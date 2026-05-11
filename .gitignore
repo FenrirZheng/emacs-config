@@ -29,6 +29,12 @@
 # eca: vendored 78 MB binary + zip, not config
 /eca/
 
+# Package state that doesn't go through no-littering (lands at the repo root):
+# treesit-auto's downloaded tree-sitter grammars (.so) and elgrep's last-search
+# cache — both regenerated on demand.
+/tree-sitter/
+/elgrep-data.el
+
 # Backups Emacs / our own scripts leave behind
 *~
 *.bak
