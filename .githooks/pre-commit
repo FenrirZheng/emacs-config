@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pre-commit guard for ~/.emacs.d — scan staged content for leaked credentials.
+# Wired per-clone via:  git config core.hooksPath .githooks
+# (core.hooksPath is local config, not tracked — re-run after a fresh clone.)
+set -euo pipefail
+
+if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks git --staged --no-banner
+else
+    echo "pre-commit: gitleaks not found on PATH — skipping secret scan" >&2
+fi
