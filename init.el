@@ -4,7 +4,7 @@
 ;; Organised, section-by-section config for Emacs 30.1.
 ;;
 ;; Layout:
-;;   1.  Package system & use-package bootstrap
+;;   1.  Package system, use-package bootstrap, no-littering
 ;;   2.  Better built-in defaults (no external packages)
 ;;   3.  system-packages (OS package helper)
 ;;   4.  Minibuffer / completion UI      (Vertico ecosystem)
@@ -50,6 +50,23 @@
 ;; Every `(use-package foo ...)' implies `:ensure t' -- i.e. auto-install foo.
 ;; Use `:ensure nil' for packages that are part of Emacs itself.
 (setq use-package-always-ensure t)
+
+;; no-littering: many packages drop a state file straight into ~/.emacs.d/
+;; (recentf, savehist, transient history, tramp, autosaves, ...).  This
+;; redirects them into two tidy subdirs -- `var/' (volatile runtime state) and
+;; `etc/' (config-ish data).  Load it as EARLY as possible so the packages
+;; configured later in this file (savehist in section 4, ...) already see the
+;; redirected paths.  The project .gitignore ignores `/var/' and `/etc/' in one
+;; line each, replacing the per-file ignore rules; the pre-no-littering files
+;; still sitting at the repo root (transient/, tramp, history, auto-save-list/)
+;; are now orphaned litter -- safe to `rm' them whenever.
+(use-package no-littering
+  :demand t                              ; load now, don't defer
+  :config
+  ;; Keep #autosave# files under var/auto-save/ instead of next to the edited
+  ;; file (canonical snippet from the no-littering README).
+  (setq auto-save-file-name-transforms
+        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
 
 ;; ---------------------------------------------------------------------------
 ;; 2. Better built-in defaults (no external packages)
@@ -117,6 +134,20 @@
   :custom
   (vertico-cycle t))                     ; wrap around at top/bottom
 
+;; vertico-directory: an extension that ships INSIDE the vertico package -- so
+;; `:ensure nil'.  Makes RET/DEL operate on whole path components when you're
+;; editing a file name in the minibuffer (RET descends into the dir under
+;; point; DEL deletes back to the previous `/').
+(use-package vertico-directory
+  :ensure nil
+  :after vertico
+  :bind (:map vertico-map
+              ("RET"   . vertico-directory-enter)
+              ("DEL"   . vertico-directory-delete-char)
+              ("M-DEL" . vertico-directory-delete-word))
+  ;; Collapse the "//" / "~/" shadow when you type an absolute path mid-prompt.
+  :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
+
 ;; Persist minibuffer history; also lets Vertico put recent picks first.
 (use-package savehist
   :ensure nil
@@ -159,6 +190,14 @@
   :after (embark consult)
   :hook (embark-collect-mode . consult-preview-at-point-mode))
 
+;; wgrep: make grep / ripgrep result buffers editable, then commit the edits
+;; back to every file at once.  The payoff with the setup above: run
+;; `consult-ripgrep' (M-s r), `embark-export' (C-. then E) the matches into a
+;; grep buffer, `C-c C-p' to make it writable, edit freely, `C-c C-c' to save
+;; -- a project-wide search-and-replace with ordinary undo on each file.
+(use-package wgrep
+  :custom (wgrep-auto-save-buffer t))    ; write edited files out immediately
+
 ;; ---------------------------------------------------------------------------
 ;; 5. In-buffer code completion -- Corfu + Cape
 ;; ---------------------------------------------------------------------------
@@ -173,6 +212,16 @@
   (corfu-auto-prefix 2)                  ; ...after 2 chars
   (corfu-cycle t)
   (corfu-quit-no-match 'separator))
+
+;; corfu-popupinfo: another in-package extension (hence `:ensure nil') -- shows
+;; the selected candidate's docstring / signature in a second popup beside the
+;; completion list.  The delay is (visible-delay . next-candidate-delay): wait
+;; 0.5s before the first doc popup, then 0.2s when stepping between candidates.
+(use-package corfu-popupinfo
+  :ensure nil
+  :after corfu
+  :init (corfu-popupinfo-mode 1)
+  :custom (corfu-popupinfo-delay '(0.5 . 0.2)))
 
 (use-package cape
   :init
@@ -227,6 +276,30 @@
          ("C-h k" . helpful-key)
          ("C-h x" . helpful-command)
          ("C-h o" . helpful-symbol)))
+
+;; vundo: draw the undo history as a tree in a transient side buffer and walk
+;; it with the arrow keys.  Unlike `undo-tree' it stores nothing on disk and
+;; doesn't replace Emacs' native undo machinery -- it just visualises it, so
+;; there's no risk of a corrupted on-disk history on huge files.
+(use-package vundo
+  :bind ("C-x u" . vundo))               ; was `undo' (still on C-/ and C-_)
+
+;; hl-todo: colour-code TODO / FIXME / HACK / NOTE / BUG keywords in comments.
+;; (magit-todos in section 9 reuses this keyword set for its repo-wide list.)
+(use-package hl-todo
+  :hook (prog-mode . hl-todo-mode))
+
+;; pulsar: briefly pulse the current line after a big motion -- an avy jump, a
+;; window switch, `consult-line', `recenter-top-bottom', ... -- so your eye
+;; re-acquires the cursor.  Pairs naturally with the avy/consult bindings above.
+(use-package pulsar
+  :init (pulsar-global-mode 1)
+  :config
+  (dolist (fn '(avy-goto-char-timer avy-goto-line avy-goto-word-1))
+    (add-to-list 'pulsar-pulse-functions fn))
+  ;; consult exposes this hook on every jump (consult-line/imenu/ripgrep ...).
+  (add-hook 'consult-after-jump-hook #'pulsar-recenter-center)
+  (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry))
 
 ;; ---------------------------------------------------------------------------
 ;; 8. Project, LSP & languages
@@ -291,6 +364,13 @@
          ;; refresh the gutter right after a Magit commit/stage/...
          (magit-post-refresh . diff-hl-magit-post-refresh)))
 
+;; magit-todos: add a "TODOs" section to the Magit status buffer listing the
+;; hl-todo keywords found across the repo, jumpable like any other section.  It
+;; auto-picks a scanner -- `rg' if present (it is here), else `git grep'.
+(use-package magit-todos
+  :after magit
+  :init (magit-todos-mode 1))
+
 ;; ---------------------------------------------------------------------------
 ;; 10. Terminal -- vterm
 ;; ---------------------------------------------------------------------------
@@ -337,6 +417,18 @@
   (org-startup-indented t)               ; visually indent by outline level
   (org-hide-emphasis-markers t)          ; show *bold* as bold, hide the stars
   (org-src-fontify-natively t))          ; syntax-highlight inside #+begin_src
+
+;; org-modern: restyle headings, lists, checkboxes, tables, blocks and
+;; timestamps for a cleaner look.  Pure display -- it never edits your files.
+(use-package org-modern
+  :hook ((org-mode . org-modern-mode)
+         (org-agenda-finalize . org-modern-agenda)))
+
+;; org-appear: temporarily reveal the *bold* / =verbatim= / [[link]] markup of
+;; whichever element point is on -- the complement to `org-hide-emphasis-markers'
+;; above, so you can still edit the markers without globally un-hiding them.
+(use-package org-appear
+  :hook (org-mode . org-appear-mode))
 
 ;; ---------------------------------------------------------------------------
 ;; 13. AI / agent tooling -- pre-existing setup, kept as-is

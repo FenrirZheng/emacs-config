@@ -1,3 +1,11 @@
+# no-littering: all redirected package state lands under these two dirs.
+# var/ = volatile runtime state (autosaves, recentf, savehist, transient
+# history, tramp, eln-cache crumbs, ...); etc/ = config-ish data.  These two
+# lines supersede most of the per-file rules below — once the orphaned
+# pre-no-littering files at the repo root are removed, those rules can go too.
+/var/
+/etc/
+
 # Package manager downloads — re-installed by use-package on first run
 /elpa/
 

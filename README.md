@@ -1,7 +1,9 @@
 # .emacs.d
 
 Personal Emacs 30.1 configuration. See [`init.el`](init.el) for the section-by-section
-layout; [`custom.el`](custom.el) holds the `M-x customize` block.
+layout; [`custom.el`](custom.el) holds the `M-x customize` block. For a key-by-key tour of
+what's actually configured — completion UI, project search, Magit, LSP, motion tools — see
+the [features & cheat sheet](FEATURES.md).
 
 ## What's tracked
 
