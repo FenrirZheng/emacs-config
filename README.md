@@ -14,8 +14,12 @@ and [`.gitignore`](.gitignore). Everything reproducible or stateful is ignored â
 
 ```bash
 git clone <remote> ~/.emacs.d
-emacs                       # first launch: use-package installs missing packages
+git -C ~/.emacs.d config core.hooksPath .githooks   # wire pre-commit (local config, not tracked)
+emacs                                               # first launch: use-package installs missing packages
 ```
+
+The pre-commit hook ([`.githooks/pre-commit`](.githooks/pre-commit)) runs `gitleaks`
+on staged content; it no-ops if `gitleaks` isn't on `PATH`.
 
 Gotchas on first launch:
 
