@@ -20,7 +20,8 @@ a candidate).
 
 | Key | Command | What it does |
 |---|---|---|
-| `C-x b` | `consult-buffer` | Switch buffer **with live preview**; also lists recent files, bookmarks |
+| `C-x b` | `ibuffer` **(built-in)** | Buffer list with grouping, marking, batch ops. `RET` opens, `o` opens in another window, `D` kills, `m` mark + `S`/`D`/`Q` save/kill/query-replace marked, `/` filter, `q` quit. Bound here instead of the default `C-x C-b` because tmux's `C-b` prefix swallows the second keystroke in a TTY frame |
+| `C-x B` | `consult-buffer` | Switch buffer **with live preview**; also lists recent files, bookmarks. Shifted off the default `C-x b` to make room for ibuffer above |
 | `C-x 4 b` | `consult-buffer-other-window` | …opening the pick in another window |
 | `C-x p b` | `consult-project-buffer` | Buffer switch scoped to the current project |
 | `C-s` | `consult-line` | Search lines in this buffer (incremental, jumps live) |
