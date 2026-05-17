@@ -522,8 +522,33 @@ seems stuck on a stale answer."
 ;; (vue-language-server + @vue/typescript-plugin tsserver plugin, tsdk
 ;; pointer, etc.).  The npm globals (`@vue/language-server',
 ;; `@vue/typescript-plugin') are left installed -- harmless when unused.
+;;
+;; `vue-modes' override: the upstream default points `<script lang="ts">' at
+;; `typescript-mode' (the legacy SMIE package, not installed here) and bare
+;; `<script>' at `js-mode' (regex-based, no ES2020+).  Without this override
+;; TS script blocks fall back to fundamental-mode and look unhighlighted.
+;; Retarget to the tree-sitter modes the rest of the config already uses --
+;; grammars live in `~/.emacs.d/tree-sitter' (see commit 8968757).
 (use-package vue-mode
-  :mode "\\.vue\\'")
+  :mode "\\.vue\\'"
+  :custom
+  (vue-modes
+   '((:type template :name nil   :mode vue-html-mode)
+     (:type template :name html  :mode vue-html-mode)
+     (:type script   :name nil   :mode js-ts-mode)
+     (:type script   :name js    :mode js-ts-mode)
+     (:type script   :name es6   :mode js-ts-mode)
+     (:type script   :name babel :mode js-ts-mode)
+     (:type script   :name ts          :mode typescript-ts-mode)
+     (:type script   :name typescript  :mode typescript-ts-mode)
+     (:type script   :name tsx         :mode tsx-ts-mode)
+     (:type style    :name nil    :mode css-mode)
+     (:type style    :name css    :mode css-mode)
+     (:type style    :name scss   :mode css-mode)
+     (:type style    :name postcss :mode css-mode)
+     (:type style    :name sass   :mode ssass-mode)
+     (:type i18n     :name nil    :mode js-json-mode)
+     (:type i18n     :name json   :mode js-json-mode))))
 
 ;; eldoc on TTY: echo area is the default display path (single line, brief,
 ;; gets clobbered by Corfu / other `message' callers but cheap and unobtrusive).
@@ -640,8 +665,12 @@ seems stuck on a stale answer."
 ;; binary at hook time -- otherwise opening a JS file outside any project
 ;; (scratch snippet, gist, dotfile) prints a "cannot find eslint" warning.
 ;; When the binary really is missing, the backend silently no-ops.
+;; vue-mode is included so `eslint-plugin-vue' lints both the <template> and
+;; <script> blocks of .vue files alongside the same ESLint config used for
+;; the rest of the project.  flymake-eslint feeds the file as a whole; the
+;; plugin handles the SFC split internally.
 (use-package flymake-eslint
-  :hook ((js-ts-mode typescript-ts-mode tsx-ts-mode) . flymake-eslint-enable)
+  :hook ((js-ts-mode typescript-ts-mode tsx-ts-mode vue-mode) . flymake-eslint-enable)
   :custom (flymake-eslint-defer-binary-check t))
 
 ;; apheleia: async format-on-save.  Why not `eglot-format-buffer':
@@ -659,7 +688,13 @@ seems stuck on a stale answer."
 ;; opt-in per buffer -- it only formats when the formatter binary is on PATH
 ;; AND the major mode has an entry, so it stays quiet in unrelated buffers.
 (use-package apheleia
-  :config (apheleia-global-mode +1))
+  :config
+  ;; Prettier formats .vue SFCs natively (template + script + style in one
+  ;; pass).  `apheleia-mode-alist' has no default entry for `vue-mode', so
+  ;; without this nothing fires on save -- add it alongside the other
+  ;; prettier-driven modes.
+  (add-to-list 'apheleia-mode-alist '(vue-mode . prettier))
+  (apheleia-global-mode +1))
 
 ;; markdown-mode (already installed): pulled in by some of the AI tools too.
 (use-package markdown-mode
