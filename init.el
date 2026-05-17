@@ -457,6 +457,23 @@ seems stuck on a stale answer."
 ;; auto-starts when you open a file in a supported mode AND a language server
 ;; binary is on PATH (gopls, pyright, rust-analyzer, typescript-language-server,
 ;; clangd, ...).  Reach for `lsp-mode' only if you need its heavier extras.
+;;
+;; Node.js / frontend server install (one-time, npm globals):
+;;     npm i -g typescript typescript-language-server     ; JS / TS / TSX
+;;     npm i -g vscode-langservers-extracted              ; HTML / CSS / JSON / ESLint
+;;     npm i -g prettier                                  ; used by apheleia, see below
+;; `vscode-langservers-extracted' ships four binaries Eglot's default
+;; `eglot-server-programs' already knows about:
+;;     vscode-html-language-server  vscode-css-language-server
+;;     vscode-json-language-server  vscode-eslint-language-server
+;; The ESLint one is NOT auto-attached -- Eglot binds one server per major
+;; mode and TypeScript already wins.  ESLint runs via `flymake-eslint' below
+;; (no LSP -- it execs `node_modules/.bin/eslint' directly), which co-exists
+;; cleanly with the running tsserver.
+;;
+;; TSX / JSX note: `.tsx' files open in `tsx-ts-mode' (not `typescript-ts-mode'),
+;; courtesy of `treesit-auto'.  `.jsx' likewise reuses the TSX parser.  Both
+;; are covered by the `tsx-ts-mode' hook below.
 (use-package eglot
   :ensure nil
   :hook ((python-ts-mode . eglot-ensure)
@@ -464,6 +481,10 @@ seems stuck on a stale answer."
          (rust-ts-mode    . eglot-ensure)
          (js-ts-mode      . eglot-ensure)
          (typescript-ts-mode . eglot-ensure)
+         (tsx-ts-mode     . eglot-ensure)   ; React .tsx / .jsx
+         (css-ts-mode     . eglot-ensure)
+         (html-mode       . eglot-ensure)   ; covers mhtml-mode (derived)
+         (json-ts-mode    . eglot-ensure)
          (c-ts-mode       . eglot-ensure)
          (c++-ts-mode     . eglot-ensure))
   :custom
@@ -573,6 +594,38 @@ seems stuck on a stale answer."
   :bind (:map flymake-mode-map
               ("M-n" . flymake-goto-next-error)
               ("M-p" . flymake-goto-prev-error)))
+
+;; flymake-eslint: runs `node_modules/.bin/eslint' on save / change and feeds
+;; the JSON diagnostics into Flymake -- so ESLint errors show up next to
+;; tsserver's type errors in the same buffer (M-n / M-p above walks both).
+;; Why not the LSP ESLint server: Eglot binds one server per major mode and
+;; typescript-language-server already owns JS/TS/TSX.  Running ESLint as a
+;; sibling Flymake backend sidesteps the multi-server problem entirely.
+;;
+;; `flymake-eslint-defer-binary-check' (t) skips probing for the `eslint'
+;; binary at hook time -- otherwise opening a JS file outside any project
+;; (scratch snippet, gist, dotfile) prints a "cannot find eslint" warning.
+;; When the binary really is missing, the backend silently no-ops.
+(use-package flymake-eslint
+  :hook ((js-ts-mode typescript-ts-mode tsx-ts-mode) . flymake-eslint-enable)
+  :custom (flymake-eslint-defer-binary-check t))
+
+;; apheleia: async format-on-save.  Why not `eglot-format-buffer':
+;; typescript-language-server explicitly does NOT implement textDocument/
+;; formatting (their README points at Prettier).  Apheleia runs the formatter
+;; in a subprocess, diffs the output against the buffer, and applies the
+;; minimal edit -- so point / mark / window-start don't jump, and the save
+;; isn't blocked on the formatter.  Default formatter table maps:
+;;     js/ts/tsx/jsx/css/scss/html/json/md  -> prettier
+;;     python  -> black + isort
+;;     go      -> gofmt + goimports
+;;     rust    -> rustfmt
+;; Override on a per-mode basis via `apheleia-mode-alist' if a project pins
+;; a different tool (e.g. biome, ruff format).  `apheleia-global-mode' is
+;; opt-in per buffer -- it only formats when the formatter binary is on PATH
+;; AND the major mode has an entry, so it stays quiet in unrelated buffers.
+(use-package apheleia
+  :config (apheleia-global-mode +1))
 
 ;; markdown-mode (already installed): pulled in by some of the AI tools too.
 (use-package markdown-mode
