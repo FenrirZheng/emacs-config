@@ -503,6 +503,83 @@ seems stuck on a stale answer."
   ;; their own.  Default `nil' silently stops at the project boundary.
   (eglot-extend-to-xref t))
 
+;; Vue 3 (Volar 3.x) -- adds .vue support without losing tsserver for .ts/.tsx.
+;;
+;; Architecture ("Hybrid Mode", default in Volar 3 / Vue Language Tools 3):
+;;   .vue file -> vue-mode  -> Eglot -> `vue-language-server'  (Volar)
+;;   .ts/.tsx  -> *-ts-mode -> Eglot -> `typescript-language-server'
+;;                                        + @vue/typescript-plugin (tsserver plugin)
+;;
+;; The typescript-plugin is the trick: it teaches tsserver to read .vue files
+;; as TypeScript modules.  Without it, `xref-find-references' (M-?) on a
+;; symbol exported from a .ts that's only consumed by .vue returns zero
+;; results -- tsserver's module graph never includes the .vue callers.  With
+;; the plugin loaded, M-? from .ts finds .vue references (and vice versa).
+;;
+;; Volar 2.x had a "takeover mode" where vue-language-server replaced
+;; tsserver for the whole project; Volar 3.x dropped that in favour of this
+;; hybrid split, which keeps tsserver's mature .ts/.tsx behaviour and slots
+;; Volar in alongside it just for .vue.
+;;
+;; One-time install (npm globals, both required for the hybrid setup):
+;;     npm i -g @vue/language-server @vue/typescript-plugin
+;; The `typescript' npm global (installed by the earlier eglot block) is
+;; reused -- Volar needs to know where its `lib/' is via the `tsdk' init
+;; option below.
+
+;; Cache `npm root -g' + the two paths derived from it.  Computed once at
+;; init load to avoid a `shell-command-to-string' on every Eglot startup.
+;; Stale after a node version switch via nvm -- restart the daemon then.
+(defvar fenrir/npm-global-root
+  (when (executable-find "npm")
+    (string-trim (shell-command-to-string "npm root -g")))
+  "Output of `npm root -g', looked up once at init load.")
+
+(defvar fenrir/typescript-tsdk
+  (when fenrir/npm-global-root
+    (expand-file-name "typescript/lib" fenrir/npm-global-root))
+  "Path passed to Volar as the `typescript.tsdk' initialization option.")
+
+(defvar fenrir/vue-typescript-plugin-location
+  (when fenrir/npm-global-root
+    (expand-file-name "@vue/typescript-plugin" fenrir/npm-global-root))
+  "Filesystem location of @vue/typescript-plugin -- loaded into tsserver
+so typescript-language-server can read .vue files (Volar Hybrid Mode).")
+
+;; vue-mode: dedicated major mode for .vue.  Eglot needs *some* major mode to
+;; hook on, and a dedicated mode (rather than reusing web-mode for .vue) keeps
+;; the `eglot-server-programs' mapping unambiguous -- vue-mode means .vue,
+;; nothing else, so the Volar entry below can't fire on the wrong file type.
+(use-package vue-mode
+  :mode "\\.vue\\'"
+  :hook (vue-mode . eglot-ensure))
+
+;; Wire the two servers into Eglot's table.  Both adds are guarded by
+;; `file-directory-p' checks so a machine without Volar installed silently
+;; falls back to the defaults (tsserver for .ts/.tsx, no server for .vue).
+(with-eval-after-load 'eglot
+  ;; Volar for .vue, with tsdk pointer so it parses .ts imports correctly.
+  (when (and fenrir/typescript-tsdk
+             (file-directory-p fenrir/typescript-tsdk))
+    (add-to-list 'eglot-server-programs
+                 `(vue-mode . ("vue-language-server" "--stdio"
+                               :initializationOptions
+                               (:typescript (:tsdk ,fenrir/typescript-tsdk))))))
+
+  ;; tsserver + @vue/typescript-plugin for .ts/.tsx/.js -- the override that
+  ;; makes M-? from a .ts file find .vue call sites.  `add-to-list' pushes to
+  ;; the front, so this entry is consulted before Eglot's bundled default
+  ;; (same server, without the plugin).
+  (when (and fenrir/vue-typescript-plugin-location
+             (file-directory-p fenrir/vue-typescript-plugin-location))
+    (add-to-list 'eglot-server-programs
+                 `((typescript-ts-mode tsx-ts-mode js-ts-mode)
+                   . ("typescript-language-server" "--stdio"
+                      :initializationOptions
+                      (:plugins [(:name "@vue/typescript-plugin"
+                                  :location ,fenrir/vue-typescript-plugin-location
+                                  :languages ["vue"])]))))))
+
 ;; eldoc on TTY: echo area is the default display path (single line, brief,
 ;; gets clobbered by Corfu / other `message' callers but cheap and unobtrusive).
 ;; For longer signatures or godoc-on-hover, summon `M-x eldoc-doc-buffer'
