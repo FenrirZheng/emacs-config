@@ -240,7 +240,14 @@
          ("M-s f"   . consult-find))          ; find files by name
   :custom
   ;; Let `consult-line' etc. drive the live preview at this key:
-  (consult-narrow-key "<"))
+  (consult-narrow-key "<")
+  :init
+  ;; Route in-buffer completion (`M-TAB' / `C-M-i' / `completion-at-point')
+  ;; to the minibuffer via Vertico, instead of corfu's at-point popup.
+  ;; See the section-5 header comment for the rationale.  `:init' (rather
+  ;; than `:config') so the override is in place before any buffer's first
+  ;; completion call, even if consult itself loads lazily afterwards.
+  (setq completion-in-region-function #'consult-completion-in-region))
 
 (use-package embark
   :bind (("C-." . embark-act)            ; act on the thing at point / candidate
@@ -268,47 +275,47 @@
 ;; Corfu is the lightweight `company' alternative: a small popup at point.
 ;; Cape provides extra completion-at-point backends to feed it.
 
+;; In-buffer completion frontend: Vertico minibuffer, NOT Corfu popup.
+;;
+;; `completion-in-region-function' is the single switch that decides which UI
+;; handles in-buffer completion (`M-TAB' / `C-M-i' / `completion-at-point').
+;; Below we route it to `consult-completion-in-region' (set on the consult
+;; block in section 4), which renders the candidates in the minibuffer with
+;; the same Vertico + orderless + marginalia stack used by `C-x C-f' / `M-x'.
+;;
+;; `global-corfu-mode' is intentionally NOT enabled here -- if it were, corfu
+;; would set its own buffer-local `completion-in-region-function' and override
+;; the consult routing.  The package stays installed (via `:defer t') so a
+;; future switch back to the popup workflow is a one-line edit: add
+;; `:init (global-corfu-mode 1)' here and set `corfu-auto t'.
+;;
+;; Trade-off vs. corfu's popup: no auto-popup as you type, the trigger is now
+;; manual (M-TAB / C-M-i); but the candidate UI is unified with the rest of
+;; the minibuffer ecosystem (orderless multi-token search, marginalia
+;; annotations, embark actions on candidates).
 (use-package corfu
-  :init (global-corfu-mode 1)
+  :defer t                              ; installed but not auto-loaded
   :custom
-  (corfu-auto t)                         ; pop up automatically as you type
+  (corfu-auto nil)
   (corfu-auto-delay 0.2)
-  (corfu-auto-prefix 2)                  ; ...after 2 chars
+  (corfu-auto-prefix 2)
   (corfu-cycle t)
-  (corfu-quit-no-match 'separator)
-  :config
-  ;; M-m while the corfu popup is visible: move the SAME candidate set into
-  ;; vertico's minibuffer interface (via `consult-completion-in-region').  Gets
-  ;; you a `C-x C-f'-style bottom prompt with orderless filtering when the
-  ;; popup's narrow at-point view isn't enough.  Recipe is from corfu's README.
-  ;; The auto-popup stays the typing-flow primary; M-m is the escape hatch.
-  (defun fenrir/corfu-move-to-minibuffer ()
-    "Move the current Corfu completion into the minibuffer via Consult."
-    (interactive)
-    (pcase completion-in-region--data
-      (`(,beg ,end ,table ,pred ,extras)
-       (let ((completion-extra-properties extras)
-             completion-cycle-threshold completion-cycling)
-         (consult-completion-in-region beg end table pred)))))
-  (keymap-set corfu-map "M-m" #'fenrir/corfu-move-to-minibuffer))
+  (corfu-quit-no-match 'separator))
 
-;; corfu-popupinfo: another in-package extension (hence `:ensure nil') -- shows
-;; the selected candidate's docstring / signature in a second popup beside the
-;; completion list.  The delay is (visible-delay . next-candidate-delay): wait
-;; 0.5s before the first doc popup, then 0.2s when stepping between candidates.
+;; corfu-popupinfo: in-package extension that shows the selected candidate's
+;; docstring / signature beside Corfu's popup.  CURRENTLY DORMANT -- only fires
+;; when a Corfu popup is visible, and `global-corfu-mode' is off (see section-5
+;; header).  Kept installed so flipping back to the popup workflow is one line.
 (use-package corfu-popupinfo
   :ensure nil
   :after corfu
   :init (corfu-popupinfo-mode 1)
   :custom (corfu-popupinfo-delay '(0.5 . 0.2)))
 
-;; corfu-terminal: Corfu's default popup is a child frame, which only renders
-;; in GUI frames.  In a TTY frame (`emacsclient -t' inside tmux -- the common
-;; case for this daemon) the popup silently never paints: `global-corfu-mode'
-;; IS active, candidates ARE being computed, you just can't see them.  This
-;; package swaps the renderer to `popon' (overlay-based text popup) on TTY
-;; frames and leaves GUI frames using the native child frame -- so the same
-;; daemon serves both transports correctly.
+;; corfu-terminal: swaps Corfu's child-frame popup for a popon overlay in TTY
+;; frames.  CURRENTLY DORMANT alongside Corfu itself (see section-5 header) --
+;; with no popup, there's nothing to re-render.  Kept installed so flipping
+;; back to the popup workflow doesn't also require re-adding a package.
 (use-package corfu-terminal
   :after corfu
   :config (corfu-terminal-mode +1))
@@ -397,8 +404,54 @@
 ;; ---------------------------------------------------------------------------
 
 ;; project.el (built-in): project-aware file/buffer/command commands under C-x p.
+;; ~/ itself is a git repo (the dotfiles tree).  Two interacting problems:
+;;   1. project.el would otherwise treat all of $HOME as one giant project and
+;;      project-find-file would walk the whole home directory.  Fixed by the
+;;      :around advice on `project-try-vc' that returns nil when the root is $HOME.
+;;   2. Sub-directories inside the dotfiles repo that don't have their own .git
+;;      (e.g. ~/.emacs.d/, ~/.config/<foo>/) would also be killed by (1) because
+;;      `vc-find-root' walks up to ~/.git.  Fixed by `project-vc-extra-root-markers':
+;;      if any of those marker files exists in a closer ancestor, that ancestor
+;;      becomes the project root, the advice sees a non-$HOME root, and lets it
+;;      through.  Drop an empty `.project' file in any dir you want treated as
+;;      a project (or rely on the language-native markers below).
 (use-package project
-  :ensure nil)
+  :ensure nil
+  :custom
+  (project-vc-extra-root-markers
+   '(".project"          ; explicit opt-in marker for arbitrary directories
+     "Cargo.toml"        ; Rust
+     "go.mod"            ; Go
+     "pyproject.toml"    ; Python (PEP 518)
+     "CLAUDE.md"
+     "package.json"      ; Node
+     "Makefile"))        ; generic
+  :config
+  (defun my-project-ignore-home (orig-fun dir)
+    "If `project-try-vc' would return $HOME as the project root, ignore it."
+    (let ((proj (funcall orig-fun dir)))
+      (if (and proj
+               (string= (expand-file-name (project-root proj))
+                        (expand-file-name "~/")))
+          nil
+        proj)))
+  (advice-add 'project-try-vc :around #'my-project-ignore-home))
+
+;; `project-try-vc' caches its search result on each `dir' via `vc-file-setprop'
+;; (see project.el's own FIXME at the top of the defun).  That means changes to
+;; `project-vc-extra-root-markers' don't retroactively re-detect already-visited
+;; directories -- a daemon that first saw ~/code/foo/ before CLAUDE.md was in
+;; the markers list keeps returning the old (vc Git "~/") answer forever.  This
+;; helper replaces the whole obarray so the next access recomputes from scratch.
+;; Emacs 30 made obarray a distinct type (no longer a vector), so we go through
+;; `obarray-make' rather than `fillarray'.
+(defun fenrir/project-reset-cache ()
+  "Wipe all `vc-file-setprop' caches.  Use after editing
+`project-vc-extra-root-markers' or any time project root detection
+seems stuck on a stale answer."
+  (interactive)
+  (setq vc-file-prop-obarray (obarray-make 17))
+  (message "vc-file-prop-obarray cleared"))
 
 ;; Eglot (built-in since Emacs 29): a small, zero-config LSP client.  It
 ;; auto-starts when you open a file in a supported mode AND a language server
@@ -551,9 +604,12 @@
   (remove-hook 'magit-status-sections-hook 'magit-insert-untracked-files))
 
 ;; diff-hl: show added/changed/removed lines in the fringe, live.
+;; `diff-hl-dired-mode' is intentionally NOT hooked: in $HOME (which is itself
+;; a git repo with ~1500 tracked files), opening dired triggered a `git status'
+;; + `git ls-files' sweep through the vc framework on every revert -- the
+;; `emacs ./' in $HOME CPU spike. magit covers dired-side git status anyway.
 (use-package diff-hl
   :hook ((prog-mode . diff-hl-mode)
-         (dired-mode . diff-hl-dired-mode)
          ;; refresh the gutter right after a Magit commit/stage/...
          (magit-post-refresh . diff-hl-magit-post-refresh)))
 
@@ -571,6 +627,45 @@
   ;; -- using `:init' here would force magit-todos (and therefore magit) to
   ;; load eagerly at startup, defeating the whole point of `:after magit'.
   :config (magit-todos-mode 1))
+
+;; magit-delta: pipe Magit's diff buffers through git-delta for syntax-
+;; highlighted, side-by-side-capable diffs.  `magit-delta-mode' scopes the
+;; integration to Magit buffers only -- your CLI `git diff' keeps whatever
+;; pager you have configured (or none); it does NOT clobber `[core] pager'
+;; globally.
+;;
+;; Requires the `delta' binary on PATH (Debian: `apt install git-delta',
+;; provides /usr/bin/delta).  Without it, the mode loads but Magit just shows
+;; the plain diff -- no error.
+(use-package magit-delta
+  :after magit
+  :hook (magit-mode . magit-delta-mode))
+
+;; difftastic: an AST-aware "structural" differ -- compares parse trees, not
+;; lines.  Use it when a traditional diff shows "whole function deleted and
+;; re-added" but the only real change was a rename, an indent tweak, or moving
+;; a block by 20 lines.  Complements (does not replace) magit-delta: delta
+;; renders every status-buffer diff cheaply on every refresh; difft is the
+;; slower, on-demand option you reach for during code review on a specific
+;; commit.
+;;
+;; Requires the `difft' binary on PATH (no apt package on Debian 13; install
+;; via `cargo install --locked difftastic', lands in ~/.cargo/bin/difft).
+;;
+;; Integration: appends two suffixes to Magit's diff dispatch (press `d' in
+;; any Magit buffer to open the transient):
+;;     d D  -> difftastic-magit-diff   (dwim on the section / range at point)
+;;     d S  -> difftastic-magit-show   (full diff of the commit at point)
+;;
+;; First-run note: as with every use-package block here, the archive isn't
+;; refreshed at startup (see section 1).  After adding magit-delta and this
+;; one: `M-x my/package-refresh' then restart Emacs once so both install.
+(use-package difftastic
+  :after magit
+  :config
+  (transient-append-suffix 'magit-diff '(-1 -1)
+    [("D" "Difftastic diff (dwim)" difftastic-magit-diff)
+     ("S" "Difftastic show"        difftastic-magit-show)]))
 
 ;; ---------------------------------------------------------------------------
 ;; 10. Terminal -- vterm
@@ -624,7 +719,13 @@
 ;; timestamps for a cleaner look.  Pure display -- it never edits your files.
 (use-package org-modern
   :hook ((org-mode . org-modern-mode)
-         (org-agenda-finalize . org-modern-agenda)))
+         (org-agenda-finalize . org-modern-agenda))
+  :custom
+  ;; Keep tables as plain ASCII `|' separators -- the default Unicode box-
+  ;; drawing replacements (│ / ┃) read as visually heavy column dividers,
+  ;; especially with CJK content.  Other restyling (headings, lists, blocks)
+  ;; stays on.
+  (org-modern-table nil))
 
 ;; org-appear: temporarily reveal the *bold* / =verbatim= / [[link]] markup of
 ;; whichever element point is on -- the complement to `org-hide-emphasis-markers'

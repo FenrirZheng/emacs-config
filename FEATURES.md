@@ -5,6 +5,10 @@ match the section headers in [`init.el`](init.el). For the package list and *why
 choice was made, read the comments in [`init.el`](init.el) itself — this file is the
 "what keys do I press" companion.
 
+Language-specific guides (architecture, workflows, troubleshooting):
+
+- [Go development](GO.md) — `go-ts-mode` + Eglot + gopls + Vertico-driven completion
+
 > Conventions in the tables: `C-x` = Ctrl+x, `M-x` = Alt/Meta+x, `C-S-x` = Ctrl+Shift+x,
 > `SPC` = space, `RET` = Enter. Built-in packages are marked **(built-in)** — they ship
 > with Emacs 30 and the config only enables/configures them.
