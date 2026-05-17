@@ -482,9 +482,15 @@ seems stuck on a stale answer."
          (js-ts-mode      . eglot-ensure)
          (typescript-ts-mode . eglot-ensure)
          (tsx-ts-mode     . eglot-ensure)   ; React .tsx / .jsx
-         (css-ts-mode     . eglot-ensure)
+         ;; CSS / HTML / JSON intentionally use the *built-in* modes (not the
+         ;; *-ts-mode tree-sitter variants).  These grammars are simple enough
+         ;; that the regex-based built-ins are accurate, and skipping them
+         ;; sidesteps the tree-sitter ABI treadmill (Emacs 30 caps at ABI 14,
+         ;; tree-sitter-css v0.25+ is ABI 15 -> warnings).  Inside .vue files
+         ;; the <style> / <template> blocks are handled by Volar anyway.
+         (css-mode        . eglot-ensure)
          (html-mode       . eglot-ensure)   ; covers mhtml-mode (derived)
-         (json-ts-mode    . eglot-ensure)
+         (js-json-mode    . eglot-ensure)   ; built-in JSON mode
          (c-ts-mode       . eglot-ensure)
          (c++-ts-mode     . eglot-ensure))
   :custom
@@ -661,6 +667,18 @@ so typescript-language-server can read .vue files (Volar Hybrid Mode).")
 (use-package treesit-auto
   :custom (treesit-auto-install t)        ; auto-install missing grammars on first use
   :config
+  ;; Opt out of tree-sitter for languages where the built-in mode is good
+  ;; enough and the ABI churn isn't worth it.  Currently:
+  ;;   css  -- upstream grammar jumped to ABI 15 in v0.25.0 (May 2024);
+  ;;           Emacs 30.1 maxes at ABI 14, so every css-ts-mode buffer
+  ;;           emits "version-mismatch: 15" warnings.  Built-in `css-mode'
+  ;;           covers our use cases (Vue <style> blocks go through Volar).
+  ;;   json -- simple grammar; built-in `js-json-mode' is fine and the
+  ;;           LSP (vscode-json-language-server) does the heavy lifting.
+  ;; Both modes are still hooked to eglot above; we just lose the
+  ;; tree-sitter font-lock / structural navigation, which is no real loss
+  ;; for these two.
+  (setq treesit-auto-langs (seq-difference treesit-auto-langs '(css json)))
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode 1))
 
