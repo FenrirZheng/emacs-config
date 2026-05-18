@@ -108,6 +108,8 @@ and previews entries at point.
 | `` C-` `` | `popper-toggle` | Show/hide the latest "popup" buffer (compile, help, vterm, magit-process, *Warnings*, *Async Shell Command*, flymake diagnostics, …) — popups form a stack so they don't permanently fragment your layout |
 | `` M-` `` | `popper-cycle` | Cycle through visible-able popup buffers in the stack |
 | `` C-M-` `` | `popper-toggle-type` | Toggle whether the current buffer is treated as a popup (one-off opt in/out for buffers `popper-reference-buffers` doesn't match) |
+| `C-c ←` | `winner-undo` | Undo the last window-layout change (`winner-mode`, built-in). Concrete save: you `C-x 1`-ed expecting to keep the other window — this brings it back. Magit / Org / Help re-arrange windows aggressively; this is the universal undo for that |
+| `C-c →` | `winner-redo` | Redo a window-layout change you just undid with `C-c ←` |
 
 Always-on editing defaults (§2, §4): `electric-pair-mode` (auto-insert matching brackets
 / quotes), `delete-selection-mode` (typing replaces the active region),

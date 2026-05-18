@@ -478,6 +478,17 @@
   (popper-mode 1)
   (popper-echo-mode 1))
 
+;; winner (built-in): undo / redo window-layout changes.  `C-c <left>'
+;; restores the previous window configuration; `C-c <right>' moves forward
+;; again.  Concrete saves: you `C-x 1' a window expecting to keep the other
+;; visible -- `C-c <left>' brings it back.  Magit / Org / Help often
+;; re-arrange windows aggressively; winner is the universal undo for that.
+;; Pairs with ace-window (jump to a window) and popper (toggle popups)
+;; above as the third leg of window management: pick / hide / undo.
+(use-package winner
+  :ensure nil
+  :init (winner-mode 1))
+
 ;; ---------------------------------------------------------------------------
 ;; 8. Project, LSP & languages
 ;; ---------------------------------------------------------------------------
