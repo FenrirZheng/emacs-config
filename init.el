@@ -453,6 +453,28 @@ seems stuck on a stale answer."
   (setq vc-file-prop-obarray (obarray-make 17))
   (message "vc-file-prop-obarray cleared"))
 
+;; envrc: direnv integration -- when you enter a buffer whose file lives under
+;; a directory with an `.envrc', envrc runs `direnv export json' and applies
+;; the resulting env vars BUFFER-LOCALLY (sets `process-environment' and
+;; `exec-path' just in that buffer).  Two concrete wins on this setup:
+;;   * Eglot picks the right server binary per project -- e.g. a Go monorepo
+;;     pinning `PATH=./bin:$PATH' in its .envrc gets that repo's gopls, not
+;;     the global one harvested by `exec-path-from-shell' at startup.
+;;   * Node projects using `nvm' / `volta' / `asdf' switch versions per
+;;     project, so apheleia/prettier and `M-x compile' run the right tool.
+;;
+;; Why buffer-local matters: `exec-path-from-shell' (section 1) is a one-shot
+;; global harvest at daemon launch -- great for "Emacs needs to see my login
+;; PATH", useless for "this project needs a different toolchain than that
+;; one".  envrc is the per-project complement, not a replacement.
+;;
+;; Loaded as a global mode (only enables in buffers under a direnv-allowed
+;; dir, so it's free in $HOME or unrelated buffers).  Requires the `direnv'
+;; binary on PATH (`apt install direnv'); without it the mode silently
+;; no-ops.  Per-project setup: drop an `.envrc', then `direnv allow' once.
+(use-package envrc
+  :hook (after-init . envrc-global-mode))
+
 ;; Eglot (built-in since Emacs 29): a small, zero-config LSP client.  It
 ;; auto-starts when you open a file in a supported mode AND a language server
 ;; binary is on PATH (gopls, pyright, rust-analyzer, typescript-language-server,

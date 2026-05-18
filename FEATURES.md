@@ -135,6 +135,14 @@ lists the follow-up keys — no need to memorise prefixes.
 ## 7. Project, LSP & languages (§8)
 
 - `project.el` **(built-in)**: project-aware file/buffer/command commands under `C-x p`.
+- **envrc**: direnv integration. When you visit a file under a directory with an
+  `.envrc`, envrc runs `direnv export json` and applies the result **buffer-locally**
+  (`process-environment` + `exec-path`). Two concrete wins: Eglot picks the right server
+  binary per project (e.g. a Go monorepo's pinned `gopls` in `./bin/`), and Node tooling
+  follows whatever `nvm`/`volta`/`asdf` declared. Complements `exec-path-from-shell` in
+  §1 (one-shot global harvest at daemon launch) — neither replaces the other.
+  Per-project setup: drop an `.envrc`, then `direnv allow` once. Needs the `direnv`
+  binary (`apt install direnv`); without it the mode silently no-ops.
 - **Eglot** **(built-in)**: a zero-config LSP client. Auto-starts when you open a file in
   a hooked mode **and** the language server binary is on `PATH`. Hooked modes:
   `python-ts-mode`, `go-ts-mode`, `rust-ts-mode`, `js-ts-mode`, `typescript-ts-mode`,
