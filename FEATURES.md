@@ -109,12 +109,14 @@ and previews entries at point.
 | `` M-` `` | `popper-cycle` | Cycle through visible-able popup buffers in the stack |
 | `` C-M-` `` | `popper-toggle-type` | Toggle whether the current buffer is treated as a popup (one-off opt in/out for buffers `popper-reference-buffers` doesn't match) |
 
-Always-on editing defaults (§2): `electric-pair-mode` (auto-insert matching brackets /
-quotes), `delete-selection-mode` (typing replaces the active region), `rainbow-delimiters`
-(colour nested parens by depth in `prog-mode`), `column-number-mode`, `y/n` instead of
-`yes/no`, no audible bell, `global-auto-revert-mode` (reload buffers — and Dired — when
-files change on disk), no `foo~` backups / `.#foo` lockfiles (autosaves `#foo#` are kept
-for recovery, redirected under `var/auto-save/` by no-littering).
+Always-on editing defaults (§2, §4): `electric-pair-mode` (auto-insert matching brackets
+/ quotes), `delete-selection-mode` (typing replaces the active region),
+`rainbow-delimiters` (colour nested parens by depth in `prog-mode`), `column-number-mode`,
+`y/n` instead of `yes/no`, no audible bell, `global-auto-revert-mode` (reload buffers —
+and Dired — when files change on disk), `save-place-mode` (cursor position per file
+persists across sessions — reopen a file, point lands where you left off), no `foo~`
+backups / `.#foo` lockfiles (autosaves `#foo#` are kept for recovery, redirected under
+`var/auto-save/` by no-littering).
 
 **Visual feedback** — `pulsar` briefly pulses the current line after a big motion: an avy
 jump, a window switch, `consult-line` / `consult-imenu` / `consult-ripgrep`,

@@ -215,6 +215,16 @@
   (recentf-max-saved-items 200)
   (recentf-max-menu-items 25))
 
+;; saveplace (built-in): remembers point position per file across sessions.
+;; Reopen a file and the cursor lands where you left off -- no need to
+;; manually `C-s' for your spot.  Pairs naturally with `recentf' above
+;; (recent files come back via `consult-buffer'; opening them lands at the
+;; right line).  no-littering already redirects the on-disk state file
+;; under `var/places/'.
+(use-package saveplace
+  :ensure nil
+  :init (save-place-mode 1))
+
 (use-package orderless
   :custom
   ;; Use orderless for ordinary completion; keep the built-in file-name style
