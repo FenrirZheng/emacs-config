@@ -159,6 +159,17 @@ lists the follow-up keys — no need to memorise prefixes.
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
   (this file) and `consult-imenu-multi` (open buffers of the same major mode). Same
   vertico + orderless + marginalia UI as the rest of §1.
+- **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
+  for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
+  Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls
+  hover on heavy structs, rust-analyzer type info — meaningfully faster even on
+  Emacs 30's already-quick native JSON parser; per-keystroke completion deltas
+  may go marginally slower). Binary built from source via
+  `cargo install --locked --version 0.2.1 emacs-lsp-booster` (lands in
+  `~/.cargo/bin/`); `--locked` pins transitive deps to the upstream `Cargo.lock`
+  so there's no compiler-supply-chain gap relative to the pre-built release.
+  Toggle at runtime via `M-x eglot-booster-mode` if anything misbehaves; package
+  itself installed via `:vc` from [jdtsmith/eglot-booster](https://github.com/jdtsmith/eglot-booster).
 - **tree-sitter** **(built-in)** via `treesit-auto`: faster, more accurate syntax through
   `*-ts-mode`. Grammars are installed on demand (`treesit-auto-install 'prompt` — it asks
   first); classic modes are remapped to their tree-sitter equivalents.

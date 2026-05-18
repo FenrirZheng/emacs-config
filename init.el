@@ -600,6 +600,44 @@ seems stuck on a stale answer."
   ;; their own.  Default `nil' silently stops at the project boundary.
   (eglot-extend-to-xref t))
 
+;; eglot-booster: speed up Eglot by routing the LSP server's stdio through
+;; `emacs-lsp-booster' (Rust binary, blahgeek/emacs-lsp-booster v0.2.1).
+;; Two mechanisms:
+;;   1. Threaded I/O on the booster side -- Emacs no longer blocks the UI
+;;      waiting for a slow server response.  Win regardless of message size.
+;;   2. JSON -> Elisp bytecode pre-parse -- `read' on bytecode beats
+;;      `json-parse-string' on Emacs 29.  Win SHRINKS on Emacs 30 (native
+;;      parser already fast); still meaningful for large payloads:
+;;      `consult-eglot-symbols' workspace/symbol responses, gopls hovers on
+;;      heavy structs, rust-analyzer full type info, workspace diagnostics.
+;;      Tiny per-keystroke completion deltas may go marginally SLOWER -- if
+;;      that's perceptible, add `--disable-bytecode' via
+;;      `eglot-booster-no-remote-boost' / `eglot-booster-program-args' to
+;;      keep the threaded-I/O win without the bytecode trick.
+;;
+;; Trust posture (decided 2026-05-18): built from source via
+;; `cargo install --locked --version 0.2.1 emacs-lsp-booster' rather than
+;; downloading the pre-built release binary.  `--locked' pins every
+;; transitive dep to the upstream Cargo.lock SHA, eliminating
+;; compiler-supply-chain ambiguity in the prebuilt zip.  Trade: 3-5 min
+;; compile on first install.  Binary lands at ~/.cargo/bin/, on PATH via
+;; rustup.
+;;
+;; Compatibility: monkey-patches `eglot--connect'.  Built-in Eglot evolves
+;; with Emacs releases; an Emacs upgrade may break the patch (historically
+;; fixed quickly upstream).  If broken: `M-x eglot-booster-mode' to disable
+;; at runtime, no permanent harm.  All LSP servers this config talks to
+;; (pyright, gopls, rust-analyzer, typescript-language-server, vscode-*,
+;; clangd) use stdio JSON-RPC and are compatible.
+;;
+;; Source GitHub-only, installed via Emacs 30's `:vc' keyword (same pattern
+;; as combobulate above).  Update later: `M-x package-vc-upgrade RET
+;; eglot-booster RET'.
+(use-package eglot-booster
+  :vc (:url "https://github.com/jdtsmith/eglot-booster" :rev :newest)
+  :after eglot
+  :config (eglot-booster-mode 1))
+
 ;; consult-eglot: project-wide LSP symbol search via `workspace/symbol'.
 ;;
 ;; Fills a gap in the consult bindings (section 4): `consult-imenu' is THIS
