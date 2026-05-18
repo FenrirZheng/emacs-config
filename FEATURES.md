@@ -33,6 +33,7 @@ a candidate).
 | `M-s f` | `consult-find` | Find files by name |
 | `M-g i` | `consult-imenu` | Jump to a definition in this file (functions / classes …) |
 | `M-g g` | `consult-goto-line` | Go to line number |
+| `M-g s` | `consult-eglot-symbols` | **Project-wide LSP symbol jump** (LSP buffers only — bound in `eglot-mode-map`). Unlike `M-g I` (open buffers, same major mode), this hits the LSP's `workspace/symbol` index so unopened files are found too. See §7 |
 | `M-y` | `consult-yank-pop` | Browse the whole kill-ring (not just paste the last entry) |
 | `<` | — | Inside the above commands, `<` *narrows* to one source (e.g. only buffers, not recents) |
 
@@ -149,6 +150,11 @@ lists the follow-up keys — no need to memorise prefixes.
   `c-ts-mode`, `c++-ts-mode` (so: pyright/pylsp, gopls, rust-analyzer,
   typescript-language-server, clangd). `eglot-autoshutdown t` kills the server when its
   last buffer closes; the JSON-RPC events log is disabled.
+- **consult-eglot**: `M-g s` → `consult-eglot-symbols` (bound only in
+  `eglot-mode-map`). Asks the language server's `workspace/symbol` index for **every**
+  symbol in the project, not just open buffers — fills the gap between `consult-imenu`
+  (this file) and `consult-imenu-multi` (open buffers of the same major mode). Same
+  vertico + orderless + marginalia UI as the rest of §1.
 - **tree-sitter** **(built-in)** via `treesit-auto`: faster, more accurate syntax through
   `*-ts-mode`. Grammars are installed on demand (`treesit-auto-install 'prompt` — it asks
   first); classic modes are remapped to their tree-sitter equivalents.

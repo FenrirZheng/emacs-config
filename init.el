@@ -531,6 +531,26 @@ seems stuck on a stale answer."
   ;; their own.  Default `nil' silently stops at the project boundary.
   (eglot-extend-to-xref t))
 
+;; consult-eglot: project-wide LSP symbol search via `workspace/symbol'.
+;;
+;; Fills a gap in the consult bindings (section 4): `consult-imenu' is THIS
+;; file only, `consult-imenu-multi' is the currently-open buffers of the
+;; same major mode -- neither sees a symbol in a file you haven't visited
+;; yet.  `consult-eglot-symbols' asks the running language server for every
+;; symbol in the project's index, so you can jump to `NewFooBar' in a Go
+;; monorepo without opening its file first.  Same vertico + orderless +
+;; marginalia UI as the rest of the minibuffer stack.
+;;
+;; Bound on `M-g s' ("goto symbol") only inside `eglot-mode-map' -- the key
+;; is meaningless in non-LSP buffers, and scoping the binding avoids
+;; shadowing whatever a future major mode might want on `M-g s'.  Needs an
+;; Eglot session live in the current buffer; in a buffer without one, the
+;; command errors out clearly rather than silently returning nothing.
+(use-package consult-eglot
+  :after (consult eglot)
+  :bind (:map eglot-mode-map
+              ("M-g s" . consult-eglot-symbols)))
+
 ;; vue-mode: syntax highlighting for .vue files only.  Eglot is intentionally
 ;; NOT hooked here -- Vue's LSP options (Volar 3 in "Hybrid Mode") are
 ;; sluggish on cold start and the per-request jsonrpc timeouts get noisy in
