@@ -104,6 +104,7 @@ and previews entries at point.
 | `C-c C-<` | `mc/mark-all-like-this` | Mark *all* occurrences |
 | `C-S-<mouse-1>` | `mc/add-cursor-on-click` | Click to drop an extra cursor |
 | `C-x u` | `vundo` | Draw the undo history as a tree in a transient side buffer; walk it with the arrow keys. Stores nothing on disk, doesn't replace native undo — plain `C-/` and `C-_` still undo |
+| `M-o` | `ace-window` | Overlay every window in the frame with a one-character label (`a s d f j k l ;`) — press the letter to jump there. Far faster than `C-x o` cycling once you have 3+ windows. `C-x o` itself is unchanged |
 
 Always-on editing defaults (§2): `electric-pair-mode` (auto-insert matching brackets /
 quotes), `delete-selection-mode` (typing replaces the active region), `rainbow-delimiters`

@@ -399,6 +399,23 @@
   (add-hook 'consult-after-jump-hook #'pulsar-recenter-center)
   (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry))
 
+;; ace-window: window picker.  With more than two windows, `C-x o' starts
+;; rotating through them and you can't predict which lands focus.  ace-window
+;; overlays each window with a one-character label -- press the letter, jump
+;; there.  Rebind onto `M-o' (whose default `facemenu-keymap' is rarely used)
+;; instead of replacing `C-x o' so muscle memory still works in a pinch.
+;;
+;; `aw-keys' uses home-row letters (asdf-jkl) -- left-hand picks are
+;; physically faster than the default `1 2 3 ... 9 0' digit row.  `aw-scope'
+;; `frame' limits ace-window to the current frame; the default `global' will
+;; try to switch across frames (and even daemon-served TTY frames count),
+;; which makes `M-o' unpredictable when more than one frame is alive.
+(use-package ace-window
+  :bind (("M-o" . ace-window))
+  :custom
+  (aw-keys '(?a ?s ?d ?f ?j ?k ?l ?\;))
+  (aw-scope 'frame))
+
 ;; ---------------------------------------------------------------------------
 ;; 8. Project, LSP & languages
 ;; ---------------------------------------------------------------------------
