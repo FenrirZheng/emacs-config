@@ -187,6 +187,12 @@ lists the follow-up keys — no need to memorise prefixes.
   with `delete-selection-mode`); `C-c o n` rename identifier across its lexical scope
   (no LSP required — works on JSON keys, YAML, etc.). Installed from GitHub via Emacs
   30's `use-package :vc`; update later with `M-x package-vc-upgrade RET combobulate`.
+- **breadcrumb**: header-line shows `project / file / class / function` path of point,
+  powered by `project.el` + `imenu` + (when active) Eglot's symbol info. Concrete use:
+  deep inside a long file, the header tells you which function / class you're inside
+  without scrolling up; the project segment disambiguates when several repos are open.
+  Globally enabled; toggle off per buffer with `M-x breadcrumb-local-mode`. From GNU
+  ELPA (same author as eglot-booster and `indent-bars`).
 - **flymake** **(built-in)**: on-the-fly diagnostics, fed by Eglot from the LSP. `M-n` /
   `M-p` jump to the next / previous error.
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
