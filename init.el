@@ -757,6 +757,49 @@ seems stuck on a stale answer."
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode 1))
 
+;; combobulate: structural editing driven by the tree-sitter parse tree.
+;; Where `expand-region' grows by lisp sexps (and gets it wrong in most
+;; non-Lisp languages), combobulate operates on REAL syntactic nodes -- "the
+;; if-statement", "this function's parameter list", "the current JSX element"
+;; -- so motions and edits respect language structure.
+;;
+;; Why this earns its slot in a config that already has multiple-cursors,
+;; expand-region and Eglot's LSP rename:
+;;   * Sibling navigation (`M-a' / `M-e') jumps between cases of a switch, list
+;;     elements, JSX children, method definitions in a class -- without
+;;     fiddling with regex search.
+;;   * `M-<' / `M->' swap siblings -- reorder list items / function args / JSX
+;;     attributes without re-indenting by hand.
+;;   * `M-h' marks the current node; repeat to climb to the enclosing node.
+;;     Composes with delete-selection-mode: mark `M-h M-h`, type replacement.
+;;   * `C-c o n' renames the current identifier across its lexical scope WITHOUT
+;;     an LSP -- works in buffers where Eglot isn't attached (e.g. JSON/YAML
+;;     keys, Markdown code blocks) and is instant.
+;;
+;; Hooks: every *-ts-mode this config opens Eglot on, except `rust-ts-mode'
+;; (combobulate has no Rust support as of 2026-05).  `c-ts-mode' / `c++-ts-mode'
+;; likewise unsupported.  Inside .vue files combobulate doesn't activate in
+;; the embedded `js-ts-mode' / `typescript-ts-mode' chunks -- vue-mode's MMM
+;; sub-buffer mechanism doesn't fire combobulate's mode hook there (a known
+;; limitation, not a bug here).
+;;
+;; Source: GitHub only -- not on MELPA.  `:vc' is the Emacs 30 use-package
+;; keyword that calls `package-vc-install' on first run (no straight.el /
+;; quelpa needed).  Subsequent starts are no-ops.  To update later:
+;;   M-x package-vc-upgrade RET combobulate RET
+;; First load may take ~3s as Emacs byte-compiles the language adapters.
+(use-package combobulate
+  :vc (:url "https://github.com/mickeynp/combobulate" :rev :newest)
+  :hook ((python-ts-mode     . combobulate-mode)
+         (go-ts-mode         . combobulate-mode)
+         (js-ts-mode         . combobulate-mode)
+         (typescript-ts-mode . combobulate-mode)
+         (tsx-ts-mode        . combobulate-mode))
+  :custom
+  ;; Default `C-c o' -- spelled out so the prefix is visible at the call
+  ;; site (and easy to retarget if it ever clashes with a new mode binding).
+  (combobulate-key-prefix "C-c o"))
+
 ;; flymake (built-in): on-the-fly diagnostics; Eglot feeds it from the LSP.
 (use-package flymake
   :ensure nil

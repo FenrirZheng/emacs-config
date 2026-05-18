@@ -162,6 +162,16 @@ lists the follow-up keys — no need to memorise prefixes.
 - **tree-sitter** **(built-in)** via `treesit-auto`: faster, more accurate syntax through
   `*-ts-mode`. Grammars are installed on demand (`treesit-auto-install 'prompt` — it asks
   first); classic modes are remapped to their tree-sitter equivalents.
+- **combobulate**: structural editing driven by the tree-sitter parse tree. Active in
+  `python-ts-mode`, `go-ts-mode`, `js-ts-mode`, `typescript-ts-mode`, `tsx-ts-mode`.
+  Where `expand-region` (`C-=`, §5) grows by lisp sexps and gets non-Lisp wrong,
+  combobulate operates on real syntactic nodes — if-statement, parameter list, JSX
+  element. Key motions: `M-a` / `M-e` jump between siblings (cases of a switch, list
+  items, JSX children); `M-<` / `M->` swap siblings (reorder args / list items / JSX
+  attributes); `M-h` mark current node (repeat to climb to the enclosing node, composes
+  with `delete-selection-mode`); `C-c o n` rename identifier across its lexical scope
+  (no LSP required — works on JSON keys, YAML, etc.). Installed from GitHub via Emacs
+  30's `use-package :vc`; update later with `M-x package-vc-upgrade RET combobulate`.
 - **flymake** **(built-in)**: on-the-fly diagnostics, fed by Eglot from the LSP. `M-n` /
   `M-p` jump to the next / previous error.
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
