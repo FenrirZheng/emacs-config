@@ -507,6 +507,30 @@
 (use-package breadcrumb
   :init (breadcrumb-mode 1))
 
+;; jinx: spell checker backed by `enchant-2' (C binary; orders of magnitude
+;; faster than the elisp-only `flyspell').  Active in every text-mode buffer
+;; (org, markdown, gfm, fundamental text, ...) via `global-jinx-mode'.
+;; Misspellings underlined inline as you type; `M-$' (was `ispell-word')
+;; opens a minibuffer correction menu -- vertico + orderless deliver the
+;; suggestion list with the same UI as the rest of section 4.  `C-M-$'
+;; switches between configured languages mid-buffer.
+;;
+;; Requires `enchant-2' on the system (`apt install enchant-2
+;; libenchant-2-dev'); the elisp side compiles a small C module on first
+;; load (~2 s, one-off).  Without enchant, jinx fails loudly at startup
+;; rather than silently no-op-ing.
+;;
+;; `jinx-languages' default is read from the locale; pin to `"en_US"' so
+;; behaviour is consistent across machines.  Enchant doesn't ship Chinese
+;; dictionaries by default, so no point listing `zh_TW' here -- mixed-
+;; language buffers can opt-in per-buffer with `C-M-$' if you ever wire a
+;; CJK backend (Hunspell + zh dict, etc.).
+(use-package jinx
+  :hook (emacs-startup . global-jinx-mode)
+  :bind (("M-$"   . jinx-correct)
+         ("C-M-$" . jinx-languages))
+  :custom (jinx-languages "en_US"))
+
 ;; ---------------------------------------------------------------------------
 ;; 8. Project, LSP & languages
 ;; ---------------------------------------------------------------------------

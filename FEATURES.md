@@ -197,6 +197,12 @@ lists the follow-up keys — no need to memorise prefixes.
   `M-p` jump to the next / previous error.
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
   `markdown-command` is `pandoc`.
+- **jinx**: fast spell checker for every text-mode buffer (org, markdown, gfm, ...).
+  Backed by the `enchant-2` C binary — orders of magnitude faster than `flyspell`.
+  `M-$` (was `ispell-word`) opens a vertico-driven correction menu for the word at point;
+  `C-M-$` switches languages mid-buffer. Pinned to `en_US` by default; first load
+  compiles a small C module (~2 s, one-off). Requires `apt install enchant-2
+  libenchant-2-dev`.
 
 ---
 
