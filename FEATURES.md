@@ -105,6 +105,9 @@ and previews entries at point.
 | `C-S-<mouse-1>` | `mc/add-cursor-on-click` | Click to drop an extra cursor |
 | `C-x u` | `vundo` | Draw the undo history as a tree in a transient side buffer; walk it with the arrow keys. Stores nothing on disk, doesn't replace native undo — plain `C-/` and `C-_` still undo |
 | `M-o` | `ace-window` | Overlay every window in the frame with a one-character label (`a s d f j k l ;`) — press the letter to jump there. Far faster than `C-x o` cycling once you have 3+ windows. `C-x o` itself is unchanged |
+| `` C-` `` | `popper-toggle` | Show/hide the latest "popup" buffer (compile, help, vterm, magit-process, *Warnings*, *Async Shell Command*, flymake diagnostics, …) — popups form a stack so they don't permanently fragment your layout |
+| `` M-` `` | `popper-cycle` | Cycle through visible-able popup buffers in the stack |
+| `` C-M-` `` | `popper-toggle-type` | Toggle whether the current buffer is treated as a popup (one-off opt in/out for buffers `popper-reference-buffers` doesn't match) |
 
 Always-on editing defaults (§2): `electric-pair-mode` (auto-insert matching brackets /
 quotes), `delete-selection-mode` (typing replaces the active region), `rainbow-delimiters`

@@ -416,6 +416,58 @@
   (aw-keys '(?a ?s ?d ?f ?j ?k ?l ?\;))
   (aw-scope 'frame))
 
+;; popper: triage transient "popup" buffers (help, compile, vterm, *Warnings*,
+;; magit-process, ...) and treat them as a stack you can show/hide with a
+;; single key, instead of leaving them squatting in your window layout.
+;;
+;; Why this matters here: this config opens a lot of side buffers --
+;; `helpful', `magit-status' subprocess output, `vterm', `*Async Shell
+;; Command*', `compilation-mode' results, flymake diagnostics.  Without
+;; popper, each `q' / `C-x 0' / `C-x 1' is a little decision; with popper
+;; they all live on one toggle and never permanently fragment the layout.
+;;
+;; Bindings (chosen so they don't shadow anything in this config):
+;;   C-`     popper-toggle         show/hide the latest popup
+;;   M-`     popper-cycle          rotate through visible-able popups
+;;   C-M-`   popper-toggle-type    mark/unmark the current buffer as a popup
+;;
+;; `popper-reference-buffers' is a mixed list of regexps (matched against
+;; buffer-name) and major-mode symbols.  Add a new popup class by appending
+;; either form -- e.g. `"^\\*eat\\*"' if you switch to `eat' later.
+;;
+;; eldoc-doc-buffer is INTENTIONALLY OMITTED from this list: section 8's
+;; `display-buffer-alist' already pins it as a right-side window via
+;; `display-buffer-in-side-window'.  Side windows live in their own slot
+;; and popper doesn't manage them -- letting both rules touch the same
+;; buffer would race on every `C-c d'.
+;;
+;; `popper-echo-mode' shows a one-line summary of the current popup stack
+;; in the echo area after each toggle (e.g. "[*Help*] [*compilation*]" with
+;; the active one highlighted) -- pure information, no behaviour change.
+(use-package popper
+  :bind (("C-`"   . popper-toggle)
+         ("M-`"   . popper-cycle)
+         ("C-M-`" . popper-toggle-type))
+  :init
+  (setq popper-reference-buffers
+        '("\\*Messages\\*"
+          "\\*Warnings\\*"
+          "\\*Backtrace\\*"
+          "\\*Async Shell Command\\*"
+          "Output\\*$"                  ; *Shell Command Output* etc.
+          "\\*compilation\\*"
+          compilation-mode
+          help-mode                     ; *Help*
+          helpful-mode                  ; helpful's own buffers
+          "^\\*vterm\\*"
+          vterm-mode
+          "^\\*eshell.*\\*$" eshell-mode
+          "^\\*shell.*\\*$"  shell-mode
+          "^\\*magit-process"           ; transient subprocess output
+          flymake-diagnostics-buffer-mode))
+  (popper-mode 1)
+  (popper-echo-mode 1))
+
 ;; ---------------------------------------------------------------------------
 ;; 8. Project, LSP & languages
 ;; ---------------------------------------------------------------------------
