@@ -75,12 +75,12 @@
 ;; still sitting at the repo root (transient/, tramp, history, auto-save-list/)
 ;; are now orphaned litter -- safe to `rm' them whenever.
 (use-package no-littering
-  :demand t                              ; load now, don't defer
-  :config
-  ;; Keep #autosave# files under var/auto-save/ instead of next to the edited
-  ;; file (canonical snippet from the no-littering README).
-  (setq auto-save-file-name-transforms
-        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
+  :demand t)                             ; load now, don't defer
+;; (Previously had an `auto-save-file-name-transforms' :config form to route
+;; classic `#foo#' autosaves under `var/auto-save/'.  Dropped along with
+;; `auto-save-default' in `init-defaults.el' -- `auto-save-visited-mode'
+;; writes to the visited file directly, so nothing emits sidecar files
+;; that would need redirecting.)
 
 ;; exec-path-from-shell: when Emacs is launched as a systemd/PAM daemon (or
 ;; from a GUI launcher), its PATH is the minimal login env -- no ~/go/bin,

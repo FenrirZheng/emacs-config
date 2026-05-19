@@ -24,7 +24,29 @@
   (global-so-long-mode 1)                ; survive opening huge minified files
   ;; --- files / backups ---
   (setq make-backup-files nil)           ; no foo~ litter next to the file
-  (setq auto-save-default t)             ; keep #foo# autosaves (recovery)
+  ;; Replace classic `#foo#' recovery autosaves with `auto-save-visited-mode'.
+  ;; Classic auto-save writes to a SIDECAR file (`#foo#'), useful only when
+  ;; Emacs crashes; for our workflow (frequent commits via Magit, no recent
+  ;; recovery use) those sidecars are pure write churn -- the no-littering
+  ;; redirection in init.el shovels them into `var/auto-save/' but they
+  ;; still accumulate and the recovery-via-`M-x recover-this-file' path is
+  ;; never reached.
+  ;;
+  ;; `auto-save-visited-mode' writes through to the VISITED file every
+  ;; `auto-save-visited-interval' seconds of idle, so the on-disk file
+  ;; matches the buffer.  Magit then picks up the change naturally as an
+  ;; unstaged edit -- exactly the state `magit-status s' expects.  30 s is
+  ;; conservative (VSCode default delay is ~5 s; 60 s is the "barely
+  ;; auto-saves" end).  Tune in `M-x customize-variable
+  ;; auto-save-visited-interval' if 30 s is too eager.
+  ;;
+  ;; Side effect: `init.el's no-littering :config no longer needs the
+  ;; `auto-save-file-name-transforms' form (removed in the same commit) --
+  ;; with `auto-save-default nil', nothing writes `#foo#' files anywhere.
+  ;; Stale ones under `var/auto-save/' can be deleted by hand later.
+  (setq auto-save-default nil)
+  (setq auto-save-visited-interval 30)
+  (auto-save-visited-mode 1)
   (setq create-lockfiles nil)            ; no .#foo lockfiles
   (global-auto-revert-mode 1)            ; reload buffers when files change on disk
   (setq global-auto-revert-non-file-buffers t) ; ...including Dired
