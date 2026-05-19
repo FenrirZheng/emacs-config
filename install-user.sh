@@ -34,9 +34,11 @@ if have npm; then
   # user-writable path so `npm install -g` no longer needs sudo. Idempotent:
   # the conditional no-ops on subsequent runs.
   npm_prefix="$(npm config get prefix 2>/dev/null || echo /usr/local)"
+  npm_prefix_flipped=0
   if [ "$npm_prefix" = "/usr/local" ] || [ "$npm_prefix" = "/usr" ]; then
     npm config set prefix "$HOME/.npm-global"
     ok "npm prefix → $HOME/.npm-global  (add \$HOME/.npm-global/bin to PATH)"
+    npm_prefix_flipped=1
   fi
   npm install -g \
     typescript typescript-language-server \
@@ -75,8 +77,10 @@ fi
 
 # ── 5. manual follow-ups ────────────────────────────────────────────────
 section "Manual follow-ups"
+if [ "${npm_prefix_flipped:-0}" -eq 1 ]; then
+  echo '  • PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)'
+fi
 cat <<'EOF'
-  • PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)
   • First Emacs launch: M-x nerd-icons-install-fonts (downloads TTFs once)
   • jinx compiles its C module on first load (~2s; needs libenchant-2-dev)
   • vterm compiles its C module on first launch (needs cmake + libvterm-dev)
