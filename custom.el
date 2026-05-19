@@ -8,17 +8,16 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window acp apheleia breadcrumb cape combobulate consult-eglot
+   '(ace-window apheleia breadcrumb cape combobulate consult-eglot
                 corfu-terminal diff-hl difftastic dirvish
-                doom-modeline doom-themes eca eglot-booster eldoc-box
+                doom-modeline doom-themes eglot-booster eldoc-box
                 embark-consult envrc exec-path-from-shell
-                expand-region flymake-eslint gcmh ggtags helpful jinx
-                lua-mode magit-delta magit-todos marginalia
+                expand-region flymake-eslint gcmh ggtags gptel helpful
+                jinx lua-mode magit-delta magit-todos marginalia
                 multiple-cursors no-littering obsidian orderless
                 org-appear org-modern org-roam-ui popper pulsar
-                rainbow-delimiters shell-maker system-packages
-                treesit-auto vertico vterm vue-mode vundo wgrep
-                yasnippet-snippets))
+                rainbow-delimiters system-packages treesit-auto
+                vertico vterm vue-mode vundo wgrep yasnippet-snippets))
  '(package-vc-selected-packages
    '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate"))))

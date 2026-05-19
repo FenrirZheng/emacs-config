@@ -110,12 +110,13 @@ before gptel is loaded, to seed the key first."
   ;; `generativelanguage.googleapis.com' entry in `~/.authinfo' with
   ;; `M-x fenrir/gptel-set-api-key gemini' before first send, otherwise
   ;; gptel raises "No `gptel-api-key' found in the auth source".
-  ;; Pinning to a stable GA model (2.5-pro) rather than the rolling
-  ;; `gemini-pro-latest' alias so behaviour doesn't shift silently
-  ;; when Google rotates the alias.  Switch live with `M-x gptel-menu'
-  ;; (-p picks backend, -m picks model).
+  ;; Using the rolling `gemini-pro-latest' alias so we automatically
+  ;; track Google's newest Pro thinking model (currently 3.1-pro-preview)
+  ;; without needing to bump the pin every release.  Switch live with
+  ;; `M-x gptel-menu' (-p picks backend, -m picks model) if a specific
+  ;; version is needed.
   (setq gptel-backend (gptel-get-backend "Gemini")
-        gptel-model   'gemini-2.5-pro))
+        gptel-model   'gemini-pro-latest))
 
 (provide 'init-ai)
 ;;; init-ai.el ends here
