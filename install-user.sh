@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# install-user.sh — user-scope deps for ~/.emacs.d.
+# Refuses to run as root (cargo/go/rustup/npm caches would land under /root/).
+# Idempotent: re-run anytime; already-installed components are no-ops.
+#
+# Sections:
+#   1. npm globals  — LSPs / formatters / linters (skipped if no npm)
+#   2. cargo        — emacs-lsp-booster, difftastic (skipped if no cargo)
+#   3. go install   — gopls (skipped if no go)
+#   4. rustup       — rust-analyzer component (skipped if no rustup)
+#   5. reminders    — manual follow-ups printed at end
+
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "install-user.sh: must be run with bash (you used sh/dash, which has no arrays)" >&2
+  echo "  try:  bash $0    or just:  $0" >&2
+  exit 1
+fi
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=install-lib.sh
+. "$SCRIPT_DIR/install-lib.sh"
+
+if [ "$EUID" -eq 0 ]; then
+  echo "install-user.sh: refuse to run as root — cargo/go/rustup/npm caches" >&2
+  echo "  would land under /root/. Run as your normal user without sudo." >&2
+  exit 1
+fi
+
+# ── 1. npm globals ──────────────────────────────────────────────────────
+section "npm globals"
+if have npm; then
+  # If npm's global prefix is still a root-requiring default, flip it to a
+  # user-writable path so `npm install -g` no longer needs sudo. Idempotent:
+  # the conditional no-ops on subsequent runs.
+  npm_prefix="$(npm config get prefix 2>/dev/null || echo /usr/local)"
+  if [ "$npm_prefix" = "/usr/local" ] || [ "$npm_prefix" = "/usr" ]; then
+    npm config set prefix "$HOME/.npm-global"
+    ok "npm prefix → $HOME/.npm-global  (add \$HOME/.npm-global/bin to PATH)"
+  fi
+  npm install -g \
+    typescript typescript-language-server \
+    vscode-langservers-extracted \
+    prettier eslint \
+    pyright
+else
+  skip "npm 不在 PATH — LSP / formatter 跳過; 自行裝 node 後重跑此腳本"
+fi
+
+# ── 2. cargo ────────────────────────────────────────────────────────────
+section "cargo crates"
+if have cargo; then
+  # emacs-lsp-booster: version pin matches init.el:713
+  cargo install --locked --version 0.2.1 emacs-lsp-booster
+  cargo install --locked difftastic
+else
+  skip "cargo 不在 PATH — emacs-lsp-booster / difftastic 跳過"
+fi
+
+# ── 3. go install ───────────────────────────────────────────────────────
+section "go binaries"
+if have go; then
+  go install golang.org/x/tools/gopls@latest
+else
+  skip "go 不在 PATH — gopls 跳過"
+fi
+
+# ── 4. rustup component ─────────────────────────────────────────────────
+section "rustup components"
+if have rustup; then
+  rustup component add rust-analyzer
+else
+  skip "rustup 不在 PATH — rust-analyzer 跳過"
+fi
+
+# ── 5. manual follow-ups ────────────────────────────────────────────────
+section "Manual follow-ups"
+cat <<'EOF'
+  • PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)
+  • First Emacs launch: M-x nerd-icons-install-fonts (downloads TTFs once)
+  • jinx compiles its C module on first load (~2s; needs libenchant-2-dev)
+  • vterm compiles its C module on first launch (needs cmake + libvterm-dev)
+  • Tree-sitter css/json/lua are ABI 15 and unusable on Emacs 30 (ABI 14);
+    init.el:873-895 already routes around this (lua falls back to lua-mode)
+  • Lua LSP not in apt — install lua-language-server from GitHub releases
+    if you want eglot integration for .lua files
+EOF
