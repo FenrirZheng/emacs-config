@@ -40,6 +40,12 @@
   ;; everything you set since launch).  no-littering already redirects the
   ;; on-disk bookmarks file under `var/bookmark'.
   (setq bookmark-save-flag 1)
+  ;; pixel-scroll-precision-mode (Emacs 29+, GUI-only): mouse wheel /
+  ;; touchpad scrolls per-pixel instead of jumping 5 lines per tick.
+  ;; `fboundp' guard so a hypothetical older Emacs still loads this module;
+  ;; the mode silently no-ops in TTY frames (`emacsclient -t' inside tmux).
+  (when (fboundp 'pixel-scroll-precision-mode)
+    (pixel-scroll-precision-mode 1))
   ;; repeat-mode (built-in, Emacs 28+): after a prefixed command like `C-x o',
   ;; pressing the LAST key (`o', `o', `o') keeps invoking it without re-typing
   ;; the `C-x' prefix.  Also works for `C-x ^' (enlarge-window) etc.  Pure
