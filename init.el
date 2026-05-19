@@ -1,25 +1,25 @@
 ;;; init.el --- Personal Emacs configuration -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Organised, section-by-section config for Emacs 30.1.
+;; Thin loader for the per-section modules under `lisp/'.  Each `init-<area>.el'
+;; module corresponds to one section of the pre-2026-05-19 monolithic init.el
+;; (see git log for the split commits).
 ;;
-;; Layout:
-;;   1.  Package system, use-package bootstrap, no-littering
-;;   2.  Better built-in defaults (no external packages)
-;;   3.  system-packages (OS package helper)
-;;   4.  Minibuffer / completion UI      (Vertico ecosystem)
-;;   5.  In-buffer code completion        (Corfu + Cape)
-;;   6.  Snippets                         (YASnippet)
-;;   7.  Editing enhancements             (which-key, avy, expand-region, ...)
-;;   8.  Project, LSP & languages         (project.el, Eglot, tree-sitter)
-;;   9.  Git                              (Magit, diff-hl)
-;;   10. Terminal                         (vterm)
-;;   11. Appearance                       (doom-themes, doom-modeline, nerd-icons)
-;;   12. Org-mode                         (light touch)
-;;   13. Obsidian note vault              (obsidian.el)
-;;   14. org-roam                         (Zettelkasten over ~/code/org-roam)
-;;   15. AI / agent tooling               (eca, acp, shell-maker) -- pre-existing
-;;   16. Custom-set-variables block       (managed by M-x customize)
+;; Modules, in load order:
+;;   init-defaults         -- Better built-in defaults, custom-file, which-key, ibuffer
+;;   init-system-packages  -- OS package helper (apt/brew/...)
+;;   init-completion      -- Minibuffer / completion UI (Vertico ecosystem)
+;;   init-corfu           -- In-buffer code completion (Corfu + Cape)
+;;   init-snippets        -- YASnippet
+;;   init-editing        -- Editing enhancements (avy, pulsar, popper, jinx, ...)
+;;   init-languages      -- Project, LSP (Eglot), tree-sitter, per-language
+;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
+;;   init-terminal       -- vterm
+;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
+;;   init-org            -- Org-mode (light touch)
+;;   init-obsidian       -- Obsidian note vault (~/code/obsidian/)
+;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
+;;   init-ai             -- AI / agent tooling (eca, acp, shell-maker, claude-jobs-view)
 ;;
 ;; Conventions:
 ;;   * `use-package-always-ensure' is t, so plain `(use-package foo ...)' will
@@ -28,11 +28,16 @@
 ;;   * The package archive is NOT refreshed at startup (network-free boot).
 ;;     Run `M-x my/package-refresh' before installing anything new, or the
 ;;     first launch after adding a package will fail to find it.
+;;   * `M-x customize' writes to custom.el; `custom-file' is set in
+;;     init-defaults.el, which also calls `(load custom-file)'.  There is
+;;     intentionally NO `custom-set-variables' block here -- a duplicate in
+;;     both files would let "whichever loads last" silently win.
 
 ;;; Code:
 
 ;; ---------------------------------------------------------------------------
-;; 1. Package system & use-package bootstrap
+;; Package system & use-package bootstrap (kept inline -- `use-package' must be
+;; loaded before any module file can call it).
 ;; ---------------------------------------------------------------------------
 
 (require 'package)
@@ -63,7 +68,7 @@
 ;; (recentf, savehist, transient history, tramp, autosaves, ...).  This
 ;; redirects them into two tidy subdirs -- `var/' (volatile runtime state) and
 ;; `etc/' (config-ish data).  Load it as EARLY as possible so the packages
-;; configured later in this file (savehist in section 4, ...) already see the
+;; configured later (savehist in init-completion, ...) already see the
 ;; redirected paths.  The project .gitignore ignores `/var/' and `/etc/' in one
 ;; line each, replacing the per-file ignore rules; the pre-no-littering files
 ;; still sitting at the repo root (transient/, tramp, history, auto-save-list/)
@@ -96,9 +101,12 @@
 ;; nil' resolves without touching MELPA.
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
-;; Per-section modules under `lisp/' carry the rest of this config.  Loaded
-;; in the original section order; cross-section `use-package :after' wiring
-;; relies on this order, so do not reshuffle without verifying.
+;; ---------------------------------------------------------------------------
+;; Per-section modules.  Loaded in the original section order; cross-section
+;; `use-package :after' wiring relies on this order, so do not reshuffle
+;; without verifying.
+;; ---------------------------------------------------------------------------
+
 (mapc #'require
       '(init-defaults
         init-system-packages
@@ -112,34 +120,7 @@
         init-appearance
         init-org
         init-obsidian
-        init-org-roam))
-
-
-;; ---------------------------------------------------------------------------
-;; 15. AI / agent tooling -- pre-existing setup, kept as-is
-;; ---------------------------------------------------------------------------
-;;   eca          -- Editor Code Assistant client
-;;   acp          -- Agent Client Protocol library
-;;   shell-maker  -- shared shell framework these build on
-;; These were installed via `M-x customize' (see `package-selected-packages'
-;; in the block below).  Add explicit `(use-package eca ...)' configuration
-;; here if/when you want to bind keys or tweak behaviour.
-
-;; claude-jobs-view -- tabulated UI for the `jobctl' CLI (persistent Claude
-;; Code background sessions).  Source: lisp/claude-jobs-view.el.  Entry point:
-;; M-x claude-jobs-view.  `:commands' makes the autoload lazy -- the file is
-;; only loaded the first time the command is invoked.
-(use-package claude-jobs-view
-  :ensure nil
-  :commands (claude-jobs-view))
-
-;; ---------------------------------------------------------------------------
-;; 16. End of file
-;; ---------------------------------------------------------------------------
-;; `M-x customize' writes to `custom.el' (path set in section 2); that file is
-;; the single source of truth for `custom-set-variables' / `custom-set-faces'.
-;; There is intentionally NO custom-set-variables block here -- having one in
-;; both files leads to whichever-loads-last wins, which is exactly the kind of
-;; subtle bug `custom-file' was invented to prevent.
+        init-org-roam
+        init-ai))
 
 ;;; init.el ends here
