@@ -33,6 +33,13 @@
   (setq use-short-answers t)             ; y/n instead of yes/no
   (setq ring-bell-function 'ignore)      ; no audible bell
   (setq sentence-end-double-space nil)
+  ;; bookmark-save-flag = 1: persist `bookmark-set' / `bookmark-rename' /
+  ;; `bookmark-delete' to the bookmarks file IMMEDIATELY, not on Emacs exit.
+  ;; In daemon mode the "on exit" path effectively never fires (daemon stays
+  ;; alive across `emacsclient' sessions; a SIGKILL / power cut loses
+  ;; everything you set since launch).  no-littering already redirects the
+  ;; on-disk bookmarks file under `var/bookmark'.
+  (setq bookmark-save-flag 1)
   ;; repeat-mode (built-in, Emacs 28+): after a prefixed command like `C-x o',
   ;; pressing the LAST key (`o', `o', `o') keeps invoking it without re-typing
   ;; the `C-x' prefix.  Also works for `C-x ^' (enlarge-window) etc.  Pure
