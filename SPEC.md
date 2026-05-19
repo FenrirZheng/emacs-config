@@ -1,236 +1,304 @@
-# Spec: split `install.sh` into root-scope vs user-scope
+# Spec: split monolithic `init.el` into `lisp/init-<area>.el` modules
 
 Working tree: `/home/fenrir/.emacs.d` on branch `main`.
-Source-of-truth before this change: [`install.sh`](shell/install.sh) (current monolith,
-107 lines, six sections).
+Source-of-truth before this change: [`init.el`](init.el) (1320 lines, 68 KB,
+sixteen `;; N. <name>` sections under one `;;; Code:` block).
 
 ## Objective
 
-Refactor the single bootstrap script into two independently-runnable scripts so
-that the privilege boundary is explicit:
+Move from one ~1320-line `init.el` to a thin loader plus per-section module
+files under [`lisp/`](lisp/), one file per current top-level section. The
+section content moves verbatim; this refactor is a **layout change, not a
+behaviour change**.
 
-- **`install-root.sh`** — only the part that genuinely needs `sudo` (apt
-  packages). Safe to hand off to a sysadmin or run once per machine.
-- **`install-user.sh`** — everything that should write to the invoking user's
-  home directory (`$HOME/.cargo`, `$HOME/go`, `$HOME/.rustup`, `$HOME/.npm-global`).
-  Must NOT be run as root, or those caches end up owned by root and break next
-  user-mode invocation.
+Why this matters:
+- §8 (Project / LSP / languages) alone is 439 lines, one-third of the file.
+  Adding a new language mode currently means scrolling past 870 lines of
+  unrelated config.
+- Cross-section navigation today relies on remembering the section number
+  (`;; 8.`) — file names like `init-languages.el` are self-describing.
+- Byte-compilation is currently all-or-nothing; per-module `.elc` lets one
+  section's edit invalidate only its own compiled file.
+- The infrastructure is already half-built: `lisp/` exists,
+  [`init.el:1301`](init.el) already adds it to `load-path`, and
+  [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.el) already follows the
+  `(use-package … :ensure nil)` + local-`provide` pattern.
 
-Why this matters: today's [`install.sh`](shell/install.sh) mixes `sudo apt …` with
-`cargo install …` in the same `set -euo pipefail` flow. If the caller forgets
-and runs it under `sudo`, every cargo/go/rustup artefact lands in `/root/…` —
-silent corruption the user discovers later. The split removes that footgun.
+### Target user
 
-**npm-globals belongs in user scope** (per user clarification 2026-05-19):
-`install-user.sh` reconfigures `npm config set prefix "$HOME/.npm-global"` on
-first run so that `npm install -g` no longer needs `sudo`. PATH reminder
-printed in the manual-follow-ups block.
+The single operator of this repo (one machine). The split is for that operator's
+own future edits — not for sharing, packaging, or third-party reuse.
 
-### Target users
+### Assumptions I'm making
 
-The single user of this dotfiles repo (one machine, one operator). The split is
-about safety / mental clarity for that one user, not multi-tenant deployment.
+1. **No behaviour change.** Every section's content moves verbatim — same
+   `use-package` blocks, same `setq`s, same hooks, same order. If a smoke
+   test passes today, it must pass after the split with no edits.
+2. **Section boundaries are correct as drawn.** The existing 16 `;; N.` blocks
+   are the unit of split. No collapsing or further sub-splitting in this pass.
+3. **`use-package` is the only loading mechanism.** No transition to
+   `straight.el` / `elpaca` / literate org. Boot path stays
+   `early-init.el` → `init.el` → `(require 'init-<area>)` × N → `custom.el`.
+4. **Byte-compiled `.elc` files are disposable.** Existing
+   [`init.elc`](init.elc) will be deleted; modules can be byte-compiled or
+   not, the config must work either way.
+5. **`claude-jobs-view.el` is NOT a section.** It's a real elisp library that
+   happens to live under `lisp/`. It stays where it is and is still required
+   from `init-ai.el` (the new home of current §15).
+6. **Network-free boot stays.** `package-refresh-contents` is still **not**
+   called at startup (see [`init.el:49-54`](init.el)); `my/package-refresh`
+   stays as the on-demand command.
+
+→ Correct any of these now or the implementation will assume them.
 
 ## Tech Stack
 
-- Pure `bash` (already required — [`install.sh:14-18`](shell/install.sh) gates on
-  `BASH_VERSION`). No introduction of Make, Just, Ansible, or other tooling.
-- Same external dependencies as today: `dpkg-query`, `apt`, optionally `npm`,
-  `cargo`, `go`, `rustup`. All `have <cmd>` skips preserved.
+- Emacs 30.1 with `use-package` (built-in since Emacs 29). No new packages
+  introduced.
+- Existing `lisp/` directory on `load-path` (added at
+  [`init.el:1301`](init.el); moves up to the bootstrap section after the
+  split).
+- `no-littering` (already in §1) — module load order keeps it loading before
+  any section that creates state files.
 
 ## Commands
 
 After the refactor:
 
-| step | command | who runs it |
+| step | command | notes |
 |---|---|---|
-| install apt packages | `sudo bash install-root.sh` | root (or user under `sudo`) |
-| install user-level toolchain pieces | `bash install-user.sh` | the user, **NOT** under `sudo` |
-| one-shot orchestrator | `bash install.sh` | the user — internally calls `sudo` for the root half |
-| verify shellcheck | `shellcheck install.sh install-root.sh install-user.sh install-lib.sh` | the user |
-
-Each of the three scripts (`install.sh`, `install-root.sh`, `install-user.sh`)
-is independently executable; `install.sh` is convenience, not a hard dependency.
+| start daemon (smoke) | `emacs --daemon` | should complete without errors |
+| start client (smoke) | `emacsclient -c -nw` | mode-line, fonts, modules all live |
+| byte-compile all modules | `emacs -Q --batch -L lisp/ -f batch-byte-compile lisp/init-*.el` | optional but recommended after edits |
+| clean stale top-level `.elc` | `rm -f init.elc` | one-shot at the end of the refactor |
+| audit load order | `emacsclient -e '(mapcar #'\''car load-history)'` | confirm every `init-<area>` appears exactly once |
+| feature audit | `emacsclient -e '(mapcar (lambda (s) (cons s (featurep s))) (quote (init-defaults init-completion init-corfu init-snippets init-editing init-languages init-git init-terminal init-appearance init-org init-obsidian init-org-roam init-ai)))'` | every cell should be `(symbol . t)` |
+| batch sanity | `emacs --batch -l init.el --eval '(message "ok")'` | exits 0, prints `ok`, no `Symbol's function definition is void` |
 
 ## Project Structure
 
 ```
-shell/install.sh       → thin orchestrator (entry point preserved for muscle memory)
-shell/install-root.sh  → apt section only; self-elevates via exec sudo if EUID != 0
-shell/install-user.sh  → cargo + go + rustup + npm-globals + manual reminders;
-                         refuses to run if EUID == 0
-shell/install-lib.sh   → shared helpers (have / dpkg_installed / section / ok / skip);
-                         sourced by the three runnables, never executed directly
-SPEC.md                → this file (added by this change)
+init.el              → thin loader (~60 lines)
+                       §1 (package + use-package bootstrap) +
+                       load-path push for `lisp/` +
+                       sequential `(require 'init-…)` block +
+                       `(load custom-file)` tail
+custom.el            → unchanged (managed by M-x customize)
+early-init.el        → unchanged
+lisp/init-defaults.el        → §2  Better built-in defaults
+lisp/init-system-packages.el → §3  system-packages wrapper
+lisp/init-completion.el      → §4  Vertico ecosystem
+lisp/init-corfu.el           → §5  Corfu + Cape (in-buffer completion)
+lisp/init-snippets.el        → §6  YASnippet
+lisp/init-editing.el         → §7  Editing enhancements
+lisp/init-languages.el       → §8  Project / LSP / tree-sitter / languages
+lisp/init-git.el             → §9  Magit + diff-hl + magit-todos
+lisp/init-terminal.el        → §10 vterm
+lisp/init-appearance.el      → §11 doom-themes + doom-modeline + nerd-icons
+lisp/init-org.el             → §12 Org-mode (minimal)
+lisp/init-obsidian.el        → §13 obsidian.el
+lisp/init-org-roam.el        → §14 org-roam
+lisp/init-ai.el              → §15 AI / agent tooling (eca / acp / shell-maker
+                                   + the existing `claude-jobs-view` require)
+lisp/claude-jobs-view.el     → UNCHANGED (real library, not a section)
+SPEC.md                      → this file
 ```
 
-All four shell files live under [`shell/`](shell/) — they were moved out of the
-repo root after the split landed, so all install machinery sits in one folder.
+Section 1 (package bootstrap) **must** stay in `init.el` itself — `use-package`
+has to be `require`d before any module file can use it. Section 16 (end-of-file
+comment about `custom.el`) folds into a one-liner at the bottom of the new
+`init.el`.
 
 ## Code Style
 
-Mirror the existing helpers in [`install.sh:21-29`](shell/install.sh) verbatim — they
-move into `install-lib.sh` unchanged:
+Every new `lisp/init-<area>.el` file follows the canonical Emacs Lisp library
+header that [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.el) already
+uses:
 
-```bash
-# install-lib.sh — shared helpers for install-{root,user}.sh.
-# Source-only; do not execute directly.
+```elisp
+;;; init-completion.el --- Minibuffer / completion UI -*- lexical-binding: t; -*-
 
-have() { command -v "$1" >/dev/null 2>&1; }
-dpkg_installed() {
-  dpkg-query -W -f='${Status}' "$1" 2>/dev/null \
-    | grep -q "install ok installed"
-}
-section() { printf '\n\033[1;34m── %s ──\033[0m\n' "$1"; }
-ok()      { printf '  \033[32m[ok]\033[0m   %s\n' "$1"; }
-skip()    { printf '  \033[33m[skip]\033[0m %s\n' "$1"; }
+;;; Commentary:
+;; Section 4 of the original init.el.
+;; Vertico + Orderless + Marginalia + Consult + Embark + Wgrep.
+;; Behaviour: identical to pre-split init.el §4 — this is a layout change only.
+
+;;; Code:
+
+;; ... use-package blocks moved verbatim from old init.el §4 ...
+
+(provide 'init-completion)
+;;; init-completion.el ends here
 ```
 
-`install-root.sh` privilege-elevation idiom:
+The post-split [`init.el`](init.el) shrinks to roughly this shape:
 
-```bash
-#!/usr/bin/env bash
-# install-root.sh — root-scope deps (apt only). Self-elevates if EUID != 0.
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=install-lib.sh
-. "$SCRIPT_DIR/install-lib.sh"
+```elisp
+;;; init.el --- Personal Emacs configuration -*- lexical-binding: t; -*-
+;;; Commentary:
+;; Thin loader. Each `lisp/init-<area>.el' module corresponds to one
+;; section of the pre-2026-05-19 monolithic init.el (see git log for the
+;; split commit).
+;;; Code:
 
-if [ "$EUID" -ne 0 ]; then
-  exec sudo --preserve-env=PATH "$0" "$@"
-fi
-# ... apt section ...
+;; §1. Package system & use-package bootstrap  (kept inline — `use-package'
+;;     must be loaded before any module file can call it).
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
+(defun my/package-refresh () "Refresh package archive on demand."
+       (interactive) (package-refresh-contents))
+(require 'use-package)
+(setq use-package-always-ensure t)
+(use-package no-littering :demand t :config ...)
+(use-package exec-path-from-shell :demand t :if ... :config ...)
+
+;; Local-lisp dir for the per-section modules and hand-written libraries.
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
+;; Modules — load order matters: no-littering is already up; the rest
+;; follow the original section ordering verbatim.
+(mapc #'require
+      '(init-defaults
+        init-system-packages
+        init-completion
+        init-corfu
+        init-snippets
+        init-editing
+        init-languages
+        init-git
+        init-terminal
+        init-appearance
+        init-org
+        init-obsidian
+        init-org-roam
+        init-ai))
+
+;;; init.el ends here
 ```
 
-`install-user.sh` reverse-guard:
-
-```bash
-#!/usr/bin/env bash
-# install-user.sh — user-scope deps. Refuses to run as root.
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=install-lib.sh
-. "$SCRIPT_DIR/install-lib.sh"
-
-if [ "$EUID" -eq 0 ]; then
-  echo "install-user.sh: refuse to run as root — cargo/go/rustup/npm caches" >&2
-  echo "  would land under /root/. Run as your normal user without sudo." >&2
-  exit 1
-fi
-# ... cargo / go / rustup / npm / reminders ...
-```
-
-`install.sh` post-refactor (orchestrator only):
-
-```bash
-#!/usr/bin/env bash
-# install.sh — orchestrator. Calls install-root.sh (via sudo) then install-user.sh.
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-sudo bash "$SCRIPT_DIR/install-root.sh"
-bash "$SCRIPT_DIR/install-user.sh"
-```
-
-### npm-globals → user prefix idiom (the one new piece of logic)
-
-Inside `install-user.sh`, before any `npm install -g`:
-
-```bash
-if have npm; then
-  npm_prefix="$(npm config get prefix 2>/dev/null || echo /usr/local)"
-  if [ "$npm_prefix" = "/usr/local" ] || [ "$npm_prefix" = "/usr" ]; then
-    section "npm: switching global prefix to user-writable path"
-    npm config set prefix "$HOME/.npm-global"
-    ok "npm prefix → $HOME/.npm-global  (add $HOME/.npm-global/bin to PATH)"
-  fi
-  # then the existing npm install -g ... block, unchanged
-fi
-```
-
-The PATH reminder also gets a line in the manual-follow-ups heredoc at the
-bottom of `install-user.sh`.
+`custom-file` resolution (currently inside §2) stays in `init-defaults.el`.
 
 ## Testing Strategy
 
-No test framework — these are bootstrap shell scripts run a handful of times
-per machine. Verification is static + smoke:
+No test framework. Verification is smoke + diff-based:
 
-- **Static**: `shellcheck install.sh install-root.sh install-user.sh install-lib.sh`
-  must exit 0. The split should not regress any lint that the current
-  monolith passes.
-- **Idempotency smoke**: running each script twice in a row produces no
-  failures and the second run's output is mostly `[ok]` / `[skip]` lines, no
-  `installing:` lines. (Today's [`install.sh`](shell/install.sh) already has this
-  property — preserve it.)
-- **Privilege-guard smoke**:
-  - `bash install-root.sh` with no `sudo` should re-exec under sudo (prompt for
-    password) rather than fail with EACCES on `apt update`.
-  - `sudo bash install-user.sh` should exit non-zero with the refuse-to-run
-    message, NOT proceed to write `/root/.cargo/`.
-- **npm-prefix smoke**: after a fresh `install-user.sh` run on a machine where
-  `npm config get prefix` was `/usr/local`, the new prefix is `$HOME/.npm-global`
-  and a subsequent `npm install -g pkg` (manual, outside this script) succeeds
-  without `sudo`.
+- **Batch load**: `emacs --batch -l init.el --eval '(message "ok")'` exits 0,
+  prints `ok`, prints no `Symbol's function definition is void`, no
+  `Cannot open load file`, no `Wrong type argument`.
+- **Daemon smoke**: `emacs --daemon` produces only the existing benign
+  messages (no new warnings). `emacsclient -c -nw` opens a usable frame with
+  doom-modeline, doom-themes, vertico minibuffer, corfu in-buffer completion.
+- **Feature presence**: every expected `init-<area>` is in `features`:
+  ```
+  emacsclient -e '(mapcar (lambda (s) (cons s (featurep s)))
+                          (quote (init-defaults init-completion init-corfu
+                                  init-snippets init-editing init-languages
+                                  init-git init-terminal init-appearance
+                                  init-org init-obsidian init-org-roam
+                                  init-ai)))'
+  ```
+  Every cell `(symbol . t)`.
+- **Behaviour parity** spot-checks (the high-traffic features):
+  - `C-x C-f` → vertico minibuffer with marginalia annotations.
+  - `M-x consult-ripgrep` → works.
+  - Open a `.go` file → `go-ts-mode`, eglot starts, gopls connects.
+  - Open a `.lua` file → `lua-mode` (regex), no tree-sitter ABI warning.
+  - `M-x magit-status` → Magit opens normally; diff-hl fringe present.
+  - `M-x org-roam-node-find` → org-roam minibuffer.
+  - `M-x claude-jobs-view` → tabulated UI opens (proves the local-lisp
+    require still works).
+- **`*Messages*` audit** after a clean daemon start:
+  ```
+  emacsclient -e '(with-current-buffer "*Messages*"
+                    (buffer-substring-no-properties
+                      (max (point-min) (- (point-max) 8000)) (point-max)))'
+  ```
+  Diff against a captured pre-refactor baseline — no new warnings or
+  errors, may differ in ordering of benign init messages.
+- **Diff hygiene**:
+  - `git diff init.el` shows ~1260 lines removed, the new thin-loader content
+    added — net file becomes ~60 lines.
+  - Each new `lisp/init-<area>.el` has a `git status` "new file" entry whose
+    content equals the corresponding pre-refactor section + the
+    library-header / `provide` wrapping. Nothing else.
+  - `git diff custom.el early-init.el` empty (untouched).
 
 ## Boundaries
 
 - **Always**:
-  - Preserve every existing `have <cmd>` skip — no new hard dependencies.
-  - Preserve `dpkg_installed` idempotency — never re-`apt install` already-installed packages.
-  - Preserve the `# ── N. <name> ──` section headers and `[ok]` / `[skip]`
-    output style — the user reads these visually.
-  - Keep the BASH_VERSION gate at the top of every runnable script (sh/dash
-    has no arrays — same reason as today's [`install.sh:14-18`](shell/install.sh)).
-  - `set -euo pipefail` at the top of every runnable; `set -u`-safe parameter
-    expansion (`${VAR:-default}`) where applicable.
+  - Preserve every section's content **verbatim** (modulo the file header /
+    `provide` wrapping). No "while I'm in here" cleanups.
+  - Preserve section ordering. `no-littering` loads first, then everything
+    else in the original §2 → §15 order, then `custom.el` last.
+  - Every new file gets the `-*- lexical-binding: t; -*-` cookie on line 1.
+  - Every new file ends with `(provide 'init-<area>)` and the `;;; … ends
+    here` trailer (matches the convention in
+    [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.el)).
+  - Cross-section `with-eval-after-load` / `:after` references keep working
+    untouched — they operate by feature symbol, not by file boundary, and
+    the load order is preserved.
+  - Delete [`init.elc`](init.elc) once at the end so a stale compiled file
+    can't shadow the new `init.el`.
 - **Ask first**:
-  - Adding a sixth or seventh script — keep the surface area small.
-  - Changing what goes in root vs user scope beyond the npm-globals move
-    already specified.
-  - Introducing a `Makefile` / `Justfile` / external runner.
+  - Splitting one of the existing 16 sections further (e.g. teasing
+    `init-languages.el` into `init-eglot.el` + `init-treesit.el` + per-lang
+    files). Tempting for §8 specifically — defer to a follow-up RFC.
+  - Collapsing two small sections into one file (e.g. §6 snippets + §5 corfu).
+  - Switching to `straight.el` / `elpaca` / literate org / any non-`use-package`
+    loader.
+  - Renaming `lisp/claude-jobs-view.el` or moving it under any of the new
+    `init-*.el` modules.
 - **Never**:
-  - Run `sudo` inside `install-user.sh` (it's the user-scope script — if a
-    step needs root, that step belongs in `install-root.sh`).
-  - Use `npm install -g` without first ensuring the user-writable prefix is
-    configured (defeats the whole "npm-in-user-scope" decision).
-  - Touch the `cargo --locked --version 0.2.1 emacs-lsp-booster` pin without
-    also updating [`init.el:713`](init.el) — the comment at
-    [`install.sh:74`](shell/install.sh) flags this coupling.
-  - Add backwards-compat shims for "what if someone still calls the old
-    script?" — `install.sh` keeps working (it's now the orchestrator), no
-    deprecation theatre needed.
+  - Re-order sections to "feel cleaner". Order is part of the contract
+    (no-littering before recentf, exec-path-from-shell before eglot, …).
+  - Inline `(load "lisp/init-X")` calls — use `(require 'init-X)` so duplicate
+    loads are no-ops and the feature list reflects what's actually loaded.
+  - Add a `:after` / `with-eval-after-load` indirection that wasn't already
+    in the monolith — behaviour must stay byte-identical.
+  - Introduce a `Makefile` or build script to byte-compile. Manual
+    `emacs --batch … -f batch-byte-compile` invocation is fine for a single
+    operator.
+  - Commit the per-module `.elc` files (they're already covered by
+    [`.gitignore`](.gitignore) — verify before commit).
 
 ## Success Criteria
 
-1. `shellcheck install.sh install-root.sh install-user.sh install-lib.sh` exits 0.
-2. Fresh machine flow works: `bash install.sh` from a clean checkout installs
-   everything that today's [`install.sh`](shell/install.sh) installs, in one invocation,
-   prompting for sudo password once.
-3. `sudo bash install-user.sh` exits non-zero with the refuse message — does NOT
-   write to `/root/.cargo/` or `/root/go/`.
-4. `bash install-root.sh` from an unprivileged shell self-elevates (one sudo
-   password prompt) and completes the apt section.
-5. On a machine where `npm config get prefix` was `/usr/local`, running
-   `bash install-user.sh` flips the prefix to `$HOME/.npm-global` and then
-   `npm install -g` works without `sudo`. The manual-follow-ups block at end
-   of `install-user.sh` reminds the user to add `$HOME/.npm-global/bin` to PATH.
-6. Re-running any of the three scripts produces no `installing:` / `cargo
-   install` write activity for already-installed components — output is
-   dominated by `[ok]` / `[skip]` lines.
-7. `git diff install.sh` shows the file shrunk to the orchestrator form (~8
-   lines); the three new files (`install-root.sh`, `install-user.sh`,
-   `install-lib.sh`) appear as untracked, ready to commit alongside.
-8. No regression in the section coverage: every section in today's
-   [`install.sh`](shell/install.sh) (apt / npm / cargo / go / rustup / reminders) is
-   present in exactly one of the two new scripts.
+1. `emacs --batch -l init.el --eval '(message "ok")'` exits 0 with `ok` on
+   stdout, no errors / warnings.
+2. `emacs --daemon` + `emacsclient -c -nw` opens a frame; every smoke-check
+   in "Testing Strategy" passes.
+3. `wc -l init.el` ≤ 80 lines; `wc -l lisp/init-*.el` shows roughly the
+   pre-split section sizes (file-by-file delta ≤ ~6 lines of header
+   wrapping per file).
+4. `git diff --stat` shows ~1260 lines deleted from `init.el`, ~1260 lines
+   added across the 13 new `lisp/init-*.el` files. Net repo line count
+   roughly conserved.
+5. Feature audit query (Commands table) returns every cell as `(symbol . t)`.
+6. `*Messages*` after a clean daemon start contains no new warnings vs the
+   pre-refactor baseline (captured once before any moves).
+7. Re-running the daemon after `M-x package-refresh` + `M-x package-upgrade-all`
+   continues to work — module file paths don't bake in any MELPA-version
+   assumptions.
+8. [`init.elc`](init.elc) is removed; `git status` confirms it's untracked-
+   ignored (already covered by [`.gitignore`](.gitignore)).
+9. `M-x claude-jobs-view` still launches the tabulated UI — proves the
+   pre-existing local-lisp require chain survives the refactor.
 
 ## Open Questions
 
-None blocking — proceed to plan / implement under the assumptions above. Note
-for after implementation:
+None blocking. Surface to the user **after** the split lands, not before:
 
-- Whether to also gate `install-root.sh`'s `apt update` behind a "stamp file
-  is older than 24h" check, to avoid hitting Debian mirrors on every run. Not
-  in scope for this change — current behaviour (`apt update` runs only when
-  the `missing` array is non-empty) is already conservative.
+- Should §8 (`init-languages.el`, the 439-line elephant) be sub-split in a
+  follow-up — e.g. `init-eglot.el` + `init-treesit.el` + per-language files?
+  Defer until the simple split is in and we can see how often §8 alone is
+  edited.
+- Byte-compilation: do we want a `make compile` shortcut or a
+  `post-package-install-hook` that recompiles changed modules? Defer —
+  manual `emacs --batch -L lisp/ -f batch-byte-compile lisp/init-*.el` is
+  fine for now.
+- Documentation: [`FEATURES.md`](FEATURES.md) currently references sections
+  by number (e.g. "§7 Editing"). Should those become file-path links
+  (`[init-editing.el](lisp/init-editing.el)`) once the split lands? Yes —
+  do it as a follow-up commit, not bundled with the move (keeps the diff
+  reviewable).
