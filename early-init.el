@@ -19,16 +19,20 @@
 ;; ---------------------------------------------------------------------------
 ;; Default `gc-cons-threshold' is 800k -- with 60+ use-package blocks that
 ;; triggers ~50 minor GCs (~300-500ms total).  Disable GC entirely during init
-;; by raising the threshold to the largest fixnum, then restore a sane
-;; interactive value once startup finishes.  32MB is the sweet spot for most
-;; setups: large enough to avoid pause-on-each-typed-key, small enough that
-;; the eventual sweep doesn't lock the UI for noticeable beats.
+;; by raising the threshold to the largest fixnum, then drop to a 16 MB FLOOR
+;; on `emacs-startup-hook'.  `gcmh-mode' (configured in
+;; `init-defaults.el') takes over from there and adapts the threshold upward
+;; on user activity, sweeping during idle -- so 16 MB is just the lower bound
+;; that holds between `emacs-startup-hook' and the first gcmh adjustment.
+;; A fixed 32 MB without GCMH used to be the sweet spot here, but it still
+;; produced visible pauses on heavy `consult-ripgrep' / Magit refresh; GCMH
+;; eliminates those.
 (setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.6)
 
 (add-hook 'emacs-startup-hook
           (lambda ()
-            (setq gc-cons-threshold (* 32 1024 1024)
+            (setq gc-cons-threshold (* 16 1024 1024)
                   gc-cons-percentage 0.1)))
 
 ;; ---------------------------------------------------------------------------

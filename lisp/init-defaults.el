@@ -90,6 +90,26 @@
       (send-string-to-terminal (format "\e]52;c;%s\a" b64))))
   (setq interprogram-cut-function #'fenrir/osc52-copy))
 
+;; gcmh: Garbage Collector Magic Hack.  Replaces the fixed post-startup
+;; `gc-cons-threshold' (16 MB floor set in `early-init.el') with an adaptive
+;; scheme: raise the threshold to a high "interactive" value while you're
+;; typing / scrolling / running commands, then drop it back and sweep once
+;; Emacs has been idle for `gcmh-idle-delay' seconds.  Net result: zero
+;; perceptible GC pauses during heavy work (`consult-ripgrep' through 100k
+;; matches, `magit-refresh' on a big repo, `eglot' hover on a complex
+;; struct), with memory still bounded because the idle sweep DOES run.
+;;
+;; `gcmh-idle-delay 'auto' lets gcmh pick the idle delay from the most-
+;; recent GC time -- short for cheap GCs, longer for expensive ones --
+;; instead of forcing a single fixed value.  Upstream default.
+;;
+;; First-run note: as with every use-package block here, the archive is not
+;; refreshed at startup (see init.el §1).  After this commit lands, run
+;; `M-x my/package-refresh' then restart the daemon once so gcmh installs.
+(use-package gcmh
+  :init (gcmh-mode 1)
+  :custom (gcmh-idle-delay 'auto))
+
 ;; which-key: after a prefix key (C-x, C-c, ...) pops up a panel listing the
 ;; follow-up keys.  Built into Emacs 30 -- hence :ensure nil.
 (use-package which-key

@@ -12,7 +12,7 @@
                 corfu-terminal diff-hl difftastic dirvish
                 doom-modeline doom-themes eca eglot-booster eldoc-box
                 embark-consult envrc exec-path-from-shell
-                expand-region flymake-eslint ggtags helpful jinx
+                expand-region flymake-eslint gcmh ggtags helpful jinx
                 lua-mode magit-delta magit-todos marginalia
                 multiple-cursors no-littering obsidian orderless
                 org-appear org-modern org-roam-ui popper pulsar
