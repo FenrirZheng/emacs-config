@@ -79,11 +79,22 @@
          ("C-x B"   . consult-buffer)         ; switch buffer (with previews)
          ("C-x 4 b" . consult-buffer-other-window)
          ("C-x p b" . consult-project-buffer) ; project-scoped buffer switch
+         ("C-x r b" . consult-bookmark)       ; bookmark jump with preview
          ;; search
          ("M-y"     . consult-yank-pop)       ; browse the kill-ring
          ("C-s"     . consult-line)           ; search lines in this buffer
+         ("M-s L"   . consult-line-multi)     ; same, across all open buffers
+         ("M-s k"   . consult-keep-lines)     ; filter buffer to matching lines
+         ("M-s u"   . consult-focus-lines)    ; hide non-matching lines (toggle)
+         ;; goto -- `M-g' is the standard prefix for "jump to":
          ("M-g g"   . consult-goto-line)
          ("M-g i"   . consult-imenu)          ; jump to a definition in this file
+         ("M-g I"   . consult-imenu-multi)    ; same, across project buffers
+         ("M-g o"   . consult-outline)        ; jump to an outline heading
+         ("M-g m"   . consult-mark)           ; jump to a recent mark in buffer
+         ("M-g k"   . consult-global-mark)    ; jump to a recent mark globally
+         ("M-g f"   . consult-flymake)        ; list diagnostics with preview
+         ;; project search
          ("M-s r"   . consult-ripgrep)        ; grep across the project
          ("M-s f"   . consult-find))          ; find files by name
   :custom
@@ -95,7 +106,27 @@
   ;; See the section-5 header comment for the rationale.  `:init' (rather
   ;; than `:config') so the override is in place before any buffer's first
   ;; completion call, even if consult itself loads lazily afterwards.
-  (setq completion-in-region-function #'consult-completion-in-region))
+  (setq completion-in-region-function #'consult-completion-in-region)
+  :config
+  ;; Debounce live preview for the expensive commands.  Default behaviour
+  ;; re-runs ripgrep / re-renders the previewed buffer on every keystroke;
+  ;; on a large project that's enough latency to feel laggy.  `:debounce 0.2'
+  ;; waits 200ms of input idle before previewing; `any' means any key counts
+  ;; as input (the alternative `'any' would also re-trigger on the
+  ;; manual-preview key, which we don't want).
+  ;;
+  ;; Only command-level entries listed -- the `consult--source-*' variables
+  ;; (bookmark, recent-file, file-register, project-recent-file) are
+  ;; autoloaded lazily by `consult-buffer' and don't exist at the time this
+  ;; `:config' block runs, so passing them here triggers
+  ;; "neither a command nor a source" warnings.  The `consult-buffer' multi-
+  ;; source flow has cheap buffer/file previewing anyway -- the commands
+  ;; below are the ones that actually pay ripgrep / file-read cost per
+  ;; keystroke.
+  (consult-customize
+   consult-ripgrep consult-grep consult-git-grep consult-find
+   consult-bookmark consult-recent-file
+   :preview-key '(:debounce 0.2 any)))
 
 (use-package embark
   :bind (("C-." . embark-act)            ; act on the thing at point / candidate
