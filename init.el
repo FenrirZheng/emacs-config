@@ -90,6 +90,12 @@
   :config
   (exec-path-from-shell-initialize))
 
+;; Local-lisp dir for hand-written packages (claude-jobs-view, future siblings)
+;; and for the per-section `init-<area>.el' modules.  Added to `load-path' here,
+;; ONCE, so every later `(require 'init-<area>)' / `use-package <local> :ensure
+;; nil' resolves without touching MELPA.
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
 ;; ---------------------------------------------------------------------------
 ;; 2. Better built-in defaults (no external packages)
 ;; ---------------------------------------------------------------------------
@@ -1263,11 +1269,6 @@ seems stuck on a stale answer."
 ;; These were installed via `M-x customize' (see `package-selected-packages'
 ;; in the block below).  Add explicit `(use-package eca ...)' configuration
 ;; here if/when you want to bind keys or tweak behaviour.
-
-;; Local-lisp dir for hand-written packages (claude-jobs-view, future siblings).
-;; Added to `load-path' here, ONCE, so any `use-package <local> :ensure nil'
-;; below resolves without touching MELPA.
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
 ;; claude-jobs-view -- tabulated UI for the `jobctl' CLI (persistent Claude
 ;; Code background sessions).  Source: lisp/claude-jobs-view.el.  Entry point:
