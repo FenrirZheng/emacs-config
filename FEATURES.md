@@ -1,9 +1,10 @@
 # Features & cheat sheet
 
-What this Emacs 30.1 config actually gives you, grouped by workflow. Section numbers
-match the section headers in [`init.el`](init.el). For the package list and *why* each
-choice was made, read the comments in [`init.el`](init.el) itself — this file is the
-"what keys do I press" companion.
+What this Emacs 30.1 config actually gives you, grouped by workflow. Each section
+points to the module file under [`lisp/`](lisp/) where the relevant config lives.
+For the package list and *why* each choice was made, read the comments in those
+modules (and in [`init.el`](init.el)'s bootstrap block) — this file is the "what
+keys do I press" companion.
 
 Language-specific guides (architecture, workflows, troubleshooting):
 
@@ -15,7 +16,7 @@ Language-specific guides (architecture, workflows, troubleshooting):
 
 ---
 
-## 1. Minibuffer: finding things (Vertico ecosystem — §4)
+## 1. Minibuffer: finding things (Vertico ecosystem — [`init-completion.el`](lisp/init-completion.el))
 
 Five small orthogonal packages replace Helm/Ivy/ido: **vertico** (vertical candidate
 list), **orderless** (space-separated, any-order fuzzy match), **marginalia** (docstrings
@@ -58,11 +59,11 @@ a candidate).
 - **Preview debounce**: expensive previewers (`consult-ripgrep`, `consult-grep`,
   `consult-find`, `consult-bookmark`, `consult-recent-file`) wait 200 ms of input idle
   before re-rendering — keeps typing in a large project from queueing a ripgrep per
-  keystroke. Tune via `consult-customize` in [`init.el`](init.el) §4.
+  keystroke. Tune via `consult-customize` in [`init-completion.el`](lisp/init-completion.el).
 
 ---
 
-## 2. ⭐ Combo — project-wide search-and-replace with undo (§4)
+## 2. ⭐ Combo — project-wide search-and-replace with undo ([`init-completion.el`](lisp/init-completion.el))
 
 The payoff of consult + embark + wgrep wired together:
 
@@ -78,7 +79,7 @@ C-c C-c        ; write the edits back to every file at once (each file keeps its
 
 ---
 
-## 3. Embark — a context menu for "the thing at point" (§4)
+## 3. Embark — a context menu for "the thing at point" ([`init-completion.el`](lisp/init-completion.el))
 
 | Key | Command | What it does |
 |---|---|---|
@@ -91,7 +92,7 @@ and previews entries at point.
 
 ---
 
-## 4. In-buffer code completion — Corfu + Cape (§5)
+## 4. In-buffer code completion — Corfu + Cape ([`init-corfu.el`](lisp/init-corfu.el))
 
 - Popup appears automatically after **2 characters**, **0.2 s** delay (`corfu-auto`,
   `corfu-auto-prefix 2`, `corfu-auto-delay 0.2`); `corfu-cycle` wraps the list.
@@ -104,7 +105,7 @@ and previews entries at point.
 
 ---
 
-## 5. Motion & editing power tools (§7)
+## 5. Motion & editing power tools ([`init-editing.el`](lisp/init-editing.el))
 
 | Key | Command | What it does |
 |---|---|---|
@@ -124,7 +125,9 @@ and previews entries at point.
 | `C-c ←` | `winner-undo` | Undo the last window-layout change (`winner-mode`, built-in). Concrete save: you `C-x 1`-ed expecting to keep the other window — this brings it back. Magit / Org / Help re-arrange windows aggressively; this is the universal undo for that |
 | `C-c →` | `winner-redo` | Redo a window-layout change you just undid with `C-c ←` |
 
-Always-on editing defaults (§2, §4): `electric-pair-mode` (auto-insert matching brackets
+Always-on editing defaults (mostly [`init-defaults.el`](lisp/init-defaults.el); `save-place-mode`
+lives in [`init-completion.el`](lisp/init-completion.el), `rainbow-delimiters` in
+[`init-editing.el`](lisp/init-editing.el)): `electric-pair-mode` (auto-insert matching brackets
 / quotes), `delete-selection-mode` (typing replaces the active region),
 `rainbow-delimiters` (colour nested parens by depth in `prog-mode`), `column-number-mode`,
 `y/n` instead of `yes/no`, no audible bell, `global-auto-revert-mode` (reload buffers —
@@ -139,7 +142,7 @@ jump, a window switch, `consult-line` / `consult-imenu` / `consult-ripgrep`,
 
 ---
 
-## 6. Help system, upgraded (§2, §7)
+## 6. Help system, upgraded (`which-key` in [`init-defaults.el`](lisp/init-defaults.el), `helpful` in [`init-editing.el`](lisp/init-editing.el))
 
 | Key | Command | What it does |
 |---|---|---|
@@ -154,7 +157,7 @@ lists the follow-up keys — no need to memorise prefixes.
 
 ---
 
-## 7. Project, LSP & languages (§8)
+## 7. Project, LSP & languages ([`init-languages.el`](lisp/init-languages.el))
 
 - `project.el` **(built-in)**: project-aware file/buffer/command commands under `C-x p`.
 - **envrc**: direnv integration. When you visit a file under a directory with an
@@ -162,7 +165,7 @@ lists the follow-up keys — no need to memorise prefixes.
   (`process-environment` + `exec-path`). Two concrete wins: Eglot picks the right server
   binary per project (e.g. a Go monorepo's pinned `gopls` in `./bin/`), and Node tooling
   follows whatever `nvm`/`volta`/`asdf` declared. Complements `exec-path-from-shell` in
-  §1 (one-shot global harvest at daemon launch) — neither replaces the other.
+  [`init.el`](init.el)'s bootstrap (one-shot global harvest at daemon launch) — neither replaces the other.
   Per-project setup: drop an `.envrc`, then `direnv allow` once. Needs the `direnv`
   binary (`apt install direnv`); without it the mode silently no-ops.
 - **Eglot** **(built-in)**: a zero-config LSP client. Auto-starts when you open a file in
@@ -220,13 +223,13 @@ lists the follow-up keys — no need to memorise prefixes.
   no LSP / formatter / REPL wired. Picked over the built-in `lua-ts-mode` because the
   upstream `tree-sitter-grammars/tree-sitter-lua` grammar is ABI 15 at HEAD and Emacs
   30.1 caps at ABI 14 (same reason `css` and `json` are excluded from `treesit-auto`
-  in [`init.el`](init.el) §8). Reach for `M-s r` (consult-ripgrep) for cross-file
+  in [`init-languages.el`](lisp/init-languages.el)). Reach for `M-s r` (consult-ripgrep) for cross-file
   work in a Lua project; add `(lua-mode . eglot-ensure)` + install
   `lua-language-server` only when annotations / go-to-def actually matter.
 
 ---
 
-## 8. Git — Magit + diff-hl (§9)
+## 8. Git — Magit + diff-hl ([`init-git.el`](lisp/init-git.el))
 
 | Key | Command | What it does |
 |---|---|---|
@@ -242,7 +245,7 @@ lists the follow-up keys — no need to memorise prefixes.
 
 ---
 
-## 9. Terminal — vterm (§10)
+## 9. Terminal — vterm ([`init-terminal.el`](lisp/init-terminal.el))
 
 | Key | Command | What it does |
 |---|---|---|
@@ -255,7 +258,7 @@ use `M-x eshell`.)
 
 ---
 
-## 10. Snippets — YASnippet (§6)
+## 10. Snippets — YASnippet ([`init-snippets.el`](lisp/init-snippets.el))
 
 `yas-global-mode` is on; `yasnippet-snippets` ships a large ready-made collection for many
 major modes. Type a snippet's abbreviation and press `TAB` to expand it; `TAB` again jumps
@@ -263,7 +266,7 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 
 ---
 
-## 11. Appearance (§11)
+## 11. Appearance ([`init-appearance.el`](lisp/init-appearance.el))
 
 - **doom-themes** — `doom-one` loaded by default (swap for any `doom-*`); bold + italic
   enabled; `doom-themes-org-config` tweaks Org faces to match.
@@ -273,7 +276,7 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 
 ---
 
-## 12. Org-mode — light touch (§12)
+## 12. Org-mode — light touch ([`init-org.el`](lisp/init-org.el))
 
 - `org-startup-indented` (visually indent by outline level), `org-hide-emphasis-markers`
   (show `*bold*` as bold, hide the stars), `org-src-fontify-natively` (highlight inside
@@ -288,12 +291,12 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 
 ---
 
-## 13. AI / agent tooling (§13)
+## 13. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el))
 
 `eca` (Editor Code Assistant client), `acp` (Agent Client Protocol library) and
 `shell-maker` (the shared shell framework they build on) are installed but **not yet bound
-to keys** — invoke via `M-x eca` etc. Add `(use-package eca ...)` config in §13 of
-[`init.el`](init.el) when you want bindings or tweaks.
+to keys** — invoke via `M-x eca` etc. Add `(use-package eca ...)` config in
+[`init-ai.el`](lisp/init-ai.el) when you want bindings or tweaks.
 
 ---
 
@@ -302,9 +305,8 @@ to keys** — invoke via `M-x eca` etc. Add `(use-package eca ...)` config in §
 - **No package-archive refresh at startup** (network-free boot). Before installing a new
   package run `M-x my/package-refresh`, then restart — otherwise the first launch after
   adding it fails to find it. See also [`README.md`](README.md).
-- **New `M-x customize` settings go to [`custom.el`](custom.el)** (`custom-file` is set in
-  §2). The legacy `custom-set-variables` block at the bottom of [`init.el`](init.el) is
-  kept only for compatibility with older Emacs.
+- **New `M-x customize` settings go to [`custom.el`](custom.el)** — `custom-file` is set
+  and loaded in [`init-defaults.el`](lisp/init-defaults.el).
 - **no-littering** redirects package state into `var/` (volatile runtime state) and `etc/`
   (config-ish data); [`.gitignore`](.gitignore) ignores both in one line each. The orphaned
   pre-no-littering files still at the repo root (`transient/`, `tramp`, `history`,
