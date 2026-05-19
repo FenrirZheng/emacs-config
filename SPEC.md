@@ -1,7 +1,7 @@
 # Spec: split `install.sh` into root-scope vs user-scope
 
 Working tree: `/home/fenrir/.emacs.d` on branch `main`.
-Source-of-truth before this change: [`install.sh`](install.sh) (current monolith,
+Source-of-truth before this change: [`install.sh`](shell/install.sh) (current monolith,
 107 lines, six sections).
 
 ## Objective
@@ -16,7 +16,7 @@ that the privilege boundary is explicit:
   Must NOT be run as root, or those caches end up owned by root and break next
   user-mode invocation.
 
-Why this matters: today's [`install.sh`](install.sh) mixes `sudo apt …` with
+Why this matters: today's [`install.sh`](shell/install.sh) mixes `sudo apt …` with
 `cargo install …` in the same `set -euo pipefail` flow. If the caller forgets
 and runs it under `sudo`, every cargo/go/rustup artefact lands in `/root/…` —
 silent corruption the user discovers later. The split removes that footgun.
@@ -33,7 +33,7 @@ about safety / mental clarity for that one user, not multi-tenant deployment.
 
 ## Tech Stack
 
-- Pure `bash` (already required — [`install.sh:14-18`](install.sh) gates on
+- Pure `bash` (already required — [`install.sh:14-18`](shell/install.sh) gates on
   `BASH_VERSION`). No introduction of Make, Just, Ansible, or other tooling.
 - Same external dependencies as today: `dpkg-query`, `apt`, optionally `npm`,
   `cargo`, `go`, `rustup`. All `have <cmd>` skips preserved.
@@ -55,21 +55,21 @@ is independently executable; `install.sh` is convenience, not a hard dependency.
 ## Project Structure
 
 ```
-install.sh         → thin orchestrator (existing path preserved for muscle memory)
-install-root.sh    → apt section only; self-elevates via exec sudo if EUID != 0
-install-user.sh    → cargo + go + rustup + npm-globals + manual reminders;
-                     refuses to run if EUID == 0
-install-lib.sh     → shared helpers (have / dpkg_installed / section / ok / skip);
-                     sourced by the three runnables, never executed directly
-SPEC.md            → this file (added by this change)
+shell/install.sh       → thin orchestrator (entry point preserved for muscle memory)
+shell/install-root.sh  → apt section only; self-elevates via exec sudo if EUID != 0
+shell/install-user.sh  → cargo + go + rustup + npm-globals + manual reminders;
+                         refuses to run if EUID == 0
+shell/install-lib.sh   → shared helpers (have / dpkg_installed / section / ok / skip);
+                         sourced by the three runnables, never executed directly
+SPEC.md                → this file (added by this change)
 ```
 
-All four shell files sit at the repo root next to the existing [`install.sh`](install.sh)
-— no `scripts/` subdir, matching the current flat layout.
+All four shell files live under [`shell/`](shell/) — they were moved out of the
+repo root after the split landed, so all install machinery sits in one folder.
 
 ## Code Style
 
-Mirror the existing helpers in [`install.sh:21-29`](install.sh) verbatim — they
+Mirror the existing helpers in [`install.sh:21-29`](shell/install.sh) verbatim — they
 move into `install-lib.sh` unchanged:
 
 ```bash
@@ -161,7 +161,7 @@ per machine. Verification is static + smoke:
   monolith passes.
 - **Idempotency smoke**: running each script twice in a row produces no
   failures and the second run's output is mostly `[ok]` / `[skip]` lines, no
-  `installing:` lines. (Today's [`install.sh`](install.sh) already has this
+  `installing:` lines. (Today's [`install.sh`](shell/install.sh) already has this
   property — preserve it.)
 - **Privilege-guard smoke**:
   - `bash install-root.sh` with no `sudo` should re-exec under sudo (prompt for
@@ -181,7 +181,7 @@ per machine. Verification is static + smoke:
   - Preserve the `# ── N. <name> ──` section headers and `[ok]` / `[skip]`
     output style — the user reads these visually.
   - Keep the BASH_VERSION gate at the top of every runnable script (sh/dash
-    has no arrays — same reason as today's [`install.sh:14-18`](install.sh)).
+    has no arrays — same reason as today's [`install.sh:14-18`](shell/install.sh)).
   - `set -euo pipefail` at the top of every runnable; `set -u`-safe parameter
     expansion (`${VAR:-default}`) where applicable.
 - **Ask first**:
@@ -196,7 +196,7 @@ per machine. Verification is static + smoke:
     configured (defeats the whole "npm-in-user-scope" decision).
   - Touch the `cargo --locked --version 0.2.1 emacs-lsp-booster` pin without
     also updating [`init.el:713`](init.el) — the comment at
-    [`install.sh:74`](install.sh) flags this coupling.
+    [`install.sh:74`](shell/install.sh) flags this coupling.
   - Add backwards-compat shims for "what if someone still calls the old
     script?" — `install.sh` keeps working (it's now the orchestrator), no
     deprecation theatre needed.
@@ -205,7 +205,7 @@ per machine. Verification is static + smoke:
 
 1. `shellcheck install.sh install-root.sh install-user.sh install-lib.sh` exits 0.
 2. Fresh machine flow works: `bash install.sh` from a clean checkout installs
-   everything that today's [`install.sh`](install.sh) installs, in one invocation,
+   everything that today's [`install.sh`](shell/install.sh) installs, in one invocation,
    prompting for sudo password once.
 3. `sudo bash install-user.sh` exits non-zero with the refuse message — does NOT
    write to `/root/.cargo/` or `/root/go/`.
@@ -222,7 +222,7 @@ per machine. Verification is static + smoke:
    lines); the three new files (`install-root.sh`, `install-user.sh`,
    `install-lib.sh`) appear as untracked, ready to commit alongside.
 8. No regression in the section coverage: every section in today's
-   [`install.sh`](install.sh) (apt / npm / cargo / go / rustup / reminders) is
+   [`install.sh`](shell/install.sh) (apt / npm / cargo / go / rustup / reminders) is
    present in exactly one of the two new scripts.
 
 ## Open Questions

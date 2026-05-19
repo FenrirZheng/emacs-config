@@ -10,7 +10,7 @@ proceed independently.
 
 ## Overview
 
-Refactor the existing monolithic [`install.sh`](../install.sh) into four files
+Refactor the existing monolithic [`install.sh`](../shell/install.sh) into four files
 to make the `sudo`-vs-user privilege boundary explicit:
 
 - `install-lib.sh` — shared helpers (no execution)
@@ -18,7 +18,7 @@ to make the `sudo`-vs-user privilege boundary explicit:
 - `install-user.sh` — cargo / go / rustup / npm + manual reminders, refuses
   to run as root, **flips `npm config prefix` to `$HOME/.npm-global`** so
   `npm install -g` no longer needs `sudo`
-- [`install.sh`](../install.sh) — thin orchestrator (calls the two scripts in
+- [`install.sh`](../shell/install.sh) — thin orchestrator (calls the two scripts in
   order), kept at its current path so the README bootstrap one-liner still
   works untouched
 
@@ -31,7 +31,7 @@ implementation breakdown.
   layout — the repo only has `install.sh` at root today, no `scripts/`
   directory. Keeps the README bootstrap one-liner pointing at the same path.
 - **`install-lib.sh` is source-only (no shebang shellcheck directive needed).**
-  Helpers move out of [`install.sh:21-29`](../install.sh) verbatim — `have`,
+  Helpers move out of [`install.sh:21-29`](../shell/install.sh) verbatim — `have`,
   `dpkg_installed`, `section`, `ok`, `skip`. Both runnables `source` it via
   `. "$SCRIPT_DIR/install-lib.sh"` after computing `SCRIPT_DIR` from
   `BASH_SOURCE[0]`. Allows running each script directly without cwd
@@ -51,11 +51,11 @@ implementation breakdown.
   user-writable prefix, leave it alone. Subsequent runs are no-ops (the
   conditional fails on the second pass).
 - **`emacs-lsp-booster` version pin stays in place.** Comment at
-  [`install.sh:74`](../install.sh) flags coupling to
+  [`install.sh:74`](../shell/install.sh) flags coupling to
   [`init.el:713`](../init.el); the new `install-user.sh` preserves the
   `--version 0.2.1` flag and the explanatory comment verbatim.
 - **Existing Chinese comments preserved verbatim.** Lines like
-  `# core — config 載入必要` ([`install.sh:34`](../install.sh)) move into
+  `# core — config 載入必要` ([`install.sh:34`](../shell/install.sh)) move into
   `install-root.sh` unchanged. No translation, no rewording — just relocate.
 
 ## Task List
@@ -65,13 +65,13 @@ implementation breakdown.
 #### Task 1: Create `install-lib.sh` with the five helpers
 
 **Description:** Extract `have`, `dpkg_installed`, `section`, `ok`, `skip` from
-[`install.sh:21-29`](../install.sh) into a new file `install-lib.sh` at the
+[`install.sh:21-29`](../shell/install.sh) into a new file `install-lib.sh` at the
 repo root. Identical byte content for those five functions; add a one-line
 banner comment at the top stating that this file is source-only.
 
 **Acceptance criteria:**
-- [ ] `install-lib.sh` exists at [`/home/fenrir/.emacs.d/install-lib.sh`](../install-lib.sh).
-- [ ] Contains exactly the five helpers from [`install.sh:21-29`](../install.sh),
+- [ ] `install-lib.sh` exists at [`/home/fenrir/.emacs.d/install-lib.sh`](../shell/install-lib.sh).
+- [ ] Contains exactly the five helpers from [`install.sh:21-29`](../shell/install.sh),
       byte-identical bodies.
 - [ ] Top of file has a comment `# install-lib.sh — shared helpers for install-{root,user}.sh.`
       and `# Source-only; do not execute directly.`
@@ -99,14 +99,14 @@ parallel sessions. Serialize them in a single session.
 
 #### Task 2: Create `install-root.sh` (apt section + self-elevate)
 
-**Description:** New file at [`/home/fenrir/.emacs.d/install-root.sh`](../install-root.sh).
+**Description:** New file at [`/home/fenrir/.emacs.d/install-root.sh`](../shell/install-root.sh).
 Contains:
 
 1. Shebang `#!/usr/bin/env bash`, `BASH_VERSION` gate
-   ([`install.sh:14-18`](../install.sh) idiom), `set -euo pipefail`.
+   ([`install.sh:14-18`](../shell/install.sh) idiom), `set -euo pipefail`.
 2. `SCRIPT_DIR` resolution + `. "$SCRIPT_DIR/install-lib.sh"`.
 3. Self-elevate idiom: if `EUID != 0`, `exec sudo --preserve-env=PATH "$0" "$@"`.
-4. The apt section from [`install.sh:31-57`](../install.sh) verbatim
+4. The apt section from [`install.sh:31-57`](../shell/install.sh) verbatim
    (`APT_PKGS` array + the `missing` loop + the `apt update && apt install`
    block). Drop the `sudo` prefix from `apt update` / `apt install` since
    we're already root at this point — both `apt` invocations run as root
@@ -114,13 +114,13 @@ Contains:
 
 **Acceptance criteria:**
 - [ ] `install-root.sh` exists and is executable (`chmod +x` applied).
-- [ ] `APT_PKGS` array byte-identical to [`install.sh:33-44`](../install.sh)
+- [ ] `APT_PKGS` array byte-identical to [`install.sh:33-44`](../shell/install.sh)
       (preserve the Chinese comments).
 - [ ] No `cargo` / `go` / `rustup` / `npm` references in this file.
 - [ ] The `apt update` + `apt install` calls do NOT have a `sudo` prefix
       (they're already running as root after the re-exec).
 - [ ] `git diff` shows no changes to the apt section's package list relative
-      to the current [`install.sh`](../install.sh) — same packages, same order.
+      to the current [`install.sh`](../shell/install.sh) — same packages, same order.
 
 **Verification:**
 - [ ] `shellcheck install-root.sh` exits 0 (errors only — `SC2086`-style
@@ -141,7 +141,7 @@ Contains:
 
 #### Task 3: Create `install-user.sh` (cargo + go + rustup + npm + reminders)
 
-**Description:** New file at [`/home/fenrir/.emacs.d/install-user.sh`](../install-user.sh).
+**Description:** New file at [`/home/fenrir/.emacs.d/install-user.sh`](../shell/install-user.sh).
 Contains:
 
 1. Shebang `#!/usr/bin/env bash`, `BASH_VERSION` gate, `set -euo pipefail`.
@@ -151,14 +151,14 @@ Contains:
    Conditional `npm config set prefix "$HOME/.npm-global"` only when current
    prefix is `/usr/local` or `/usr`. Place this immediately BEFORE the
    existing npm section.
-5. **npm globals section** moved from [`install.sh:59-69`](../install.sh)
+5. **npm globals section** moved from [`install.sh:59-69`](../shell/install.sh)
    verbatim, with the call site unchanged (`npm install -g typescript …`).
-6. **cargo section** moved from [`install.sh:71-79`](../install.sh) verbatim,
+6. **cargo section** moved from [`install.sh:71-79`](../shell/install.sh) verbatim,
    including the `# emacs-lsp-booster: version pin matches init.el:713`
    comment and the `--version 0.2.1` flag.
-7. **go section** moved from [`install.sh:81-87`](../install.sh) verbatim.
-8. **rustup section** moved from [`install.sh:89-95`](../install.sh) verbatim.
-9. **Manual follow-ups heredoc** moved from [`install.sh:97-107`](../install.sh)
+7. **go section** moved from [`install.sh:81-87`](../shell/install.sh) verbatim.
+8. **rustup section** moved from [`install.sh:89-95`](../shell/install.sh) verbatim.
+9. **Manual follow-ups heredoc** moved from [`install.sh:97-107`](../shell/install.sh)
    with ONE added bullet at the top of the heredoc:
    `• PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)`.
 
@@ -204,17 +204,17 @@ new logic (npm-prefix flip) that didn't exist before.
 
 - [ ] `shellcheck install-lib.sh install-root.sh install-user.sh` exits 0.
 - [ ] Three new files exist alongside the still-monolithic
-      [`install.sh`](../install.sh) (which Task 4 will shrink). At this point
-      [`install.sh`](../install.sh) is unchanged from `main` HEAD.
+      [`install.sh`](../shell/install.sh) (which Task 4 will shrink). At this point
+      [`install.sh`](../shell/install.sh) is unchanged from `main` HEAD.
 - [ ] Privilege guards verified (root self-elevates; user refuses root).
 - [ ] Pause briefly to eyeball the three files before collapsing the
       orchestrator.
 
 ### Phase 3: Collapse the orchestrator
 
-#### Task 4: Shrink [`install.sh`](../install.sh) to orchestrator (~8 lines)
+#### Task 4: Shrink [`install.sh`](../shell/install.sh) to orchestrator (~8 lines)
 
-**Description:** Replace the entire body of [`install.sh`](../install.sh)
+**Description:** Replace the entire body of [`install.sh`](../shell/install.sh)
 (currently lines 1–107) with the orchestrator form from
 [`SPEC.md` "Code Style"](../SPEC.md#code-style):
 
@@ -233,7 +233,7 @@ redundant — but explicit, so the user sees the password prompt come from
 `install.sh` rather than from a re-exec hop. Acceptable redundancy.
 
 **Acceptance criteria:**
-- [ ] [`install.sh`](../install.sh) is ~8 lines.
+- [ ] [`install.sh`](../shell/install.sh) is ~8 lines.
 - [ ] Existing executable bit preserved.
 - [ ] No `APT_PKGS` / `cargo` / `go` / `rustup` / `npm` / `EOF` references
       remain — they're all delegated to the two sub-scripts.
@@ -252,7 +252,7 @@ redundant — but explicit, so the user sees the password prompt come from
 **Dependencies:** Tasks 1, 2, 3.
 
 **Files likely touched:**
-- [`install.sh`](../install.sh) (rewrite — net ~100 lines removed)
+- [`install.sh`](../shell/install.sh) (rewrite — net ~100 lines removed)
 
 **Estimated scope:** **XS** — one file, mostly deletion.
 
@@ -300,8 +300,8 @@ so the README describes shipping behaviour).
 - [ ] End-to-end re-run produces no `installing:` / `cargo install` write
       activity (the bootstrap is idempotent on an already-bootstrapped
       machine — same property as today's
-      [`install.sh`](../install.sh)).
-- [ ] `git status` shows: modified [`install.sh`](../install.sh),
+      [`install.sh`](../shell/install.sh)).
+- [ ] `git status` shows: modified [`install.sh`](../shell/install.sh),
       modified [`README.md`](../README.md), three new files
       (`install-root.sh`, `install-user.sh`, `install-lib.sh`).
 - [ ] Pre-existing dirty files ([`custom.el`](../custom.el),
@@ -322,9 +322,9 @@ so the README describes shipping behaviour).
 | `npm config set prefix` mutates user-global npm state | Low — single-user repo, one machine | Conditional fires only when prefix is still the root-requiring default (`/usr/local` or `/usr`); subsequent runs no-op; printed in `[ok]` line so the change is visible in output |
 | `$HOME/.npm-global/bin` not on PATH after npm-prefix flip | Medium — user runs `npm install -g foo`, then `foo` not found | Manual-follow-ups heredoc gets a new top bullet flagging the PATH requirement; this is a one-time setup step, not a per-run problem |
 | `apt update` no longer behind `sudo` prefix in `install-root.sh` | Low — script is already root post-elevate | Acceptance criterion on Task 2 explicitly checks for absence of `sudo` prefix; shellcheck `SC2086`-class warnings are unrelated |
-| User runs `bash install-user.sh` BEFORE `install-root.sh` on a fresh machine, hitting a missing apt dep (e.g. cargo not installed) | Low — all user-section steps `have <cmd>` skip when toolchain is absent | Existing skip semantics preserve correctness; first run of `install-user.sh` on a clean machine simply prints `[skip]` for everything until [`install-root.sh`](../install-root.sh) runs separately. Orchestrator `install.sh` always calls root first. |
+| User runs `bash install-user.sh` BEFORE `install-root.sh` on a fresh machine, hitting a missing apt dep (e.g. cargo not installed) | Low — all user-section steps `have <cmd>` skip when toolchain is absent | Existing skip semantics preserve correctness; first run of `install-user.sh` on a clean machine simply prints `[skip]` for everything until [`install-root.sh`](../shell/install-root.sh) runs separately. Orchestrator `install.sh` always calls root first. |
 | Chinese comments lost during refactor | Low — pure copy | Acceptance criterion calls out byte-identical preservation; spot-check after each Edit |
-| Breaking change to README bootstrap path | Zero | [`install.sh`](../install.sh) stays at the same path with the same name — same one-liner works |
+| Breaking change to README bootstrap path | Zero | [`install.sh`](../shell/install.sh) stays at the same path with the same name — same one-liner works |
 | Existing `tasks/plan.md` / `tasks/todo.md` (Lua work) collision | None | This plan lives at `install-split-plan.md` / `install-split-todo.md` — distinct filenames, disjoint scope |
 
 ## Open Questions

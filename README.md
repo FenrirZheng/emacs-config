@@ -17,23 +17,23 @@ and [`.gitignore`](.gitignore). Everything reproducible or stateful is ignored �
 ```bash
 git clone <remote> ~/.emacs.d
 git -C ~/.emacs.d config core.hooksPath .githooks   # wire pre-commit (local config, not tracked)
-~/.emacs.d/install.sh                               # apt/npm/cargo/go/rustup deps (see below)
+~/.emacs.d/shell/install.sh                         # apt/npm/cargo/go/rustup deps (see below)
 emacs                                               # first launch: use-package installs missing packages
 ```
 
-The [bootstrap script](install.sh) is idempotent — it installs system packages
+The [bootstrap script](shell/install.sh) is idempotent — it installs system packages
 that the config references (jinx → enchant-2, vterm → cmake + libvterm-dev,
 magit-delta → git-delta, etc.) plus the npm / cargo / go / rustup binaries used
 by `eglot`, `apheleia`, and `eglot-booster`. Re-run safely after pulling new
 `init.el` deps. Toolchains that aren't on `PATH` (cargo / go / rustup) are
 skipped with a warning rather than aborting the run.
 
-Internally, [`install.sh`](install.sh) is a thin orchestrator calling two
-halves: [`install-root.sh`](install-root.sh) (apt packages — self-elevates
-via `sudo` if not already root) and [`install-user.sh`](install-user.sh)
+Internally, [`install.sh`](shell/install.sh) is a thin orchestrator calling two
+halves: [`install-root.sh`](shell/install-root.sh) (apt packages — self-elevates
+via `sudo` if not already root) and [`install-user.sh`](shell/install-user.sh)
 (cargo / go / rustup / npm — refuses to run as root so user toolchain
 caches don't land under `/root/`). Shared helpers live in
-[`install-lib.sh`](install-lib.sh). `install-user.sh` also flips npm's
+[`install-lib.sh`](shell/install-lib.sh). `install-user.sh` also flips npm's
 global prefix to `$HOME/.npm-global` so `npm install -g` no longer needs
 `sudo` — add `$HOME/.npm-global/bin` to your shell `PATH` once for the new
 prefix to be useful. See [`SPEC.md`](SPEC.md) for the privilege-boundary
@@ -48,7 +48,7 @@ Gotchas on first launch:
   If a `use-package` form names a package that isn't in the local archive cache yet,
   the install fails. Run `M-x my/package-refresh` first, then restart.
 - Packages with `:ensure nil` are built-ins — they won't be pulled from MELPA.
-- `vterm` and jinx compile their C modules on first load (~2s each); install.sh
+- `vterm` and jinx compile their C modules on first load (~2s each); `shell/install.sh`
   ensures `cmake` / `libvterm-dev` / `libenchant-2-dev` are present.
 - Tree-sitter css/json/lua grammars are ABI 15 and unusable on Emacs 30 (ABI 14);
   `init.el:873-895` routes around this.
