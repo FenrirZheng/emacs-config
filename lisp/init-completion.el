@@ -51,7 +51,26 @@
   :init (recentf-mode 1)
   :custom
   (recentf-max-saved-items 200)
-  (recentf-max-menu-items 25))
+  (recentf-max-menu-items 25)
+  :config
+  ;; Without these, `consult-buffer's "Recent files" group fills up with:
+  ;;   * `var/' state files (history, places, bookmarks, transient ...)
+  ;;     -- no-littering redirects them here, so opening Emacs once is
+  ;;     enough to seed recentf with a dozen irrelevant entries.
+  ;;   * `etc/' config-ish state (TLS server cache, ...) -- same shape.
+  ;;   * TRAMP `/sudo:' paths -- selecting one tries to re-elevate, which
+  ;;     prompts for the password mid-buffer-switch.
+  ;;   * `COMMIT_EDITMSG' -- Magit re-opens this on every commit; the file
+  ;;     never has stable contents and re-opening it from recentf is noise.
+  ;; no-littering exposes `recentf-expand-file-name' for the var/etc paths;
+  ;; using it (vs. raw `no-littering-var-directory') normalises the form
+  ;; recentf stores internally so exclusion matches reliably.
+  (add-to-list 'recentf-exclude
+               (recentf-expand-file-name no-littering-var-directory))
+  (add-to-list 'recentf-exclude
+               (recentf-expand-file-name no-littering-etc-directory))
+  (add-to-list 'recentf-exclude "\\`/sudo:")
+  (add-to-list 'recentf-exclude "COMMIT_EDITMSG\\'"))
 
 ;; saveplace (built-in): remembers point position per file across sessions.
 ;; Reopen a file and the cursor lands where you left off -- no need to
