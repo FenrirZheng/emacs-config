@@ -7,7 +7,7 @@ choice was made, read the comments in [`init.el`](init.el) itself — this file 
 
 Language-specific guides (architecture, workflows, troubleshooting):
 
-- [Go development](GO.md) — `go-ts-mode` + Eglot + gopls + Vertico-driven completion
+- [Go development](_doc/GO.md) — `go-ts-mode` + Eglot + gopls + Vertico-driven completion
 
 > Conventions in the tables: `C-x` = Ctrl+x, `M-x` = Alt/Meta+x, `C-S-x` = Ctrl+Shift+x,
 > `SPC` = space, `RET` = Enter. Built-in packages are marked **(built-in)** — they ship
@@ -28,11 +28,20 @@ a candidate).
 | `C-x B` | `consult-buffer` | Switch buffer **with live preview**; also lists recent files, bookmarks. Shifted off the default `C-x b` to make room for ibuffer above |
 | `C-x 4 b` | `consult-buffer-other-window` | …opening the pick in another window |
 | `C-x p b` | `consult-project-buffer` | Buffer switch scoped to the current project |
+| `C-x r b` | `consult-bookmark` | Jump to a bookmark with preview |
 | `C-s` | `consult-line` | Search lines in this buffer (incremental, jumps live) |
+| `M-s L` | `consult-line-multi` | Same, but across every open buffer at once |
 | `M-s r` | `consult-ripgrep` | **ripgrep across the whole project** |
 | `M-s f` | `consult-find` | Find files by name |
-| `M-g i` | `consult-imenu` | Jump to a definition in this file (functions / classes …) |
+| `M-s k` | `consult-keep-lines` | Filter the current buffer down to lines matching a pattern (destructive — undoable with `C-/`) |
+| `M-s u` | `consult-focus-lines` | Hide non-matching lines via overlays (non-destructive toggle — call again to reveal) |
 | `M-g g` | `consult-goto-line` | Go to line number |
+| `M-g i` | `consult-imenu` | Jump to a definition in this file (functions / classes …) |
+| `M-g I` | `consult-imenu-multi` | Same, but across every open buffer with the same major mode |
+| `M-g o` | `consult-outline` | Jump to a heading in outline-minor-mode / Org / Markdown |
+| `M-g m` | `consult-mark` | Jump to a recent mark in this buffer — beats hammering `C-u C-SPC` |
+| `M-g k` | `consult-global-mark` | Same, but across **all** buffers — recover "where was I before that detour?" |
+| `M-g f` | `consult-flymake` | List diagnostics with consult preview (`C-u` for project-wide); pairs with the LSP/flymake stack in §7 |
 | `M-g s` | `consult-eglot-symbols` | **Project-wide LSP symbol jump** (LSP buffers only — bound in `eglot-mode-map`). Unlike `M-g I` (open buffers, same major mode), this hits the LSP's `workspace/symbol` index so unopened files are found too. See §7 |
 | `M-y` | `consult-yank-pop` | Browse the whole kill-ring (not just paste the last entry) |
 | `<` | — | Inside the above commands, `<` *narrows* to one source (e.g. only buffers, not recents) |
@@ -46,6 +55,10 @@ a candidate).
   automatically.
 - **History**: `savehist` **(built-in)** persists minibuffer history across sessions and
   floats recent picks to the top.
+- **Preview debounce**: expensive previewers (`consult-ripgrep`, `consult-grep`,
+  `consult-find`, `consult-bookmark`, `consult-recent-file`) wait 200 ms of input idle
+  before re-rendering — keeps typing in a large project from queueing a ripgrep per
+  keystroke. Tune via `consult-customize` in [`init.el`](init.el) §4.
 
 ---
 

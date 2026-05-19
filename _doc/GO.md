@@ -2,7 +2,7 @@
 
 How Go editing works in this Emacs configuration: which packages drive what,
 where they're configured, what to do when it breaks. Companion to the
-keybinding cheat sheet in [FEATURES.md](FEATURES.md).
+keybinding cheat sheet in [FEATURES.md](../FEATURES.md).
 
 ## Stack
 
@@ -12,7 +12,7 @@ keybinding cheat sheet in [FEATURES.md](FEATURES.md).
 | LSP server | `gopls` v0.21.1 | `~/go/bin/gopls` — install via `go install golang.org/x/tools/gopls@latest` |
 | Major mode | `go-ts-mode` | Built-in (Emacs 30+); auto-selected by `treesit-auto` |
 | Tree-sitter grammar | `libtree-sitter-go.so` | `~/.emacs.d/tree-sitter/` (`treesit-install-language-grammar` populates this) |
-| LSP client | `eglot` | Built-in; auto-starts on Go buffers — see [section 8 of init.el](init.el) |
+| LSP client | `eglot` | Built-in; auto-starts on Go buffers — see [section 8 of init.el](../init.el) |
 | Diagnostics | `flymake` ← eglot ← gopls | Built-in; eglot pipes LSP diagnostics into it |
 | Hover / signatures | `eldoc` ← eglot ← gopls | Echo area by default; `C-c d` summons full doc buffer as a 60-col side window |
 | Symbol navigation | `xref` ← eglot ← gopls | `M-.` / `M-,` / `M-?` |
@@ -53,7 +53,7 @@ go mod init scratch-go                   # creates go.mod
 
 `emacs main.go` from inside the module → Eglot starts, gopls indexes the module, everything works. From outside any module → Eglot still starts but capabilities are partial.
 
-This is also why `eglot-extend-to-xref` matters (set `t` in [init.el's eglot block](init.el)): when `M-.` jumps from your code into the stdlib (e.g., `Unmarshal` → `encoding/json/decode.go`), the target file is outside your project's eglot session. `eglot-extend-to-xref t` reuses your gopls session to resolve symbols in the visited file rather than refusing.
+This is also why `eglot-extend-to-xref` matters (set `t` in [init.el's eglot block](../init.el)): when `M-.` jumps from your code into the stdlib (e.g., `Unmarshal` → `encoding/json/decode.go`), the target file is outside your project's eglot session. `eglot-extend-to-xref t` reuses your gopls session to resolve symbols in the visited file rather than refusing.
 
 ## Completion flow
 
@@ -82,7 +82,7 @@ RET → buffer is patched, import auto-added if applicable
 
 The minibuffer feels like `C-x C-f` because it **is** the same UI — same Vertico, same orderless, same marginalia. There's no separate "code completion popup" to learn; the muscle memory from buffer-switching, file-finding, ripgrep search transfers wholesale.
 
-**No auto-popup as you type**. This is a deliberate choice — see [section 5 of init.el](init.el) for the rationale and the one-line flip to re-enable Corfu's at-point popup if you change your mind.
+**No auto-popup as you type**. This is a deliberate choice — see [section 5 of init.el](../init.el) for the rationale and the one-line flip to re-enable Corfu's at-point popup if you change your mind.
 
 ### Auto-import of unimported packages
 
@@ -111,21 +111,23 @@ LSP-driven via xref. Eglot's xref backend prepends itself to `xref-backend-funct
 | `M-,` | `xref-go-back` | Pop back to the previous position |
 | `M-?` | `xref-find-references` | Show all references to the symbol at point in a `*xref*` buffer |
 | `M-g i` | `consult-imenu` | Jump to a definition **in this file** via Vertico (gopls feeds the symbol list) |
+| `M-g I` | `consult-imenu-multi` | Same, but across every open buffer that shares the major mode — useful for jumping between files in the same package |
 | `M-s r` | `consult-ripgrep` | Project-wide text search — orthogonal to LSP, useful when gopls doesn't know |
 
-`ggtags` is in the config (see [init.el's ggtags block](init.el)) but only takes over in buffers without an active LSP session — for Go, eglot always wins. Mostly relevant for Java, where Eglot isn't auto-hooked.
+`ggtags` is in the config (see [init.el's ggtags block](../init.el)) but only takes over in buffers without an active LSP session — for Go, eglot always wins. Mostly relevant for Java, where Eglot isn't auto-hooked.
 
 ## Diagnostics
 
-`flymake` (built-in, on for `prog-mode` via [section 8 of init.el](init.el)) receives error/warning streams from gopls. Visual: red/orange underlines + fringe markers.
+`flymake` (built-in, on for `prog-mode` via [section 8 of init.el](../init.el)) receives error/warning streams from gopls. Visual: red/orange underlines + fringe markers.
 
 | Key | Command |
 |---|---|
 | `M-n` | `flymake-goto-next-error` |
 | `M-p` | `flymake-goto-prev-error` |
+| `M-g f` | `consult-flymake` — list all diagnostics with consult preview, narrow by severity with `<` |
 | `C-h .` | `display-local-help` (or hover at point with `eldoc`) |
 
-To see all diagnostics in one place: `M-x flymake-show-buffer-diagnostics` (current file) or `flymake-show-project-diagnostics` (entire project).
+`consult-flymake` is the everyday "show me everything wrong with this buffer" entry point. Pass `C-u` for the project-wide variant. The built-ins `M-x flymake-show-buffer-diagnostics` / `flymake-show-project-diagnostics` still work for the static tabulated-list view if you prefer that over consult's live-preview minibuffer.
 
 Diagnostic *categories* gopls emits depend on its config:
 
@@ -139,7 +141,7 @@ Diagnostic *categories* gopls emits depend on its config:
 `eldoc` displays the type / signature / docstring of the symbol at point.
 
 - **Echo area** (default): one line, brief, fast. Gets clobbered by other `message` calls; cheap and unobtrusive.
-- **On-demand side window**: press `C-c d` (`eldoc-doc-buffer`, [bound in section 8](init.el)) → full doc opens in a 60-col right-side window. The display rule in init.el matches both `*eldoc*` and `* *eldoc for SYM*` buffer-name variants.
+- **On-demand side window**: press `C-c d` (`eldoc-doc-buffer`, [bound in section 8](../init.el)) → full doc opens in a 60-col right-side window. The display rule in init.el matches both `*eldoc*` and `* *eldoc for SYM*` buffer-name variants.
 
 Why not `eldoc-box` (child-frame tooltips, pretty): child frames are GUI-only. In TTY frames (the daemon's common case) eldoc-box silently no-ops *and* bypasses the echo area fallback — net regression. The side-window approach works identically in TTY and GUI.
 
@@ -182,15 +184,15 @@ Where each piece lives:
 
 | Concern | File | Section / line |
 |---|---|---|
-| Tree-sitter auto-install + grammar load path | [init.el](init.el) | Section 8 (treesit) |
-| Eglot hook for `go-ts-mode` | [init.el](init.el) | Section 8 (`eglot` use-package, around line 417) |
-| Eglot sync-connect, autoshutdown, xref extension | [init.el](init.el) | Section 8 (`eglot-*` custom vars) |
-| Flymake hook + nav keys | [init.el](init.el) | Section 8 (`flymake` use-package) |
-| Eldoc side-window display rule | [init.el](init.el) | Section 8 (`display-buffer-alist` near line 421) |
-| `gopls`/`go` on `exec-path` for daemon | [init.el](init.el) | Section 1 (`exec-path-from-shell`) |
-| Vertico minibuffer + orderless + marginalia | [init.el](init.el) | Section 4 |
-| `completion-in-region-function` → consult | [init.el](init.el) | Section 4 (`consult` use-package `:init`) |
-| Keybinding cheat sheet | [FEATURES.md](FEATURES.md) | — |
+| Tree-sitter auto-install + grammar load path | [init.el](../init.el) | Section 8 (treesit) |
+| Eglot hook for `go-ts-mode` | [init.el](../init.el) | Section 8 (`eglot` use-package, around line 417) |
+| Eglot sync-connect, autoshutdown, xref extension | [init.el](../init.el) | Section 8 (`eglot-*` custom vars) |
+| Flymake hook + nav keys | [init.el](../init.el) | Section 8 (`flymake` use-package) |
+| Eldoc side-window display rule | [init.el](../init.el) | Section 8 (`display-buffer-alist` near line 421) |
+| `gopls`/`go` on `exec-path` for daemon | [init.el](../init.el) | Section 1 (`exec-path-from-shell`) |
+| Vertico minibuffer + orderless + marginalia | [init.el](../init.el) | Section 4 |
+| `completion-in-region-function` → consult | [init.el](../init.el) | Section 4 (`consult` use-package `:init`) |
+| Keybinding cheat sheet | [FEATURES.md](../FEATURES.md) | — |
 
 ## Troubleshooting
 
@@ -200,7 +202,7 @@ Eglot couldn't locate gopls on `exec-path`. Causes:
 
 1. gopls not installed → `go install golang.org/x/tools/gopls@latest`
 2. `~/go/bin` not on PATH → check `echo $PATH` in a login shell
-3. **Daemon PATH gotcha**: Emacs launched by systemd inherits the minimal PAM PATH, not your login PATH. `exec-path-from-shell` ([init.el section 1](init.el)) handles this — but only fires when the predicate matches (`(or (daemonp) (memq window-system '(x pgtk mac ns)))`). Verify with `M-: (executable-find "gopls") RET`.
+3. **Daemon PATH gotcha**: Emacs launched by systemd inherits the minimal PAM PATH, not your login PATH. `exec-path-from-shell` ([init.el section 1](../init.el)) handles this — but only fires when the predicate matches (`(or (daemonp) (memq window-system '(x pgtk mac ns)))`). Verify with `M-: (executable-find "gopls") RET`.
 
 Fix: `M-x exec-path-from-shell-initialize` then `M-x eglot` again in the buffer.
 
@@ -218,7 +220,7 @@ Fix: `M-x exec-path-from-shell-initialize` then `M-x eglot` again in the buffer.
 M-x treesit-install-language-grammar RET go RET
 ```
 
-This installs into `~/.emacs.d/tree-sitter/`, which is on `treesit-extra-load-path` (see [init.el section 8](init.el)) so it persists. `treesit-auto-install t` should do this on first `.go` open, but a fresh checkout occasionally needs the manual nudge.
+This installs into `~/.emacs.d/tree-sitter/`, which is on `treesit-extra-load-path` (see [init.el section 8](../init.el)) so it persists. `treesit-auto-install t` should do this on first `.go` open, but a fresh checkout occasionally needs the manual nudge.
 
 ### `M-.` lands in the wrong place / says "no definition found"
 
@@ -240,7 +242,7 @@ Likely a large module + analyses enabled. Disable `staticcheck` and the heavier 
 | Struct tag generation | None | The gomodifytags binary + `M-x compile`, or `go-impl`-style helpers |
 
 If any of these starts hurting, the small additions are documented inline in
-[init.el section 8](init.el) as comments — the eglot block already has the
+[init.el section 8](../init.el) as comments — the eglot block already has the
 relevant hooks; format-on-save is a 3-line add.
 
 ## References
@@ -249,4 +251,4 @@ relevant hooks; format-on-save is a 3-line add.
 - [gopls user guide](https://github.com/golang/tools/blob/master/gopls/doc/user.md)
 - [gopls settings reference](https://github.com/golang/tools/blob/master/gopls/doc/settings.md)
 - [Tree-sitter grammar usage in Emacs](https://www.gnu.org/software/emacs/manual/html_node/elisp/Parsing-Program-Source.html)
-- [Local cheat sheet](FEATURES.md) — keybindings across all modes, not Go-specific
+- [Local cheat sheet](../FEATURES.md) — keybindings across all modes, not Go-specific
