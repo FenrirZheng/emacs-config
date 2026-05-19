@@ -16,6 +16,7 @@
 ;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
 ;;   init-terminal       -- vterm
 ;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
+;;   init-dirvish        -- Dirvish: polished Dired with icons + preview
 ;;   init-org            -- Org-mode (light touch)
 ;;   init-obsidian       -- Obsidian note vault (~/code/obsidian/)
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
@@ -118,6 +119,7 @@
         init-git
         init-terminal
         init-appearance
+        init-dirvish
         init-org
         init-obsidian
         init-org-roam

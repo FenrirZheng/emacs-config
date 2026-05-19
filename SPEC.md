@@ -1,163 +1,125 @@
-# Spec: split monolithic `init.el` into `lisp/init-<area>.el` modules
+; -*- mode: markdown -*-
+
+# Spec: add Dirvish (polished Dired) to the Emacs config
 
 Working tree: `/home/fenrir/.emacs.d` on branch `main`.
-Source-of-truth before this change: [`init.el`](init.el) (1320 lines, 68 KB,
-sixteen `;; N. <name>` sections under one `;;; Code:` block).
+Previous SPEC ("split monolithic `init.el` into `lisp/init-<area>.el` modules",
+commit `fd6d8d0`) is now history — that refactor landed; this file replaces it
+with the next planned change. Past SPEC.md content remains accessible via
+`git show fd6d8d0:SPEC.md`.
 
 ## Objective
 
-Move from one ~1320-line `init.el` to a thin loader plus per-section module
-files under [`lisp/`](lisp/), one file per current top-level section. The
-section content moves verbatim; this refactor is a **layout change, not a
-behaviour change**.
+Add [Dirvish](https://github.com/alexluigit/dirvish) — a UI-rich enhancement
+of Dired — to this Emacs 30.1 config as a new per-section module
+[`lisp/init-dirvish.el`](lisp/init-dirvish.el), loaded by the [`init.el`](init.el)
+thin loader after [`init-appearance.el`](lisp/init-appearance.el).
 
 Why this matters:
-- §8 (Project / LSP / languages) alone is 439 lines, one-third of the file.
-  Adding a new language mode currently means scrolling past 870 lines of
-  unrelated config.
-- Cross-section navigation today relies on remembering the section number
-  (`;; 8.`) — file names like `init-languages.el` are self-describing.
-- Byte-compilation is currently all-or-nothing; per-module `.elc` lets one
-  section's edit invalidate only its own compiled file.
-- The infrastructure is already half-built: `lisp/` exists,
-  [`init.el:1301`](init.el) already adds it to `load-path`, and
-  [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.el) already follows the
-  `(use-package … :ensure nil)` + local-`provide` pattern.
+- Default Dired is fine for one-off file ops but lacks icons, preview,
+  history, a follow-mode side panel, and the `?`-dispatch transient that
+  makes file management discoverable.
+- `nerd-icons` is already configured (deferred) in
+  [`init-appearance.el`](lisp/init-appearance.el) — Dirvish reuses that
+  glyph set, no second icon stack.
+- The config already has a workflow for "open a tree of files via the
+  minibuffer" (vertico + consult-find) but no spatial file browser; a
+  side-panel Dirvish complements rather than replaces consult-find.
 
 ### Target user
 
-The single operator of this repo (one machine). The split is for that operator's
-own future edits — not for sharing, packaging, or third-party reuse.
+The single operator of this repo (one machine). Like every prior section,
+this is for that operator's daily use, not for packaging or sharing.
 
 ### Assumptions I'm making
 
-1. **No behaviour change.** Every section's content moves verbatim — same
-   `use-package` blocks, same `setq`s, same hooks, same order. If a smoke
-   test passes today, it must pass after the split with no edits.
-2. **Section boundaries are correct as drawn.** The existing 16 `;; N.` blocks
-   are the unit of split. No collapsing or further sub-splitting in this pass.
-3. **`use-package` is the only loading mechanism.** No transition to
-   `straight.el` / `elpaca` / literate org. Boot path stays
-   `early-init.el` → `init.el` → `(require 'init-<area>)` × N → `custom.el`.
-4. **Byte-compiled `.elc` files are disposable.** Existing
-   [`init.elc`](init.elc) will be deleted; modules can be byte-compiled or
-   not, the config must work either way.
-5. **`claude-jobs-view.el` is NOT a section.** It's a real elisp library that
-   happens to live under `lisp/`. It stays where it is and is still required
-   from `init-ai.el` (the new home of current §15).
-6. **Network-free boot stays.** `package-refresh-contents` is still **not**
-   called at startup (see [`init.el:49-54`](init.el)); `my/package-refresh`
-   stays as the on-demand command.
+1. **New module file, not a fold-in.** Dirvish gets its own
+   [`lisp/init-dirvish.el`](lisp/init-dirvish.el), mirroring the
+   one-file-per-package granularity of `init-corfu.el`, `init-obsidian.el`,
+   `init-org-roam.el`. It is **not** folded into `init-editing.el` or
+   `init-appearance.el`.
+2. **`use-package` MELPA install.** `dirvish` is installed from MELPA via
+   `(use-package dirvish :ensure t …)`. `use-package-always-ensure` is `t`
+   in [`init.el`](init.el), so `:ensure t` is redundant but kept for
+   readability.
+3. **`dirvish-override-dired-mode` is on.** Every `C-x d` / `C-x C-f` into
+   a directory routes through Dirvish, not vanilla Dired. There is no
+   "Dirvish only on opt-in key" mode in this spec.
+4. **`vc-handled-backends` stays `nil`.** [`init-git.el`](lisp/init-git.el)
+   intentionally turns the built-in VC framework off (Magit replaces it,
+   line 22-23). Dirvish's `vc-state` attribute reads from that framework,
+   so it is **omitted** from the default `dirvish-attributes` list — it
+   would silently show nothing while still costing a per-file query.
+5. **`git-msg` attribute is off by default.** `$HOME` is itself a git repo
+   with ~1500 tracked files; in [`init-git.el`](lisp/init-git.el) we already
+   disabled `diff-hl-dired-mode` for exactly that reason (line 29-33). The
+   `git-msg` attribute calls `git log -1` per visible file — same risk.
+   Operator can toggle per-buffer via Dirvish's `a` (`dirvish-setup-menu`).
+6. **TTY and GUI both supported.** This config runs Emacs as a daemon with
+   `emacsclient -c -nw` (TTY) frames; Dirvish's image previewer falls back
+   to text on TTY automatically. No GUI-only code paths are introduced.
+7. **No new preview-tool installs in this pass.** The system already has
+   `fd-find` (per global [`~/.claude/CLAUDE.md`](.claude/CLAUDE.md)). The
+   optional preview helpers (`poppler-utils`, `ffmpegthumbnailer`,
+   `mediainfo`, `libvips-tools`, `imagemagick`) are listed in [Open
+   Questions](#open-questions); they are NOT installed as part of this
+   change.
+8. **Network-free boot survives.** [`init.el`](init.el) deliberately skips
+   `package-refresh-contents` at startup. First-time install requires
+   `M-x my/package-refresh` once, then a restart — same drill as every
+   other package added to this config.
 
 → Correct any of these now or the implementation will assume them.
 
 ## Tech Stack
 
-- Emacs 30.1 with `use-package` (built-in since Emacs 29). No new packages
-  introduced.
-- Existing `lisp/` directory on `load-path` (added at
-  [`init.el:1301`](init.el); moves up to the bootstrap section after the
-  split).
-- `no-littering` (already in §1) — module load order keeps it loading before
-  any section that creates state files.
+- Emacs 30.1 with `use-package` (built-in since Emacs 29) — unchanged.
+- New MELPA package: `dirvish` (current release line, no version pin).
+- Reuses existing packages: `nerd-icons` (declared `:defer t` in
+  [`init-appearance.el`](lisp/init-appearance.el)), Emacs built-in `dired`.
+- No new system binaries required for the minimum-viable install. Optional
+  preview binaries deferred (see Open Questions).
 
 ## Commands
 
-After the refactor:
+After the change:
 
 | step | command | notes |
 |---|---|---|
-| start daemon (smoke) | `emacs --daemon` | should complete without errors |
-| start client (smoke) | `emacsclient -c -nw` | mode-line, fonts, modules all live |
-| byte-compile all modules | `emacs -Q --batch -L lisp/ -f batch-byte-compile lisp/init-*.el` | optional but recommended after edits |
-| clean stale top-level `.elc` | `rm -f init.elc` | one-shot at the end of the refactor |
-| audit load order | `emacsclient -e '(mapcar #'\''car load-history)'` | confirm every `init-<area>` appears exactly once |
-| feature audit | `emacsclient -e '(mapcar (lambda (s) (cons s (featurep s))) (quote (init-defaults init-completion init-corfu init-snippets init-editing init-languages init-git init-terminal init-appearance init-org init-obsidian init-org-roam init-ai)))'` | every cell should be `(symbol . t)` |
-| batch sanity | `emacs --batch -l init.el --eval '(message "ok")'` | exits 0, prints `ok`, no `Symbol's function definition is void` |
+| install package (one-shot, online) | `M-x my/package-refresh` then restart | required because boot is network-free; `use-package` then auto-installs `dirvish` from MELPA on the next launch |
+| batch sanity | `emacs --batch -l init.el --eval '(message "ok")'` | exits 0, prints `ok`, no `Symbol's function definition is void`, no `Cannot open load file` |
+| daemon smoke | `emacs --daemon` then `emacsclient -c -nw` | mode-line + appearance load as before; opening a dir uses Dirvish |
+| feature audit | `emacsclient -e '(featurep (quote init-dirvish))'` | must return `t` |
+| Dired override check | `emacsclient -e 'dirvish-override-dired-mode'` | must return `t` |
+| open via dispatcher | `C-c f` inside any frame | opens `M-x dirvish` on `default-directory` |
+| open side panel | `C-c s` | opens `dirvish-side` follow panel |
+| transient cheat-sheet | inside a Dirvish buffer: `?` | `dirvish-dispatch` transient |
+| $HOME perf smoke | `M-x dirvish RET ~ RET` | must render in < 1 s; **not** trigger the 1500-file `git status` spike that motivated the `diff-hl-dired-mode` disable |
 
 ## Project Structure
 
 ```
-init.el              → thin loader (~60 lines)
-                       §1 (package + use-package bootstrap) +
-                       load-path push for `lisp/` +
-                       sequential `(require 'init-…)` block +
-                       `(load custom-file)` tail
-custom.el            → unchanged (managed by M-x customize)
-early-init.el        → unchanged
-lisp/init-defaults.el        → §2  Better built-in defaults
-lisp/init-system-packages.el → §3  system-packages wrapper
-lisp/init-completion.el      → §4  Vertico ecosystem
-lisp/init-corfu.el           → §5  Corfu + Cape (in-buffer completion)
-lisp/init-snippets.el        → §6  YASnippet
-lisp/init-editing.el         → §7  Editing enhancements
-lisp/init-languages.el       → §8  Project / LSP / tree-sitter / languages
-lisp/init-git.el             → §9  Magit + diff-hl + magit-todos
-lisp/init-terminal.el        → §10 vterm
-lisp/init-appearance.el      → §11 doom-themes + doom-modeline + nerd-icons
-lisp/init-org.el             → §12 Org-mode (minimal)
-lisp/init-obsidian.el        → §13 obsidian.el
-lisp/init-org-roam.el        → §14 org-roam
-lisp/init-ai.el              → §15 AI / agent tooling (eca / acp / shell-maker
-                                   + the existing `claude-jobs-view` require)
-lisp/claude-jobs-view.el     → UNCHANGED (real library, not a section)
-SPEC.md                      → this file
+init.el                       → loader; the `mapc #'require '(...)` list
+                                gains `init-dirvish` between `init-appearance`
+                                and `init-org` (one-line edit + commentary
+                                update)
+lisp/init-dirvish.el          → NEW. Sole `use-package dirvish` block plus a
+                                tiny `use-package dired :ensure nil` config
+                                that sets `dired-listing-switches` and
+                                re-enables `dired-find-alternate-file`
+                                (per Dirvish's upstream "Getting Started")
+lisp/init-appearance.el       → unchanged (nerd-icons already declared here)
+lisp/init-git.el              → unchanged (vc-handled-backends stays nil;
+                                this spec explicitly does NOT touch it)
+FEATURES.md                   → follow-up commit, not bundled with this change:
+                                add a §"File manager (Dirvish)" entry with
+                                the key table from this spec
+SPEC.md                       → this file
 ```
 
-Section 1 (package bootstrap) **must** stay in `init.el` itself — `use-package`
-has to be `require`d before any module file can use it. Section 16 (end-of-file
-comment about `custom.el`) folds into a one-liner at the bottom of the new
-`init.el`.
-
-## Code Style
-
-Every new `lisp/init-<area>.el` file follows the canonical Emacs Lisp library
-header that [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.el) already
-uses:
+The `init.el` require list after the change:
 
 ```elisp
-;;; init-completion.el --- Minibuffer / completion UI -*- lexical-binding: t; -*-
-
-;;; Commentary:
-;; Section 4 of the original init.el.
-;; Vertico + Orderless + Marginalia + Consult + Embark + Wgrep.
-;; Behaviour: identical to pre-split init.el §4 — this is a layout change only.
-
-;;; Code:
-
-;; ... use-package blocks moved verbatim from old init.el §4 ...
-
-(provide 'init-completion)
-;;; init-completion.el ends here
-```
-
-The post-split [`init.el`](init.el) shrinks to roughly this shape:
-
-```elisp
-;;; init.el --- Personal Emacs configuration -*- lexical-binding: t; -*-
-;;; Commentary:
-;; Thin loader. Each `lisp/init-<area>.el' module corresponds to one
-;; section of the pre-2026-05-19 monolithic init.el (see git log for the
-;; split commit).
-;;; Code:
-
-;; §1. Package system & use-package bootstrap  (kept inline — `use-package'
-;;     must be loaded before any module file can call it).
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(package-initialize)
-(defun my/package-refresh () "Refresh package archive on demand."
-       (interactive) (package-refresh-contents))
-(require 'use-package)
-(setq use-package-always-ensure t)
-(use-package no-littering :demand t :config ...)
-(use-package exec-path-from-shell :demand t :if ... :config ...)
-
-;; Local-lisp dir for the per-section modules and hand-written libraries.
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-
-;; Modules — load order matters: no-littering is already up; the rest
-;; follow the original section ordering verbatim.
 (mapc #'require
       '(init-defaults
         init-system-packages
@@ -169,136 +131,233 @@ The post-split [`init.el`](init.el) shrinks to roughly this shape:
         init-git
         init-terminal
         init-appearance
+        init-dirvish      ; ← new, here
         init-org
         init-obsidian
         init-org-roam
         init-ai))
-
-;;; init.el ends here
 ```
 
-`custom-file` resolution (currently inside §2) stays in `init-defaults.el`.
+Placement rationale: Dirvish reads `dirvish-attributes` containing
+`nerd-icons` — that symbol must be `require`-able when Dirvish first opens.
+`nerd-icons` is `:defer t` in `init-appearance`, so use-package autoloads
+take care of it whenever Dirvish first runs — but loading `init-dirvish`
+*after* `init-appearance` keeps the conceptual ordering ("icons exist before
+the thing that draws icons") obvious to anyone reading the loader.
+
+## Code Style
+
+The new file follows the same canonical header used by every other module
+(see [`lisp/init-corfu.el`](lisp/init-corfu.el),
+[`lisp/init-obsidian.el`](lisp/init-obsidian.el)):
+
+```elisp
+;;; init-dirvish.el --- Dirvish: polished Dired with icons + preview -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Dirvish (https://github.com/alexluigit/dirvish) layers icons, preview,
+;; history, a side panel, and a `?'-driven transient cheat-sheet on top of
+;; Dired.  `dirvish-override-dired-mode' makes every `C-x d' / `C-x C-f'
+;; into-a-directory route through Dirvish without a separate keybind.
+;;
+;; Two deliberate omissions vs. upstream's sample config:
+;;   * `vc-state' is NOT in `dirvish-attributes' -- init-git.el sets
+;;     `vc-handled-backends' to nil (Magit replaces vc), so vc-state would
+;;     silently no-op while still costing a per-line query.
+;;   * `git-msg' is NOT in `dirvish-attributes' -- $HOME is itself a git
+;;     repo with ~1500 tracked files; `git-msg' calls `git log -1' per
+;;     visible row, same hazard that motivated disabling
+;;     `diff-hl-dired-mode' in init-git.el.  Toggle per-buffer with `a'
+;;     (`dirvish-setup-menu') when you want it.
+
+;;; Code:
+
+(use-package dired
+  :ensure nil
+  :config
+  (setq dired-listing-switches
+        "-l --almost-all --human-readable --group-directories-first --no-group")
+  ;; Let `a' (dired-find-alternate-file) reuse the current Dired buffer
+  ;; instead of leaving a trail of stale Dired buffers behind every descent.
+  ;; Also lets `dirvish-side' auto-close its window when opening a file.
+  (put 'dired-find-alternate-file 'disabled nil))
+
+(use-package dirvish
+  :ensure t
+  :init
+  (dirvish-override-dired-mode)
+  :custom
+  (dirvish-quick-access-entries
+   ;; Keep this list short and curated -- it's a personal launcher, not a
+   ;; fileystem dump.  Order = quick-key order in `o' (dirvish-quick-access).
+   '(("h" "~/"                            "Home")
+     ("e" "~/.emacs.d/"                   "Emacs config")
+     ("c" "~/.claude/"                    "Claude config")
+     ("o" "~/code/obsidian/"              "Obsidian vault")
+     ("r" "~/code/org-roam/"              "org-roam vault")
+     ("t" "~/fenrir-tools/"               "fenrir-tools")))
+  :config
+  (setq dirvish-mode-line-format
+        '(:left (sort symlink) :right (omit yank index)))
+  ;; Attribute order MATTERS (upstream warning).  See header comment for
+  ;; why vc-state and git-msg are omitted from the default set.
+  (setq dirvish-attributes
+        '(subtree-state nerd-icons collapse file-time file-size))
+  (setq dirvish-side-attributes
+        '(nerd-icons collapse file-size))
+  ;; Hand off >20k-entry dirs to `fd' so the UI doesn't block.  `fdfind' is
+  ;; the Debian binary name; Dirvish auto-detects via `dirvish-fd-program'.
+  (setq dirvish-large-directory-threshold 20000)
+  (setq dirvish-fd-program (or (executable-find "fdfind")
+                               (executable-find "fd")))
+  :bind
+  (("C-c f" . dirvish)
+   ("C-c s" . dirvish-side)
+   :map dirvish-mode-map
+   (";"   . dired-up-directory)
+   ("?"   . dirvish-dispatch)
+   ("a"   . dirvish-setup-menu)
+   ("f"   . dirvish-file-info-menu)
+   ("o"   . dirvish-quick-access)
+   ("s"   . dirvish-quicksort)
+   ("r"   . dirvish-history-jump)
+   ("l"   . dirvish-ls-switches-menu)
+   ("v"   . dirvish-vc-menu)
+   ("y"   . dirvish-yank-menu)
+   ("N"   . dirvish-narrow)
+   ("TAB" . dirvish-subtree-toggle)
+   ("M-f" . dirvish-history-go-forward)
+   ("M-b" . dirvish-history-go-backward)))
+
+(provide 'init-dirvish)
+;;; init-dirvish.el ends here
+```
 
 ## Testing Strategy
 
-No test framework. Verification is smoke + diff-based:
+No test framework. Verification is smoke + behaviour spot-checks, matching
+the discipline established by the prior init-split SPEC:
 
 - **Batch load**: `emacs --batch -l init.el --eval '(message "ok")'` exits 0,
-  prints `ok`, prints no `Symbol's function definition is void`, no
-  `Cannot open load file`, no `Wrong type argument`.
-- **Daemon smoke**: `emacs --daemon` produces only the existing benign
-  messages (no new warnings). `emacsclient -c -nw` opens a usable frame with
-  doom-modeline, doom-themes, vertico minibuffer, corfu in-buffer completion.
-- **Feature presence**: every expected `init-<area>` is in `features`:
-  ```
-  emacsclient -e '(mapcar (lambda (s) (cons s (featurep s)))
-                          (quote (init-defaults init-completion init-corfu
-                                  init-snippets init-editing init-languages
-                                  init-git init-terminal init-appearance
-                                  init-org init-obsidian init-org-roam
-                                  init-ai)))'
-  ```
-  Every cell `(symbol . t)`.
-- **Behaviour parity** spot-checks (the high-traffic features):
-  - `C-x C-f` → vertico minibuffer with marginalia annotations.
-  - `M-x consult-ripgrep` → works.
-  - Open a `.go` file → `go-ts-mode`, eglot starts, gopls connects.
-  - Open a `.lua` file → `lua-mode` (regex), no tree-sitter ABI warning.
-  - `M-x magit-status` → Magit opens normally; diff-hl fringe present.
-  - `M-x org-roam-node-find` → org-roam minibuffer.
-  - `M-x claude-jobs-view` → tabulated UI opens (proves the local-lisp
-    require still works).
-- **`*Messages*` audit** after a clean daemon start:
-  ```
-  emacsclient -e '(with-current-buffer "*Messages*"
-                    (buffer-substring-no-properties
-                      (max (point-min) (- (point-max) 8000)) (point-max)))'
-  ```
-  Diff against a captured pre-refactor baseline — no new warnings or
-  errors, may differ in ordering of benign init messages.
+  prints `ok`, no `Symbol's function definition is void`, no `Cannot open
+  load file`. Run before and after to confirm parity.
+- **Feature presence**: `(featurep 'init-dirvish)` is `t` after a clean
+  daemon start. `(featurep 'dirvish)` is `nil` until Dirvish is first
+  invoked (autoload), then becomes `t` after `C-c f`.
+- **`dirvish-override-dired-mode` is on**: in the running daemon,
+  `dirvish-override-dired-mode` evaluates to `t`.
+- **Behaviour spot-checks**:
+  - `C-c f` in a code buffer opens Dirvish on `default-directory` with
+    `nerd-icons` glyphs visible (TTY frame may show fallback glyphs if the
+    nerd font isn't deployed in the terminal — that's the terminal's
+    problem, not Dirvish's).
+  - `C-x d` (vanilla Dired binding) opens **Dirvish**, not classic Dired —
+    proves the `dirvish-override-dired-mode` global hook is live.
+  - `?` inside the Dirvish buffer opens the transient cheat-sheet
+    (`dirvish-dispatch`).
+  - `TAB` on a directory line expands a subtree (`dirvish-subtree-toggle`).
+  - `o` opens the quick-access menu containing the six personal entries
+    from `dirvish-quick-access-entries`.
+  - `C-c s` opens `dirvish-side` as a side window; `q` closes it.
+- **$HOME hazard regression**: `M-x dirvish RET ~ RET` renders in under one
+  second on this machine. If it stalls, suspect `git-msg` / `vc-state`
+  silently re-entering the attribute list — verify with
+  `(symbol-value 'dirvish-attributes)`.
+- **Large-dir async path**: `M-x dirvish` on a directory with >20 000
+  entries (e.g. `~/.emacs.d/var/` after long use, or an apt cache mirror)
+  must not block the Emacs UI — Dirvish should spawn `fdfind` and stream.
 - **Diff hygiene**:
-  - `git diff init.el` shows ~1260 lines removed, the new thin-loader content
-    added — net file becomes ~60 lines.
-  - Each new `lisp/init-<area>.el` has a `git status` "new file" entry whose
-    content equals the corresponding pre-refactor section + the
-    library-header / `provide` wrapping. Nothing else.
-  - `git diff custom.el early-init.el` empty (untouched).
+  - `git diff init.el` shows two changes: the require list gains
+    `init-dirvish` (one line) and the loader commentary block grows by one
+    description line — nothing else.
+  - `git status` shows one new file: `lisp/init-dirvish.el`.
+  - No edits to [`init-appearance.el`](lisp/init-appearance.el),
+    [`init-editing.el`](lisp/init-editing.el),
+    [`init-git.el`](lisp/init-git.el),
+    [`init-defaults.el`](lisp/init-defaults.el),
+    [`custom.el`](custom.el), or
+    [`early-init.el`](early-init.el).
 
 ## Boundaries
 
 - **Always**:
-  - Preserve every section's content **verbatim** (modulo the file header /
-    `provide` wrapping). No "while I'm in here" cleanups.
-  - Preserve section ordering. `no-littering` loads first, then everything
-    else in the original §2 → §15 order, then `custom.el` last.
-  - Every new file gets the `-*- lexical-binding: t; -*-` cookie on line 1.
-  - Every new file ends with `(provide 'init-<area>)` and the `;;; … ends
-    here` trailer (matches the convention in
-    [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.el)).
-  - Cross-section `with-eval-after-load` / `:after` references keep working
-    untouched — they operate by feature symbol, not by file boundary, and
-    the load order is preserved.
-  - Delete [`init.elc`](init.elc) once at the end so a stale compiled file
-    can't shadow the new `init.el`.
+  - Keep the new module's content additive — no edits to existing module
+    files except the one-line require list addition in [`init.el`](init.el)
+    and its commentary update.
+  - End the new file with `(provide 'init-dirvish)` and the canonical
+    `;;; init-dirvish.el ends here` trailer.
+  - Put the file's lexical-binding cookie on line 1, matching every other
+    module.
+  - Use `executable-find` for `fdfind` / `fd` so the config still loads on
+    a non-Debian box (Arch, macOS) where the binary is just `fd`.
 - **Ask first**:
-  - Splitting one of the existing 16 sections further (e.g. teasing
-    `init-languages.el` into `init-eglot.el` + `init-treesit.el` + per-lang
-    files). Tempting for §8 specifically — defer to a follow-up RFC.
-  - Collapsing two small sections into one file (e.g. §6 snippets + §5 corfu).
-  - Switching to `straight.el` / `elpaca` / literate org / any non-`use-package`
-    loader.
-  - Renaming `lisp/claude-jobs-view.el` or moving it under any of the new
-    `init-*.el` modules.
+  - Adding any of the optional preview binaries to the host (`apt install
+    poppler-utils ffmpegthumbnailer mediainfo libvips-tools imagemagick`) —
+    these expand Dirvish's preview range to PDF / video / audio / vector
+    images, but are out of scope for this initial install.
+  - Enabling `dirvish-peek-mode` globally (preview files in the
+    `find-file` minibuffer) — interaction with vertico-posframe / consult
+    preview deserves its own dry-run.
+  - Enabling `dirvish-side-follow-mode` (treemacs-like auto-track) by
+    default — current spec leaves it off, opt-in via `M-x`.
+  - Re-introducing `vc-state` / `git-msg` to `dirvish-attributes` — only
+    after measuring the $HOME-open latency cost and deciding it's
+    acceptable (or scoping the attribute to non-$HOME dirs).
+  - Pinning the Dirvish MELPA version via `package-vc-selected-packages`
+    or a `:vc` form — current install tracks MELPA's latest release.
 - **Never**:
-  - Re-order sections to "feel cleaner". Order is part of the contract
-    (no-littering before recentf, exec-path-from-shell before eglot, …).
-  - Inline `(load "lisp/init-X")` calls — use `(require 'init-X)` so duplicate
-    loads are no-ops and the feature list reflects what's actually loaded.
-  - Add a `:after` / `with-eval-after-load` indirection that wasn't already
-    in the monolith — behaviour must stay byte-identical.
-  - Introduce a `Makefile` or build script to byte-compile. Manual
-    `emacs --batch … -f batch-byte-compile` invocation is fine for a single
-    operator.
-  - Commit the per-module `.elc` files (they're already covered by
-    [`.gitignore`](.gitignore) — verify before commit).
+  - Re-enable `vc-handled-backends` to make `vc-state` work — that undoes
+    a deliberate `init-git.el` decision (line 22-23) and would also affect
+    every non-Dirvish file open.
+  - Re-enable `diff-hl-dired-mode` — same $HOME hazard documented in
+    `init-git.el` (line 29-33).
+  - Add Dirvish config to `init-appearance.el`, `init-editing.el`, or any
+    other existing module — keep the per-package granularity intact.
+  - Commit the byte-compiled `lisp/init-dirvish.elc` — `.gitignore` already
+    excludes `lisp/*.elc`; verify before commit.
+  - Inline `(load ".../init-dirvish.el")` — use `(require 'init-dirvish)`
+    so duplicate loads are no-ops.
 
 ## Success Criteria
 
 1. `emacs --batch -l init.el --eval '(message "ok")'` exits 0 with `ok` on
    stdout, no errors / warnings.
-2. `emacs --daemon` + `emacsclient -c -nw` opens a frame; every smoke-check
-   in "Testing Strategy" passes.
-3. `wc -l init.el` ≤ 80 lines; `wc -l lisp/init-*.el` shows roughly the
-   pre-split section sizes (file-by-file delta ≤ ~6 lines of header
-   wrapping per file).
-4. `git diff --stat` shows ~1260 lines deleted from `init.el`, ~1260 lines
-   added across the 13 new `lisp/init-*.el` files. Net repo line count
-   roughly conserved.
-5. Feature audit query (Commands table) returns every cell as `(symbol . t)`.
-6. `*Messages*` after a clean daemon start contains no new warnings vs the
-   pre-refactor baseline (captured once before any moves).
-7. Re-running the daemon after `M-x package-refresh` + `M-x package-upgrade-all`
-   continues to work — module file paths don't bake in any MELPA-version
-   assumptions.
-8. [`init.elc`](init.elc) is removed; `git status` confirms it's untracked-
-   ignored (already covered by [`.gitignore`](.gitignore)).
-9. `M-x claude-jobs-view` still launches the tabulated UI — proves the
-   pre-existing local-lisp require chain survives the refactor.
+2. `(featurep 'init-dirvish)` is `t` after a clean daemon start.
+3. `dirvish-override-dired-mode` is `t`; `C-x d` opens a Dirvish buffer.
+4. `C-c f` opens Dirvish; `C-c s` opens the side panel; `?` opens the
+   transient.
+5. Opening `~` (this user's $HOME, a 1500-tracked-file git repo) renders
+   in < 1 s and shows no per-row `git` invocation in
+   `dirvish-attributes`-emitted code paths.
+6. `wc -l lisp/init-dirvish.el` is in the 40–70 line range — matches the
+   density of the other small-package modules
+   ([`init-corfu.el`](lisp/init-corfu.el) is the size benchmark).
+7. `git diff --stat` shows one new file
+   (`lisp/init-dirvish.el`) and a tiny edit to [`init.el`](init.el).
+   Nothing else.
+8. Restart-cycle proof: `emacs --daemon` → `emacsclient -c -nw` → close →
+   re-open is uneventful; `*Messages*` shows no new warnings against the
+   pre-Dirvish baseline.
 
 ## Open Questions
 
-None blocking. Surface to the user **after** the split lands, not before:
+Non-blocking. Decide after the minimal install is in:
 
-- Should §8 (`init-languages.el`, the 439-line elephant) be sub-split in a
-  follow-up — e.g. `init-eglot.el` + `init-treesit.el` + per-language files?
-  Defer until the simple split is in and we can see how often §8 alone is
-  edited.
-- Byte-compilation: do we want a `make compile` shortcut or a
-  `post-package-install-hook` that recompiles changed modules? Defer —
-  manual `emacs --batch -L lisp/ -f batch-byte-compile lisp/init-*.el` is
-  fine for now.
-- Documentation: [`FEATURES.md`](FEATURES.md) currently references sections
-  by number (e.g. "§7 Editing"). Should those become file-path links
-  (`[init-editing.el](lisp/init-editing.el)`) once the split lands? Yes —
-  do it as a follow-up commit, not bundled with the move (keeps the diff
-  reviewable).
+- **Optional preview binaries**: install
+  `poppler-utils ffmpegthumbnailer mediainfo libvips-tools imagemagick`
+  to unlock PDF / video / audio / vector previews? Defer until the bare
+  Dirvish is in and we see whether the operator misses these.
+- **`dirvish-peek-mode`**: enable globally so `find-file` candidates get
+  inline previews? Defer — overlaps with `consult-preview`-style flows in
+  [`init-completion.el`](lisp/init-completion.el) and needs a side-by-side
+  trial.
+- **`dirvish-side-follow-mode`**: turn on by default so the side panel
+  tracks the current buffer? Defer — opt-in via `M-x` is fine until daily
+  use says otherwise.
+- **`FEATURES.md` section**: add a new "File manager (Dirvish)" entry with
+  the key table from this spec. Do it as a follow-up commit, not bundled,
+  to keep the implementation diff reviewable.
+- **`pdf-tools` swap**: if PDF preview is ever wanted, substitute
+  `pdf-tools` for the default `pdftoppm` dispatcher
+  (`cl-substitute 'pdf-tools 'pdf dirvish-preview-dispatchers`). Out of
+  scope here.
