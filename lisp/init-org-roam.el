@@ -66,6 +66,16 @@
          ("C-c r b" . org-roam-buffer-toggle)    ; backlinks side window
          ("C-c r c" . org-roam-capture)          ; capture a new note via a template
          ("C-c r d" . org-roam-dailies-goto-today))
+  ;; Defer the cache-DB autosync (and therefore the whole org-roam load) until
+  ;; init has finished -- on `after-init-hook' rather than in `:config'.  In
+  ;; `:config' the mode hooks `find-file-hook' / `after-save-hook' eagerly, so
+  ;; the very first file open would pull in emacsql + the entire org-roam
+  ;; surface.  After-init runs once, before user interaction, late enough that
+  ;; `emacs-init-time' is already snapped.
+  ;;
+  ;; (The DB itself must be built once first with `M-x org-roam-db-sync' --
+  ;; see the first-run note in the header comment above.)
+  :hook (after-init . org-roam-db-autosync-mode)
   :config
   ;; Tag prompt used by `org-roam-capture-templates' above.  Completes against
   ;; every tag currently in the roam DB; returns a "#+filetags: :a:b:" line, or
@@ -76,10 +86,7 @@
                             (completing-read-multiple
                              "Tags (comma-separated, empty = none): "
                              (org-roam-tag-completions)))))
-      (if tags (format "#+filetags: :%s:\n" (string-join tags ":")) "")))
-  ;; Keep the cache DB in sync as you edit/visit files.  The DB itself must be
-  ;; built once first with `M-x org-roam-db-sync' (see the first-run note above).
-  (org-roam-db-autosync-mode 1))
+      (if tags (format "#+filetags: :%s:\n" (string-join tags ":")) ""))))
 
 ;; org-roam-ui: an interactive graph of the roam DB rendered in the browser
 ;; (D3 force-directed; click a node to jump to it, follows point in Emacs,

@@ -21,8 +21,11 @@
   ;; New notes from `obsidian-capture' land here (relative to the vault);
   ;; leave at the vault root by default -- adjust if you keep an "Inbox/" dir.
   (obsidian-inbox-directory nil)
-  :config
-  (global-obsidian-mode 1)
+  ;; Defer activation to `after-init-hook' -- otherwise the `:config' block
+  ;; below would pull obsidian.el in eagerly at startup just to flip the
+  ;; global mode.  `after-init' fires before user interaction, so the mode
+  ;; is still active by the time you visit a vault file.
+  :hook (after-init . global-obsidian-mode)
   :bind
   (;; vault-wide commands (available everywhere, "n" = notes)
    ("C-c n n" . obsidian-jump)            ; open / switch to any note
