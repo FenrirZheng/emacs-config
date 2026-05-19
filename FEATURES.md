@@ -291,7 +291,48 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 
 ---
 
-## 13. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el))
+## 13. org-roam — Zettelkasten over `~/code/org-roam` ([`init-org-roam.el`](lisp/init-org-roam.el))
+
+`~/code/org-roam/` is the `.org` vault (~1400 notes, originally converted from the
+Markdown Obsidian vault by `~/code/obsidian-to-org-roam.py`). org-roam layers an
+SQLite-backed link cache on top of plain `.org` files: every note with a top-level
+`:ID:` property is a *node*, `[[id:...]]` links between them are bidirectional, and
+the side-window `org-roam-buffer` shows the backlinks of whatever you're viewing.
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c r f` | `org-roam-node-find` | Open a note — or create one; the prompt accepts any title and `RET` on a non-existent title fires the default capture template |
+| `C-c r i` | `org-roam-node-insert` | Insert an `[[id:...]]` link to an existing note at point |
+| `C-c r b` | `org-roam-buffer-toggle` | Toggle the backlinks side window for the current note |
+| `C-c r c` | `org-roam-capture` | Capture a new note via the default template (`<timestamp>-${slug}.org` + `#+title:` + tag prompt) |
+| `C-c r d` | `org-roam-dailies-goto-today` | Open today's daily note (creates it if missing); each invocation appends a fresh `* HH:MM` heading — a running journal in one file per day |
+| `C-c r g` | `org-roam-ui-mode` | Toggle the interactive D3 force-directed graph in a browser tab (follows point in Emacs, theme-matched, no Graphviz needed) |
+
+- **First run**: `M-x my/package-refresh` → restart Emacs → `M-x org-roam-db-sync` to
+  build the cache from the vault. After that, `org-roam-db-autosync-mode` keeps it
+  fresh as you edit. The DB pulls in `emacsql`; Emacs 30's built-in SQLite covers it
+  with no external `sqlite3` install needed.
+- **Capture tag prompt**: the default `"d"` template runs `completing-read-multiple`
+  against `(org-roam-tag-completions)` so you pick from your existing vocabulary
+  instead of inventing typo-variants (`#meeting` vs `#meetings`). Empty input emits
+  no `#+filetags:` line at all — no stray empty header.
+- **Dailies live at the vault root**, not in a `daily/` subdir
+  (`org-roam-dailies-directory ""`) — the conversion script flattened them. New days
+  get `#+filetags: :daily:` on first creation; each later `C-c r d` adds a
+  `* %H:%M %?` heading via the `entry` capture template, so a day's file is a
+  chronological log of timestamped headings rather than a single body.
+- **Static graph alternative**: `M-x org-roam-graph` renders the link graph via
+  Graphviz (needs the `dot` binary — `apt install graphviz`). Use `C-u M-x
+  org-roam-graph` for a *local* subgraph around point; the whole-vault render is
+  unreadable at this scale. `org-roam-ui` (above) is the better daily-driver.
+
+(Parallel to [`init-obsidian.el`](lisp/init-obsidian.el), which still drives the
+Markdown vault at `~/code/obsidian/`. The two coexist; drop `init-obsidian.el` if and
+when you fully migrate the Markdown side over.)
+
+---
+
+## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el))
 
 `eca` (Editor Code Assistant client), `acp` (Agent Client Protocol library) and
 `shell-maker` (the shared shell framework they build on) are installed but **not yet bound
