@@ -851,12 +851,27 @@ seems stuck on a stale answer."
   ;;           covers our use cases (Vue <style> blocks go through Volar).
   ;;   json -- simple grammar; built-in `js-json-mode' is fine and the
   ;;           LSP (vscode-json-language-server) does the heavy lifting.
-  ;; Both modes are still hooked to eglot above; we just lose the
-  ;; tree-sitter font-lock / structural navigation, which is no real loss
-  ;; for these two.
-  (setq treesit-auto-langs (seq-difference treesit-auto-langs '(css json)))
+  ;;   lua  -- `tree-sitter-grammars/tree-sitter-lua' is also ABI 15 at HEAD
+  ;;           (verified 2026-05-19: `treesit-auto-install' freshly cloned +
+  ;;           compiled the grammar and STILL produced ABI 15).  No
+  ;;           ABI-14-compatible tag exists upstream.  Fall back to MELPA
+  ;;           `lua-mode' (regex-based, see use-package clause below) for
+  ;;           highlighting; revisit if/when upstream tags ABI 14 or Emacs
+  ;;           lifts the ABI cap.
+  ;; All three modes are still hooked to eglot above where applicable; we
+  ;; just lose the tree-sitter font-lock / structural navigation, which is
+  ;; no real loss for these grammars.
+  (setq treesit-auto-langs (seq-difference treesit-auto-langs '(css json lua)))
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode 1))
+
+;; lua-mode (MELPA): regex-based highlighting for .lua files.  Picked over
+;; the built-in `lua-ts-mode' because upstream tree-sitter-lua is ABI 15
+;; (see the treesit-auto exclusion comment above).  Highlighting only --
+;; no LSP / formatter / REPL wired; reach for `M-s r' (consult-ripgrep)
+;; for cross-file work in a Lua project.
+(use-package lua-mode
+  :mode "\\.lua\\'")
 
 ;; combobulate: structural editing driven by the tree-sitter parse tree.
 ;; Where `expand-region' grows by lisp sexps (and gets it wrong in most

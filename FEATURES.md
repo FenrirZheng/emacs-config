@@ -203,6 +203,13 @@ lists the follow-up keys — no need to memorise prefixes.
   `C-M-$` switches languages mid-buffer. Pinned to `en_US` by default; first load
   compiles a small C module (~2 s, one-off). Requires `apt install enchant-2
   libenchant-2-dev`.
+- **lua-mode** (MELPA): `.lua` files open in `lua-mode` — regex-based highlighting only,
+  no LSP / formatter / REPL wired. Picked over the built-in `lua-ts-mode` because the
+  upstream `tree-sitter-grammars/tree-sitter-lua` grammar is ABI 15 at HEAD and Emacs
+  30.1 caps at ABI 14 (same reason `css` and `json` are excluded from `treesit-auto`
+  in [`init.el`](init.el) §8). Reach for `M-s r` (consult-ripgrep) for cross-file
+  work in a Lua project; add `(lua-mode . eglot-ensure)` + install
+  `lua-language-server` only when annotations / go-to-def actually matter.
 
 ---
 
