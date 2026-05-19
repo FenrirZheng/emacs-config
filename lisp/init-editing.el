@@ -44,7 +44,13 @@
 ;; doesn't replace Emacs' native undo machinery -- it just visualises it, so
 ;; there's no risk of a corrupted on-disk history on huge files.
 (use-package vundo
-  :bind ("C-x u" . vundo))               ; was `undo' (still on C-/ and C-_)
+  :bind ("C-x u" . vundo)                ; was `undo' (still on C-/ and C-_)
+  :custom
+  ;; Default glyph set is ASCII (`+--o-+'); branches in a non-trivial undo
+  ;; history blur into a wall of dashes.  `vundo-unicode-symbols' uses
+  ;; box-drawing characters (┌─┬─┐ / └─┴─┘) so the tree is actually
+  ;; readable.  Nerd-icons font in this config already covers them on TTY.
+  (vundo-glyph-alist vundo-unicode-symbols))
 
 ;; hl-todo: colour-code TODO / FIXME / HACK / NOTE / BUG keywords in comments.
 ;; (magit-todos in section 9 reuses this keyword set for its repo-wide list.)
