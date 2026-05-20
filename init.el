@@ -20,7 +20,7 @@
 ;;   init-org            -- Org-mode (light touch)
 ;;   init-obsidian       -- Obsidian note vault (~/code/obsidian/)
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
-;;   init-ai             -- AI / agent tooling (eca, acp, shell-maker, claude-jobs-view, gptel)
+;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel, claude-code-ide)
 ;;
 ;; Conventions:
 ;;   * `use-package-always-ensure' is t, so plain `(use-package foo ...)' will

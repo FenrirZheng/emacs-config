@@ -19,7 +19,8 @@
                 rainbow-delimiters system-packages treesit-auto
                 vertico vterm vue-mode vundo wgrep yasnippet-snippets))
  '(package-vc-selected-packages
-   '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
+   '((claude-code-ide :url "https://github.com/manzaltu/claude-code-ide.el")
+     (eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate"))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

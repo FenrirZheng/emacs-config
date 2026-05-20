@@ -334,10 +334,24 @@ when you fully migrate the Markdown side over.)
 
 ## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el))
 
-`eca` (Editor Code Assistant client), `acp` (Agent Client Protocol library) and
-`shell-maker` (the shared shell framework they build on) are installed but **not yet bound
-to keys** — invoke via `M-x eca` etc. Add `(use-package eca ...)` config in
-[`init-ai.el`](lisp/init-ai.el) when you want bindings or tweaks.
+[`gptel`](https://github.com/karthink/gptel) — LLM chat client. Defaults to Gemini (model
+`gemini-pro-latest`); switch backend/model via `M-x gptel-menu`. Seed API keys with
+`M-x fenrir/gptel-set-api-key` (writes `~/.authinfo`, mode `0600`). Entry points: `M-x gptel`
+(open chat), `M-x gptel-send` (send region/buffer).
+
+[`claude-code-ide`](https://github.com/manzaltu/claude-code-ide.el) — runs the `claude`
+CLI inside Emacs and bridges it via MCP/WebSocket so Claude can use Emacs's xref,
+tree-sitter, and project boundaries. Installed via the `:vc` keyword (Emacs 30 native
+`package-vc-install`); URL pinned in [`custom.el`](custom.el). Entry points:
+
+| Binding   | Command                  |
+|-----------|--------------------------|
+| `C-c C-'` | `claude-code-ide-menu` (transient) |
+| —         | `M-x claude-code-ide` (start in current project) |
+| —         | `M-x claude-code-ide-stop` |
+
+Prereqs already satisfied: `claude` CLI on PATH, `vterm` (init-terminal), `websocket`
+(via org-roam-ui), `transient` (via magit).
 
 ---
 
