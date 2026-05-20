@@ -275,6 +275,13 @@ All dape commands live in `dape-global-map` under the **`C-x C-a`** prefix:
 `C-x C-a`-prefixed command the prefix stays live — bare `n` / `s` / `o` / `c` / `u`
 keep stepping, `<` / `>` keep walking the stack, until you press any other key.
 
+**Logpoints** (`C-x C-a l`): the message is plain text with `{expression}`
+interpolation — e.g. `i={i} sum={sum}` re-evaluates `i` and `sum` in the stopped
+frame and prints to the `dape-repl` every time the line is reached, **without
+halting**: a `printf` you didn't have to edit into the source. The `{}` is expanded
+by the adapter (`dlv` / `debugpy` / `codelldb` / `js-debug` all support it), so the
+expression syntax is the debuggee's language. An empty message removes the logpoint.
+
 ---
 
 ## 8. Git — Magit + diff-hl ([`init-git.el`](lisp/init-git.el))
