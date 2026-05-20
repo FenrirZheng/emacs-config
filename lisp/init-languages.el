@@ -444,5 +444,32 @@ seems stuck on a stale answer."
   :mode (("README\\.md\\'" . gfm-mode))   ; GitHub-flavoured Markdown for READMEs
   :custom (markdown-command "pandoc"))
 
+;; dape: Debug Adapter Protocol client.  The Eglot-spirit counterpart to
+;; dap-mode -- core-only deps (jsonrpc), no lsp-mode, no child frames.
+;; Breakpoints render in the buffer MARGIN ("B"), not the fringe, so they
+;; stay visible on TTY frames (this whole config is daemon + emacsclient -nw).
+;; That margin-vs-fringe difference is exactly why dap-mode is rejected here:
+;; its fringe-bitmap breakpoints are invisible on a terminal frame.
+;;
+;; dape ships built-in `dape-configs' entries for debugpy / dlv / codelldb /
+;; gdb / js-debug -- you install the adapter BINARY, not write configs.  Only
+;; `dlv' (Go) is on PATH today; other languages need their adapter installed
+;; before `M-x dape' can debug them.  Per-project overrides: `.dir-locals.el'.
+;;
+;; `repeat-mode' (enabled in init-defaults) makes step/continue repeatable
+;; without re-pressing the `C-x C-a' prefix each time.
+(use-package dape
+  :custom
+  (dape-buffer-window-arrangement 'right)  ; info + REPL docked right
+  (dape-info-hide-mode-line t)             ; reclaim modeline in info buffers
+  (dape-inlay-hints t)                     ; variable values shown inline
+  :hook
+  ;; Persist breakpoints across Emacs sessions.
+  (kill-emacs . dape-breakpoint-save)
+  (after-init . dape-breakpoint-load)
+  :config
+  ;; Save modified buffers before a run -- matters for interpreted langs.
+  (add-hook 'dape-start-hook (lambda () (save-some-buffers t t))))
+
 (provide 'init-languages)
 ;;; init-languages.el ends here

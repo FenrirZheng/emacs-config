@@ -9,7 +9,7 @@
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(ace-window apheleia breadcrumb cape combobulate consult-eglot
-                corfu-terminal diff-hl difftastic dirvish
+                corfu-terminal dape diff-hl difftastic dirvish
                 doom-modeline doom-themes eglot-booster eldoc-box
                 embark-consult envrc exec-path-from-shell
                 expand-region flymake-eslint gcmh ggtags gptel helpful
@@ -19,7 +19,8 @@
                 rainbow-delimiters system-packages treesit-auto
                 vertico vterm vue-mode vundo wgrep yasnippet-snippets))
  '(package-vc-selected-packages
-   '((claude-code-ide :url "https://github.com/manzaltu/claude-code-ide.el")
+   '((claude-code-ide :url
+                      "https://github.com/manzaltu/claude-code-ide.el")
      (eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate"))))
 (custom-set-faces
