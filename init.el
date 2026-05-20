@@ -59,6 +59,26 @@
   (interactive)
   (package-refresh-contents))
 
+;; Native-compile the whole config on demand.  `native-comp-jit-compilation'
+;; (set in early-init.el) already native-compiles packages lazily as they
+;; load, so this command is just for pre-warming -- compile packages not yet
+;; loaded this session, or pick up freshly-edited `lisp/' modules without
+;; waiting for the next startup's JIT pass.  `native-compile-async' skips
+;; files whose `.eln' is already current, so re-running it is cheap.
+(defun my/native-compile-config ()
+  "Native-compile this config: every `.el' under `elpa/' and `lisp/'.
+Queues asynchronous native compilation.  `native-compile-async' skips
+files whose `.eln' is already up to date, so re-running this only picks
+up new or changed files.  Progress and warnings land in the
+`*Async-native-compile-log*' buffer."
+  (interactive)
+  (unless (native-comp-available-p)
+    (user-error "This Emacs was built without native compilation"))
+  (dolist (dir '("elpa" "lisp"))
+    (native-compile-async (expand-file-name dir user-emacs-directory)
+                          'recursively))
+  (message "Native compilation queued (elpa/ + lisp/); see *Async-native-compile-log*"))
+
 ;; `use-package' has shipped with Emacs since 29; just require it.
 (require 'use-package)
 ;; Every `(use-package foo ...)' implies `:ensure t' -- i.e. auto-install foo.

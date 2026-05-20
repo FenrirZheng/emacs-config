@@ -89,8 +89,14 @@
 ;; warnings on first native compile.  Silencing prevents the *Warnings*
 ;; buffer from popping into focus the first time you open Emacs after a
 ;; package upgrade.  JIT compilation stays on (background async compile).
+;;
+;; `native-comp-async-jobs-number' defaults to 1 -- a single background
+;; compile worker.  0 means "half the CPU's execution units", so native
+;; compilation (JIT and `M-x my/native-compile-config' alike) runs in
+;; parallel and post-upgrade compile waves drain much faster.
 (setq native-comp-async-report-warnings-errors 'silent
-      native-comp-jit-compilation t)
+      native-comp-jit-compilation t
+      native-comp-async-jobs-number 0)
 
 (provide 'early-init)
 ;;; early-init.el ends here
