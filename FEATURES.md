@@ -226,6 +226,54 @@ lists the follow-up keys — no need to memorise prefixes.
   in [`init-languages.el`](lisp/init-languages.el)). Reach for `M-s r` (consult-ripgrep) for cross-file
   work in a Lua project; add `(lua-mode . eglot-ensure)` + install
   `lua-language-server` only when annotations / go-to-def actually matter.
+- **dape**: Debug Adapter Protocol client — an in-editor step debugger, the
+  Eglot-spirit counterpart to `dap-mode`. Core-only deps (`jsonrpc`), no
+  `lsp-mode`, no child frames; breakpoints render in the buffer **margin**
+  (a `B` glyph) so they stay visible on TTY frames (this config runs daemon +
+  `emacsclient -nw`). `M-x dape` starts a session and prompts for a built-in
+  config (`dlv`, `debugpy`, `codelldb`, `gdb`, `js-debug`, …) — you install the
+  adapter **binary**, not write configs; only Go's `dlv` is on `PATH` today.
+  Per-project overrides live in `.dir-locals.el`. Breakpoints persist across
+  Emacs sessions (`dape-breakpoint-save` on quit, `dape-breakpoint-load` on
+  startup). Modified buffers are saved before each run. Keymap below.
+
+All dape commands live in `dape-global-map` under the **`C-x C-a`** prefix:
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-x C-a d` | `dape` | Start a debug session — prompts for an adapter config |
+| `C-x C-a c` | `dape-continue` | Continue / resume execution |
+| `C-x C-a n` | `dape-next` | Step over |
+| `C-x C-a s` | `dape-step-in` | Step into |
+| `C-x C-a o` | `dape-step-out` | Step out |
+| `C-x C-a u` | `dape-until` | Run to the line at point |
+| `C-x C-a p` | `dape-pause` | Pause a running session |
+| `C-x C-a r` | `dape-restart` | Restart the session |
+| `C-x C-a f` | `dape-restart-frame` | Restart the current stack frame |
+| `C-x C-a b` | `dape-breakpoint-toggle` | Toggle a breakpoint (the `B` margin glyph) |
+| `C-x C-a e` | `dape-breakpoint-expression` | Conditional breakpoint — stop when an expression is true |
+| `C-x C-a h` | `dape-breakpoint-hits` | Hit-count breakpoint — stop on the Nth hit |
+| `C-x C-a l` | `dape-breakpoint-log` | Logpoint — print a message instead of stopping |
+| `C-x C-a F` | `dape-breakpoint-function` | Break on entry to a named function |
+| `C-x C-a B` | `dape-breakpoint-remove-all` | Remove every breakpoint |
+| `C-x C-a i` | `dape-info` | Open / refresh the info windows (scope, stack, breakpoints, threads) |
+| `C-x C-a R` | `dape-repl` | Open the debug REPL |
+| `C-x C-a x` | `dape-evaluate-expression` | Evaluate an expression in the stopped frame |
+| `C-x C-a w` | `dape-watch-dwim` | Add the symbol/expression at point to the watch list |
+| `C-x C-a m` | `dape-memory` | Open a hex memory view |
+| `C-x C-a M` | `dape-disassemble` | Disassemble the current function |
+| `C-x C-a t` | `dape-select-thread` | Switch thread |
+| `C-x C-a S` | `dape-select-stack` | Pick a stack frame |
+| `C-x C-a <` | `dape-stack-select-up` | Move up the call stack |
+| `C-x C-a >` | `dape-stack-select-down` | Move down the call stack |
+| `C-x C-a T` | `dape-select-session` | Switch between concurrent debug sessions |
+| `C-x C-a K` | `dape-kill` | Kill the debuggee |
+| `C-x C-a D` | `dape-disconnect-quit` | Detach from the debuggee and quit |
+| `C-x C-a q` | `dape-quit` | Quit dape and tear down its windows |
+
+**repeat-mode** (enabled in [`init-defaults.el`](lisp/init-defaults.el)): after one
+`C-x C-a`-prefixed command the prefix stays live — bare `n` / `s` / `o` / `c` / `u`
+keep stepping, `<` / `>` keep walking the stack, until you press any other key.
 
 ---
 
