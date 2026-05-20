@@ -145,6 +145,14 @@ before gptel is loaded, to seed the key first."
   :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
   :bind ("C-c C-'" . claude-code-ide-menu)
   :config
+  ;; Wider than the 100-column upstream default: the session lives in a
+  ;; persistent right-side window, so give Claude's wrapped output room.
+  ;;
+  ;; NOTE: `claude-code-ide-no-flicker' (CLAUDE_CODE_NO_FLICKER=1, the CLI's
+  ;; own experimental flicker-free renderer) was tried here and reverted -- it
+  ;; misrendered in this TTY-inside-tmux setup.  Leave it at its nil default.
+  ;; The on-by-default Emacs-side `claude-code-ide-vterm-anti-flicker' stays.
+  (setq claude-code-ide-window-width 150)
   (claude-code-ide-emacs-tools-setup))
 
 (provide 'init-ai)
