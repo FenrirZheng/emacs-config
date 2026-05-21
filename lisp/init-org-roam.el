@@ -9,9 +9,9 @@
 ;; `[[id:...]]' links between them are bidirectional, and `org-roam-buffer'
 ;; shows the backlinks of whatever you're viewing.
 ;;
-;; This is parallel to init-obsidian.el, not a replacement -- obsidian.el still
-;; drives the original .md vault at ~/code/obsidian/.  Drop init-obsidian.el if
-;; and when you fully move over.
+;; The original .md vault at ~/code/obsidian/ still exists on disk but is no
+;; longer wired into Emacs -- init-obsidian.el / obsidian.el were removed, so
+;; org-roam over the converted .org notes is now the only note system here.
 ;;
 ;; First run (the archive isn't refreshed at startup -- see init.el §1):
 ;;   M-x my/package-refresh  ->  restart Emacs  ->  M-x org-roam-db-sync

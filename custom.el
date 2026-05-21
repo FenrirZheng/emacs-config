@@ -14,7 +14,7 @@
                 embark-consult envrc exec-path-from-shell
                 expand-region flymake-eslint gcmh ggtags gptel helpful
                 jinx lua-mode magit-delta magit-todos marginalia
-                multiple-cursors no-littering obsidian orderless
+                multiple-cursors no-littering orderless
                 org-appear org-modern org-roam-ui popper pulsar
                 rainbow-delimiters system-packages treesit-auto
                 vertico vterm vue-mode vundo wgrep yasnippet-snippets))

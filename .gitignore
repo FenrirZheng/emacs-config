@@ -42,3 +42,4 @@
 # Byte-compiled / native-compiled artifacts
 *.elc
 *.eln
+.aider*

@@ -11,8 +11,7 @@
 ;;   gptel           -- free-form LLM chat, no repo awareness   (init-ai.el)
 ;;   aidermacs       -- the `aider' CLI; repo-map-aware, diff-first (here)
 ;; aidermacs lives in its own module -- not folded into init-ai.el -- to
-;; keep the one-package-per-module granularity of init-corfu / init-dirvish
-;; / init-obsidian.
+;; keep the one-package-per-module granularity of init-corfu / init-dirvish.
 ;;
 ;; Prerequisites (NOT installed by this config -- see the task SPEC.md):
 ;;   * `aider' on PATH -- `pipx install aider-chat'.

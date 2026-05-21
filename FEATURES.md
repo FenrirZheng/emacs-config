@@ -384,10 +384,6 @@ the side-window `org-roam-buffer` shows the backlinks of whatever you're viewing
   org-roam-graph` for a *local* subgraph around point; the whole-vault render is
   unreadable at this scale. `org-roam-ui` (above) is the better daily-driver.
 
-(Parallel to [`init-obsidian.el`](lisp/init-obsidian.el), which still drives the
-Markdown vault at `~/code/obsidian/`. The two coexist; drop `init-obsidian.el` if and
-when you fully migrate the Markdown side over.)
-
 ---
 
 ## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el), [`init-tmux-claude.el`](lisp/init-tmux-claude.el))

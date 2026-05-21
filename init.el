@@ -18,7 +18,6 @@
 ;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
 ;;   init-dirvish        -- Dirvish: polished Dired with icons + preview
 ;;   init-org            -- Org-mode (light touch)
-;;   init-obsidian       -- Obsidian note vault (~/code/obsidian/)
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
 ;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel)
 ;;   init-aidermacs      -- aidermacs: the aider AI pair-programmer (vterm, Gemini)
@@ -143,7 +142,6 @@ up new or changed files.  Progress and warnings land in the
         init-appearance
         init-dirvish
         init-org
-        init-obsidian
         init-org-roam
         init-ai
         init-aidermacs
