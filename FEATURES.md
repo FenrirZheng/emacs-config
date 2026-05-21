@@ -387,7 +387,7 @@ when you fully migrate the Markdown side over.)
 
 ---
 
-## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el))
+## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el), [`init-tmux-claude.el`](lisp/init-tmux-claude.el))
 
 [`gptel`](https://github.com/karthink/gptel) — LLM chat client. Defaults to Gemini (model
 `gemini-pro-latest`); switch backend/model via `M-x gptel-menu`. Seed API keys with
@@ -409,6 +409,15 @@ Prereqs: the `aider` CLI on PATH (installed via `uv tool install --python 3.12
 aider-chat`); `vterm` ([`init-terminal.el`](lisp/init-terminal.el)). aider reads
 `GEMINI_API_KEY` from the environment — exported by the untracked `~/.profile.local`,
 harvested into the daemon by an `exec-path-from-shell-copy-env` call in the module.
+
+`M-x fenrir/tmux-claude-split` ([`init-tmux-claude.el`](lisp/init-tmux-claude.el)) — when
+Emacs runs inside tmux, splits the current pane left/right (the equivalent of tmux's
+`Prefix %`), launches the `claude` CLI in the new pane, and titles that pane
+`claude-<pane-id>` (e.g. `claude-%2`). Two up-front guards abort with a message and create
+no pane: Emacs not inside a tmux session (`$TMUX` unset), or `claude` not on `exec-path`.
+The new pane runs `claude` as its command, so it closes when `claude` exits. The pane
+title is only *visible* when your `tmux.conf` enables `pane-border-status` —
+`select-pane -T` sets it regardless. `M-x`-only, no key binding.
 
 ---
 

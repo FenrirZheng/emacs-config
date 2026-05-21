@@ -22,6 +22,7 @@
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
 ;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel)
 ;;   init-aidermacs      -- aidermacs: the aider AI pair-programmer (vterm, Gemini)
+;;   init-tmux-claude    -- tmux helper: split a pane running the `claude' CLI
 ;;
 ;; Conventions:
 ;;   * `use-package-always-ensure' is t, so plain `(use-package foo ...)' will
@@ -145,6 +146,7 @@ up new or changed files.  Progress and warnings land in the
         init-obsidian
         init-org-roam
         init-ai
-        init-aidermacs))
+        init-aidermacs
+        init-tmux-claude))
 
 ;;; init.el ends here
