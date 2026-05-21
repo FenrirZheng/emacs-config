@@ -7,9 +7,8 @@
 ;; a Magit-style transient menu (`C-c a').  AI file edits are surfaced with
 ;; `ediff' before they are accepted.
 ;;
-;; This config's three AI surfaces, kept as separate modules:
+;; This config's two AI surfaces, kept as separate modules:
 ;;   gptel           -- free-form LLM chat, no repo awareness   (init-ai.el)
-;;   claude-code-ide -- the `claude' CLI bridged over MCP       (init-ai.el)
 ;;   aidermacs       -- the `aider' CLI; repo-map-aware, diff-first (here)
 ;; aidermacs lives in its own module -- not folded into init-ai.el -- to
 ;; keep the one-package-per-module granularity of init-corfu / init-dirvish
@@ -17,8 +16,8 @@
 ;;
 ;; Prerequisites (NOT installed by this config -- see the task SPEC.md):
 ;;   * `aider' on PATH -- `pipx install aider-chat'.
-;;   * `vterm' -- already present (init-terminal.el); its native module is
-;;     already compiled because claude-code-ide uses vterm too.
+;;   * `vterm' -- already present (init-terminal.el), which compiles its
+;;     native module on load (`vterm-always-compile-module').
 ;;   * GEMINI_API_KEY -- aider reads the key from its process environment,
 ;;     NOT from ~/.authinfo (where gptel keeps its copy).  Export it in the
 ;;     login-shell rc; the daemon then harvests it lazily via the
@@ -34,9 +33,8 @@
   :bind ("C-c a" . aidermacs-transient-menu)
   :custom
   ;; Run aider inside vterm, not the pure-Elisp comint backend.  vterm is
-  ;; already a dependency here (init-terminal.el, also used by
-  ;; claude-code-ide); its full ANSI emulation renders aider's colored,
-  ;; streamed output cleanly.
+  ;; already present (init-terminal.el); its full ANSI emulation renders
+  ;; aider's colored, streamed output cleanly.
   (aidermacs-backend 'vterm)
   ;; Default model: Gemini, matching gptel's default in init-ai.el.  aider
   ;; resolves model strings through litellm, hence the `gemini/' prefix.

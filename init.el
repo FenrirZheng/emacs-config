@@ -20,7 +20,7 @@
 ;;   init-org            -- Org-mode (light touch)
 ;;   init-obsidian       -- Obsidian note vault (~/code/obsidian/)
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
-;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel, claude-code-ide)
+;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel)
 ;;   init-aidermacs      -- aidermacs: the aider AI pair-programmer (vterm, Gemini)
 ;;
 ;; Conventions:

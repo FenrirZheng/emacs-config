@@ -394,26 +394,12 @@ when you fully migrate the Markdown side over.)
 `M-x fenrir/gptel-set-api-key` (writes `~/.authinfo`, mode `0600`). Entry points: `M-x gptel`
 (open chat), `M-x gptel-send` (send region/buffer).
 
-[`claude-code-ide`](https://github.com/manzaltu/claude-code-ide.el) — runs the `claude`
-CLI inside Emacs and bridges it via MCP/WebSocket so Claude can use Emacs's xref,
-tree-sitter, and project boundaries. Installed via the `:vc` keyword (Emacs 30 native
-`package-vc-install`); URL pinned in [`custom.el`](custom.el). Entry points:
-
-| Binding   | Command                  |
-|-----------|--------------------------|
-| `C-c C-'` | `claude-code-ide-menu` (transient) |
-| —         | `M-x claude-code-ide` (start in current project) |
-| —         | `M-x claude-code-ide-stop` |
-
-Prereqs already satisfied: `claude` CLI on PATH, `vterm` (init-terminal), `websocket`
-(via org-roam-ui), `transient` (via magit).
-
 [`aidermacs`](https://github.com/MatthewZMD/aidermacs) — Emacs front-end for the `aider`
 AI pair-programmer, in its own module [`init-aidermacs.el`](lisp/init-aidermacs.el). Runs
 `aider` in a `vterm` buffer, driven by a Magit-style transient; AI edits land through
-`ediff`. Repo-map-aware and diff-first — distinct from `gptel` (free-form chat) and
-`claude-code-ide` (the `claude` CLI). Defaults: model `gemini/gemini-2.5-pro`, `code` chat
-mode, `aidermacs-auto-commits` off (Magit owns commits).
+`ediff`. Repo-map-aware and diff-first — distinct from `gptel` (free-form chat).
+Defaults: model `gemini/gemini-2.5-pro`, `code` chat mode, `aidermacs-auto-commits` off
+(Magit owns commits).
 
 | Binding | Command |
 |---------|---------|

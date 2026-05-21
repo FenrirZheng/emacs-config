@@ -3,10 +3,8 @@
 ;;; Commentary:
 ;; Section 15 of the pre-split monolithic init.el (see git log for the move).
 ;;   gptel             -- LLM chat client (OpenAI / Claude / Gemini / Ollama / ...)
-;;   claude-code-ide   -- Claude Code CLI inside Emacs via MCP/WebSocket
-;; Both are configured explicitly below; see `package-selected-packages' /
-;; `package-vc-selected-packages' in custom.el for the install sources
-;; (gptel from MELPA, claude-code-ide via the `:vc' keyword).
+;; Configured explicitly below; see `package-selected-packages' in custom.el
+;; for the install source (gptel from MELPA / NonGNU ELPA).
 
 ;;; Code:
 
@@ -115,45 +113,6 @@ before gptel is loaded, to seed the key first."
   ;; version is needed.
   (setq gptel-backend (gptel-get-backend "Gemini")
         gptel-model   'gemini-pro-latest))
-
-;; claude-code-ide -- runs the `claude' CLI inside Emacs and bridges it to the
-;; buffer via the official Claude Code MCP (Model Context Protocol) over a
-;; local WebSocket.  Source: https://github.com/manzaltu/claude-code-ide.el.
-;; Not on MELPA -- installed via the Emacs 30 native `:vc' keyword
-;; (`package-vc-install').  The pinned URL is mirrored in
-;; `package-vc-selected-packages' in custom.el so a fresh clone reproduces the
-;; fetch; update later with `M-x package-vc-upgrade RET claude-code-ide RET'.
-;;
-;; Prereqs (already satisfied on this machine):
-;;   * `claude' CLI on PATH (~/.local/bin/claude).
-;;   * `vterm' for terminal emulation (see init-terminal.el).
-;;   * `websocket' and `transient' come in transitively (websocket via
-;;     `org-roam-ui', transient via `magit').
-;;
-;; First install: `M-x my/package-refresh' then restart Emacs (archive is not
-;; auto-refreshed at startup -- see init.el).
-;;
-;; Entry points:
-;;   C-c C-'   -- claude-code-ide-menu  (transient: start / stop / send / ...)
-;;   M-x claude-code-ide        -- start session in the current project
-;;   M-x claude-code-ide-stop   -- terminate the running session
-;;
-;; `claude-code-ide-emacs-tools-setup' registers Emacs-side MCP tools (xref,
-;; tree-sitter, project) so Claude can use the editor's symbol index and
-;; project boundaries instead of guessing.
-(use-package claude-code-ide
-  :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
-  :bind ("C-c C-'" . claude-code-ide-menu)
-  :config
-  ;; Wider than the 100-column upstream default: the session lives in a
-  ;; persistent right-side window, so give Claude's wrapped output room.
-  ;;
-  ;; NOTE: `claude-code-ide-no-flicker' (CLAUDE_CODE_NO_FLICKER=1, the CLI's
-  ;; own experimental flicker-free renderer) was tried here and reverted -- it
-  ;; misrendered in this TTY-inside-tmux setup.  Leave it at its nil default.
-  ;; The on-by-default Emacs-side `claude-code-ide-vterm-anti-flicker' stays.
-  (setq claude-code-ide-window-width 150)
-  (claude-code-ide-emacs-tools-setup))
 
 (provide 'init-ai)
 ;;; init-ai.el ends here
