@@ -4,7 +4,7 @@
 ;; Section 7 of the pre-split monolithic init.el (see git log for the move).
 ;; Quality-of-life editing packages: avy, expand-region, multiple-cursors,
 ;; rainbow-delimiters, helpful, vundo, hl-todo, pulsar, ace-window, popper,
-;; winner (built-in), breadcrumb, jinx.
+;; winner (built-in), breadcrumb, jinx, hideshow (built-in).
 
 ;;; Code:
 
@@ -190,6 +190,54 @@
   :bind (("M-$"   . jinx-correct)
          ("C-M-$" . jinx-languages))
   :custom (jinx-languages "en_US"))
+
+;; hideshow (built-in): code folding.  `C-c @' is hideshow's own default
+;; prefix, but its native sub-keys are unmemorable multi-modifier chords
+;; (`C-c @ C-M-h', `C-c @ C-c', ...).  Rebind the whole prefix to a
+;; `transient' "cockpit" instead -- one entry point, every fold action
+;; visible and labelled, and the menu stays open so you can navigate +
+;; fold repeatedly before quitting with `q'.
+;;
+;; Why transient and not which-key / hydra:
+;;   * which-key (init-defaults.el) only *displays* whatever bindings
+;;     exist -- it can't fix the bad native chords and closes after one
+;;     command.  It still helps: `C-c' then a pause shows `@' as the
+;;     route into this menu.
+;;   * hydra would be a brand-new MELPA dependency.
+;;   * transient is already installed (gptel / magit pull it in) and this
+;;     config already drives a menu this way -- `aidermacs-transient-menu'
+;;     on `C-c a' (init-aidermacs.el).  Zero new dependency.
+;;
+;; `hs-minor-mode' is auto-enabled in every `prog-mode' buffer, so `C-c @'
+;; is always live in code; it is bound in `hs-minor-mode-map' (not global)
+;; to keep it hideshow-specific.  hideshow folds by sexp/braces -- great
+;; for C-like / Lisp / JSON, weaker for indentation-structured languages
+;; like Python (a hideshow limitation, not this config's).
+(use-package hideshow
+  :ensure nil
+  :hook (prog-mode . hs-minor-mode)
+  :bind (:map hs-minor-mode-map
+              ("C-c @" . fenrir/hideshow-menu))   ; shadows the native prefix
+  :config
+  ;; transient is already on `load-path' (an elpa/ package, pulled in by
+  ;; gptel / magit); require it here so the menu is defined the first time
+  ;; a prog buffer loads hideshow -- no startup cost.
+  (require 'transient)
+  (transient-define-prefix fenrir/hideshow-menu ()
+    "Code folding (HideShow) cockpit -- stays open until `q'."
+    [["Block at point"
+      ("t" "Toggle"     hs-toggle-hiding :transient t)
+      ("h" "Hide"       hs-hide-block    :transient t)
+      ("s" "Show"       hs-show-block    :transient t)]
+     ["Whole buffer"
+      ("H" "Hide all"   hs-hide-all      :transient t)
+      ("S" "Show all"   hs-show-all      :transient t)
+      ("l" "Hide level" hs-hide-level    :transient t)]
+     ["Move point"
+      ("n" "Next line"  next-line        :transient t)
+      ("p" "Prev line"  previous-line    :transient t)]
+     ["Exit"
+      ("q" "Quit" transient-quit-one)]]))
 
 (provide 'init-editing)
 ;;; init-editing.el ends here

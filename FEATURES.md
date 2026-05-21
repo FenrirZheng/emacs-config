@@ -140,6 +140,30 @@ backups / `.#foo` lockfiles (autosaves `#foo#` are kept for recovery, redirected
 jump, a window switch, `consult-line` / `consult-imenu` / `consult-ripgrep`,
 `recenter-top-bottom`, … so your eye re-acquires the cursor.
 
+**Code folding (HideShow)** — `hs-minor-mode` **(built-in)** is auto-enabled in every
+`prog-mode` buffer. `C-c @` (hideshow's own prefix, rebound here) opens a `transient`
+menu — the same menu style as `C-c a` for aidermacs (§14). hideshow's native sub-keys
+are unmemorable multi-modifier chords; this replaces the whole prefix with one
+discoverable, bottom-popup menu that **stays open** so you can navigate and fold
+repeatedly. `which-key` still routes you in: press `C-c`, pause, and the panel shows
+`@`.
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c @` | `fenrir/hideshow-menu` | Open the folding menu (bottom-popup transient) |
+| `t` | `hs-toggle-hiding` | Fold / unfold the block at point |
+| `h` | `hs-hide-block` | Fold the block at point |
+| `s` | `hs-show-block` | Unfold the block at point |
+| `H` | `hs-hide-all` | Fold every block in the buffer |
+| `S` | `hs-show-all` | Unfold everything |
+| `l` | `hs-hide-level` | Fold all blocks one nesting level deep (`C-u N` then `l` for N levels) |
+| `n` / `p` | `next-line` / `previous-line` | Move point down / up *without leaving the menu* |
+| `q` | — | Quit the menu (`C-g` also works) |
+
+`t` / `h` / `s` / `H` / `S` / `l` / `n` / `p` are pressed *inside* the menu after `C-c @`.
+hideshow folds by sexp / braces — strong for C-like, Lisp and JSON, weaker for
+indentation-structured languages like Python.
+
 ---
 
 ## 6. Help system, upgraded (`which-key` in [`init-defaults.el`](lisp/init-defaults.el), `helpful` in [`init-editing.el`](lisp/init-editing.el))
