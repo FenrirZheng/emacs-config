@@ -21,6 +21,7 @@
 ;;   init-obsidian       -- Obsidian note vault (~/code/obsidian/)
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
 ;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel, claude-code-ide)
+;;   init-aidermacs      -- aidermacs: the aider AI pair-programmer (vterm, Gemini)
 ;;
 ;; Conventions:
 ;;   * `use-package-always-ensure' is t, so plain `(use-package foo ...)' will
@@ -143,6 +144,7 @@ up new or changed files.  Progress and warnings land in the
         init-org
         init-obsidian
         init-org-roam
-        init-ai))
+        init-ai
+        init-aidermacs))
 
 ;;; init.el ends here

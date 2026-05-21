@@ -387,7 +387,7 @@ when you fully migrate the Markdown side over.)
 
 ---
 
-## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el))
+## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el))
 
 [`gptel`](https://github.com/karthink/gptel) — LLM chat client. Defaults to Gemini (model
 `gemini-pro-latest`); switch backend/model via `M-x gptel-menu`. Seed API keys with
@@ -407,6 +407,22 @@ tree-sitter, and project boundaries. Installed via the `:vc` keyword (Emacs 30 n
 
 Prereqs already satisfied: `claude` CLI on PATH, `vterm` (init-terminal), `websocket`
 (via org-roam-ui), `transient` (via magit).
+
+[`aidermacs`](https://github.com/MatthewZMD/aidermacs) — Emacs front-end for the `aider`
+AI pair-programmer, in its own module [`init-aidermacs.el`](lisp/init-aidermacs.el). Runs
+`aider` in a `vterm` buffer, driven by a Magit-style transient; AI edits land through
+`ediff`. Repo-map-aware and diff-first — distinct from `gptel` (free-form chat) and
+`claude-code-ide` (the `claude` CLI). Defaults: model `gemini/gemini-2.5-pro`, `code` chat
+mode, `aidermacs-auto-commits` off (Magit owns commits).
+
+| Binding | Command |
+|---------|---------|
+| `C-c a` | `aidermacs-transient-menu` — transient: sessions, file management, model switch, code actions |
+
+Prereqs: the `aider` CLI on PATH (installed via `uv tool install --python 3.12
+aider-chat`); `vterm` ([`init-terminal.el`](lisp/init-terminal.el)). aider reads
+`GEMINI_API_KEY` from the environment — exported by the untracked `~/.profile.local`,
+harvested into the daemon by an `exec-path-from-shell-copy-env` call in the module.
 
 ---
 
