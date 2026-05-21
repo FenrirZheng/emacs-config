@@ -219,13 +219,16 @@ lists the follow-up keys — no need to memorise prefixes.
   `C-M-$` switches languages mid-buffer. Pinned to `en_US` by default; first load
   compiles a small C module (~2 s, one-off). Requires `apt install enchant-2
   libenchant-2-dev`.
-- **lua-mode** (MELPA): `.lua` files open in `lua-mode` — regex-based highlighting only,
-  no LSP / formatter / REPL wired. Picked over the built-in `lua-ts-mode` because the
-  upstream `tree-sitter-grammars/tree-sitter-lua` grammar is ABI 15 at HEAD and Emacs
+- **lua-mode** (MELPA): `.lua` files open in `lua-mode` — regex-based highlighting.
+  Picked over the built-in `lua-ts-mode` because the upstream
+  `tree-sitter-grammars/tree-sitter-lua` grammar is ABI 15 at HEAD and Emacs
   30.1 caps at ABI 14 (same reason `css` and `json` are excluded from `treesit-auto`
-  in [`init-languages.el`](lisp/init-languages.el)). Reach for `M-s r` (consult-ripgrep) for cross-file
-  work in a Lua project; add `(lua-mode . eglot-ensure)` + install
-  `lua-language-server` only when annotations / go-to-def actually matter.
+  in [`init-languages.el`](lisp/init-languages.el)). **LSP**: Eglot attaches
+  `lua-language-server` (LuaLS) — go-to-def, hover, `consult-eglot-symbols`,
+  Flymake diagnostics. The server isn't on apt; [`shell/install-user.sh`](shell/install-user.sh)
+  installs it from upstream GitHub releases into `~/.local/share/lua-language-server/`
+  with a `~/.local/bin/` symlink. If the binary is missing, Eglot just declines to
+  start — highlighting still works. No formatter / REPL wired.
 - **dape**: Debug Adapter Protocol client — an in-editor step debugger, the
   Eglot-spirit counterpart to `dap-mode`. Core-only deps (`jsonrpc`), no
   `lsp-mode`, no child frames; breakpoints render in the buffer **margin**

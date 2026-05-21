@@ -9,7 +9,8 @@
 #   3. go install   — gopls (skipped if no go)
 #   4. rustup       — rust-analyzer component (skipped if no rustup)
 #   5. terminfo     — tmux-256color +setf24/setb24 for Emacs TTY truecolor
-#   6. reminders    — manual follow-ups printed at end
+#   6. lua-ls       — lua-language-server (GitHub release tarball; not on apt)
+#   7. reminders    — manual follow-ups printed at end
 
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "install-user.sh: must be run with bash (you used sh/dash, which has no arrays)" >&2
@@ -97,7 +98,37 @@ else
   skip "tic / tmux-256color terminfo 不在 (apt: ncurses-bin ncurses-term) — TTY 真色彩跳過"
 fi
 
-# ── 6. manual follow-ups ────────────────────────────────────────────────
+# ── 6. lua-language-server ──────────────────────────────────────────────
+# LuaLS isn't on apt and isn't a cargo/go/npm package — it ships as a
+# self-contained tarball on upstream GitHub releases. Extract the WHOLE
+# archive into ~/.local/share/ (the bin/ launcher needs its sibling
+# script/ meta/ locale/ dirs), then symlink the launcher onto PATH. Eglot
+# attaches it to `lua-mode' — see lisp/init-languages.el. Idempotent: the
+# version probe skips the download when the pinned release is already in.
+section "lua-language-server"
+luals_version="3.18.2"
+luals_dest="$HOME/.local/share/lua-language-server"
+luals_link="$HOME/.local/bin/lua-language-server"
+if [ "$("$luals_link" --version 2>/dev/null | cut -d- -f1)" = "$luals_version" ]; then
+  ok "lua-language-server $luals_version already installed"
+elif have curl && have tar; then
+  luals_url="https://github.com/LuaLS/lua-language-server/releases/download/${luals_version}/lua-language-server-${luals_version}-linux-x64.tar.gz"
+  luals_tmp="$(mktemp -d)"
+  if curl -fsSL -o "$luals_tmp/lls.tar.gz" "$luals_url"; then
+    rm -rf "$luals_dest"
+    mkdir -p "$luals_dest" "$HOME/.local/bin"
+    tar -xzf "$luals_tmp/lls.tar.gz" -C "$luals_dest"
+    ln -sfn "$luals_dest/bin/lua-language-server" "$luals_link"
+    ok "lua-language-server $luals_version → $luals_dest"
+  else
+    skip "lua-language-server 下載失敗 — 檢查網路後重跑此腳本"
+  fi
+  rm -rf "$luals_tmp"
+else
+  skip "curl / tar 不在 PATH — lua-language-server 跳過"
+fi
+
+# ── 7. manual follow-ups ────────────────────────────────────────────────
 section "Manual follow-ups"
 if [ "${npm_prefix_flipped:-0}" -eq 1 ]; then
   echo '  • PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)'
@@ -107,7 +138,6 @@ cat <<'EOF'
   • jinx compiles its C module on first load (~2s; needs libenchant-2-dev)
   • vterm compiles its C module on first launch (needs cmake + libvterm-dev)
   • Tree-sitter css/json/lua are ABI 15 and unusable on Emacs 30 (ABI 14);
-    init.el:873-895 already routes around this (lua falls back to lua-mode)
-  • Lua LSP not in apt — install lua-language-server from GitHub releases
-    if you want eglot integration for .lua files
+    lisp/init-languages.el already routes around this (lua → lua-mode font-lock
+    + lua-language-server LSP, installed in section 6 above)
 EOF

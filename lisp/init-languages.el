@@ -119,7 +119,13 @@ seems stuck on a stale answer."
          (html-mode       . eglot-ensure)   ; covers mhtml-mode (derived)
          (js-json-mode    . eglot-ensure)   ; built-in JSON mode
          (c-ts-mode       . eglot-ensure)
-         (c++-ts-mode     . eglot-ensure))
+         (c++-ts-mode     . eglot-ensure)
+         ;; Lua attaches on the regex-based `lua-mode', NOT `lua-ts-mode' --
+         ;; tree-sitter-lua is ABI 15 (see the treesit-auto exclusion below),
+         ;; so .lua files never reach the *-ts-mode.  Eglot 30.1's default
+         ;; `eglot-server-programs' already maps `lua-mode' to the
+         ;; `lua-language-server' binary (install per the lua-mode block).
+         (lua-mode        . eglot-ensure))
   :custom
   (eglot-autoshutdown t)                 ; kill the server when its last buffer closes
   (eglot-events-buffer-size 0)           ; don't log the (huge) JSON-RPC traffic
@@ -340,9 +346,19 @@ seems stuck on a stale answer."
 
 ;; lua-mode (MELPA): regex-based highlighting for .lua files.  Picked over
 ;; the built-in `lua-ts-mode' because upstream tree-sitter-lua is ABI 15
-;; (see the treesit-auto exclusion comment above).  Highlighting only --
-;; no LSP / formatter / REPL wired; reach for `M-s r' (consult-ripgrep)
-;; for cross-file work in a Lua project.
+;; (see the treesit-auto exclusion comment above) -- so we lose tree-sitter
+;; font-lock / structural navigation but keep everything else.
+;;
+;; LSP: Eglot attaches `lua-language-server' (LuaLS) via the `lua-mode' hook
+;; in the eglot block above -- go-to-def, hover, workspace symbols, flymake
+;; diagnostics.  The server isn't on apt; it's installed from upstream
+;; GitHub releases as a self-contained bundle:
+;;     ~/.local/share/lua-language-server/    (extracted tarball)
+;;     ~/.local/bin/lua-language-server       (symlink to bin/ launcher)
+;; `shell/install-user.sh' performs this install on a fresh clone.  If the
+;; binary is missing, Eglot just declines to start -- highlighting still
+;; works.  No formatter / REPL wired; add `stylua' to `apheleia-mode-alist'
+;; if format-on-save is wanted.
 (use-package lua-mode
   :mode "\\.lua\\'")
 
