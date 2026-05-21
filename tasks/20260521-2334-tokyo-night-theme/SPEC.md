@@ -6,7 +6,7 @@
 
 1. 佈景主題由 `doom-one` 切換為 `doom-tokyo-night`。
 2. 視窗背景改為透明 — TTY 與 GUI 各自處理。
-3. 增量搜尋失配時的 `isearch-fail` face,由 doom-themes 預設的紅色改為 Tokyo Night 橘色。
+3. 增量搜尋失配時的 `isearch-fail` face,由 doom-themes 預設的紅色改為 Tokyo Night 黃色。
 
 涉及檔案:[`lisp/init-appearance.el`](../../lisp/init-appearance.el)、[`custom.el`](../../custom.el)。
 
@@ -31,8 +31,8 @@
 
 * 檔案:[`custom.el`](../../custom.el)
 * 於 `custom-set-faces` 區塊新增 `isearch-fail` override:
-  * 背景:`#ff9e64`(Tokyo Night 橘)
-  * 前景:`#414868`(Tokyo Night `base0`,深色,確保橘底上對比足夠)
+  * 背景:`#e0af68`(Tokyo Night 黃 — 主題的 `warning` 警告色,語義上對應「搜尋失敗」)
+  * 前景:`#414868`(Tokyo Night `base0`,深色,確保黃底上對比足夠)
   * 字重:`bold`(沿用 doom-themes 原設計)
 * 寫入的是 `user` theme,優先序高於任何已載入的 doom 主題,故覆寫不受載入順序影響。
 
