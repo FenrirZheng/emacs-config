@@ -31,6 +31,7 @@ APT_PKGS=(
   direnv                              # envrc          (init.el:636-638)
   git-delta                           # magit-delta    (init.el:1060-1063)
   clangd                              # eglot C/C++    (init.el:643)
+  ncurses-term                        # tmux-256color: base for truecolor terminfo (install-user.sh §5)
 )
 missing=()
 for p in "${APT_PKGS[@]}"; do

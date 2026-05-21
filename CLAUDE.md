@@ -49,7 +49,7 @@ git -C ~/.emacs.d config core.hooksPath .githooks   # wire pre-commit (local con
 emacs                                               # first launch: use-package installs missing packages
 ```
 
-[`shell/install.sh`](shell/install.sh) is a thin orchestrator over two halves: [`install-root.sh`](shell/install-root.sh) (apt packages; self-elevates via `sudo`) and [`install-user.sh`](shell/install-user.sh) (cargo / go / rustup / npm; refuses to run as root so toolchain caches don't land under `/root/`). Shared helpers live in [`install-lib.sh`](shell/install-lib.sh). `install-user.sh` flips npm's global prefix to `$HOME/.npm-global` so `npm install -g` no longer needs sudo — add `$HOME/.npm-global/bin` to `PATH` once for the new prefix to be useful.
+[`shell/install.sh`](shell/install.sh) is a thin orchestrator over two halves: [`install-root.sh`](shell/install-root.sh) (apt packages; self-elevates via `sudo`) and [`install-user.sh`](shell/install-user.sh) (cargo / go / rustup / npm / terminfo; refuses to run as root so toolchain caches don't land under `/root/`). Shared helpers live in [`install-lib.sh`](shell/install-lib.sh). `install-user.sh` flips npm's global prefix to `$HOME/.npm-global` so `npm install -g` no longer needs sudo — add `$HOME/.npm-global/bin` to `PATH` once for the new prefix to be useful.
 
 After first launch, also:
 - `M-x nerd-icons-install-fonts` once (modeline glyphs).

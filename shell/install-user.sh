@@ -8,7 +8,8 @@
 #   2. cargo        — emacs-lsp-booster, difftastic (skipped if no cargo)
 #   3. go install   — gopls (skipped if no go)
 #   4. rustup       — rust-analyzer component (skipped if no rustup)
-#   5. reminders    — manual follow-ups printed at end
+#   5. terminfo     — tmux-256color +setf24/setb24 for Emacs TTY truecolor
+#   6. reminders    — manual follow-ups printed at end
 
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "install-user.sh: must be run with bash (you used sh/dash, which has no arrays)" >&2
@@ -75,7 +76,28 @@ else
   skip "rustup 不在 PATH — rust-analyzer 跳過"
 fi
 
-# ── 5. manual follow-ups ────────────────────────────────────────────────
+# ── 5. terminfo ─────────────────────────────────────────────────────────
+section "terminfo (Emacs truecolor)"
+# Emacs emits 24-bit colour on a TTY only when terminfo carries the non-standard
+# setf24/setb24 caps — it ignores $COLORTERM. Append those two caps to the live
+# system tmux-256color entry and compile into ~/.terminfo, which ncurses searches
+# before /usr/share/terminfo: the result shadows the stock entry, so tmux.conf's
+# `default-terminal "tmux-256color"' needs no edit. A fresh `emacsclient -t'
+# frame picks it up — terminfo is read per-frame, the daemon need not restart.
+if have tic && infocmp tmux-256color >/dev/null 2>&1; then
+  {
+    infocmp -x tmux-256color
+    # value packs the colour as one int: R=p1/65536, G=(p1/256)&255, B=p1&255
+    printf '\t%s\n' \
+      'setf24=\E[38;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm,' \
+      'setb24=\E[48;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm,'
+  } | tic -x -o "$HOME/.terminfo" -    # -x keeps the extended setf24/setb24 caps
+  ok "~/.terminfo tmux-256color +setf24/setb24 — open a fresh 'emacsclient -t' frame"
+else
+  skip "tic / tmux-256color terminfo 不在 (apt: ncurses-bin ncurses-term) — TTY 真色彩跳過"
+fi
+
+# ── 6. manual follow-ups ────────────────────────────────────────────────
 section "Manual follow-ups"
 if [ "${npm_prefix_flipped:-0}" -eq 1 ]; then
   echo '  • PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)'
