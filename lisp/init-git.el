@@ -67,39 +67,52 @@
 ;; vc.el, and `vc-handled-backends' is nil (set in the Magit block above),
 ;; so they error "not under version control".  This goes through Magit
 ;; instead -- `magit-find-file-noselect' shells out to git directly.
-(defun fenrir/ediff-buffer-vs-revision (rev)
-  "Ediff the current buffer against a past version of the visited file.
-Pick a branch, then a revision from that branch's commit history of the
-file (each commit annotated with date + subject) -- two steps, no hash
-to type from memory.  The current buffer is compared as-is, so unsaved
-edits are part of the diff."
+(defun fenrir/ediff-buffer-vs-revision (rev file)
+  "Ediff the current buffer against REV's version of FILE.
+Works whether the current buffer is a working-tree file or a Magit
+revision buffer (a \"FILE.~REV~\" blob from `magit-find-file'): pick a
+branch, then a revision from that branch's commit history of the file,
+and that revision is Ediff'd against the current buffer.  A working-
+tree buffer is compared as-is, so unsaved edits are part of the diff;
+from a revision buffer it is a plain revision-vs-revision comparison."
   (interactive
    ;; `magit-*' helpers are not autoloaded, and an `interactive' form runs
    ;; before the body -- so the require has to happen right here.
    (progn
      (require 'magit)
-     (unless buffer-file-name
-       (user-error "Buffer %s is not visiting a file" (buffer-name)))
-     (let* ((branch (magit-read-branch "Compare against a revision on branch"))
+     ;; A Magit revision buffer has no `buffer-file-name' -- the path it
+     ;; shows lives in `magit-buffer-file-name'. Falling back to it lets
+     ;; `C-x v E' work while reading a blob, not only the working file.
+     (let* ((file   (or buffer-file-name
+                        (bound-and-true-p magit-buffer-file-name)
+                        (user-error
+                         "Buffer %s visits neither a file nor a revision"
+                         (buffer-name))))
+            (branch (magit-read-branch "Compare against a revision on branch"))
             ;; Step 2's candidates: the file's modification history reachable
             ;; from BRANCH (newest first) -- the revisions on that branch
             ;; where an ediff against this file is meaningful.
             (log    (magit-git-lines "log" branch "--max-count=200"
                                      "--format=%h  %cs  %s"
-                                     "--" buffer-file-name)))
+                                     "--" file)))
        (unless log
          (user-error "%s has no history on branch %s"
-                     (file-name-nondirectory buffer-file-name) branch))
+                     (file-name-nondirectory file) branch))
        ;; A candidate is "<hash>  <date>  <subject>" -- keep the first token
        ;; (a hash typed by hand passes straight through too).
        (list (car (split-string
                    (magit-completing-read
                     (format "Revision on %s" branch)
-                    log nil nil nil 'magit-revision-history)))))))
+                    log nil nil nil 'magit-revision-history)))
+             file))))
   (unless rev
     (user-error "No revision selected"))
-  (ediff-buffers (magit-find-file-noselect rev buffer-file-name)
-                 (current-buffer)))
+  (let ((rev-buffer (magit-find-file-noselect rev file)))
+    ;; From a revision buffer, picking the very revision it shows would feed
+    ;; the same buffer to both sides of the ediff.
+    (when (eq rev-buffer (current-buffer))
+      (user-error "Pick a revision other than the one this buffer shows"))
+    (ediff-buffers rev-buffer (current-buffer))))
 
 ;; diff-hl: show added/changed/removed lines in the fringe, live.
 ;; `diff-hl-dired-mode' is intentionally NOT hooked: in $HOME (which is itself
