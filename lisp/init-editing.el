@@ -223,8 +223,20 @@
   ;; gptel / magit); require it here so the menu is defined the first time
   ;; a prog buffer loads hideshow -- no startup cost.
   (require 'transient)
+  (defvar fenrir/hideshow-menu--show-nav nil
+    "When non-nil, `fenrir/hideshow-menu' also draws its Navigation group.
+The navigation keys (n/p/C-v/M-v/C-s) stay bound and usable either way --
+this only controls whether the popup lists them.  Toggled with `?'.")
+  (defun fenrir/hideshow-menu--toggle-nav ()
+    "Toggle whether `fenrir/hideshow-menu' lists its navigation keys."
+    (interactive)
+    (setq fenrir/hideshow-menu--show-nav
+          (not fenrir/hideshow-menu--show-nav)))
   (transient-define-prefix fenrir/hideshow-menu ()
-    "Code folding (HideShow) cockpit -- stays open until `q'."
+    "Code folding (HideShow) cockpit -- stays open until `q'.
+The navigation keys (`n'/`p'/`C-v'/`M-v'/`C-s') are bound and usable but
+hidden from the popup to keep it uncluttered; press `?' to list (or
+re-hide) them."
     [["Block at point"
       ("t" "Toggle"     hs-toggle-hiding :transient t)
       ("h" "Hide"       hs-hide-block    :transient t)
@@ -233,11 +245,32 @@
       ("H" "Hide all"   hs-hide-all      :transient t)
       ("S" "Show all"   hs-show-all      :transient t)
       ("l" "Hide level" hs-hide-level    :transient t)]
-     ["Move point"
-      ("n" "Next line"  next-line        :transient t)
-      ("p" "Prev line"  previous-line    :transient t)]
-     ["Exit"
-      ("q" "Quit" transient-quit-one)]]))
+     ["Menu"
+      ("?" fenrir/hideshow-menu--toggle-nav
+       :description (lambda ()
+                      (if fenrir/hideshow-menu--show-nav
+                          "Hide navigation keys"
+                        "Show navigation keys (n/p/C-v/M-v/C-s)"))
+       :transient t)
+      ("q" "Quit" transient-quit-one)]]
+    ;; Navigation is a SEPARATE top-level group, NOT a column nested in the
+    ;; row above.  transient only consults `:hide' for top-level groups (see
+    ;; `transient--insert-groups'); the `transient-columns' renderer draws its
+    ;; child columns without checking their `:hide' slot, so a `:hide' on a
+    ;; nested column is silently ignored.  As its own top-level group the
+    ;; predicate is honoured: hidden by default, revealed by `?'.  `:hide' is
+    ;; display-only -- the suffixes stay bound either way, so `n'/`p'/`C-v'/
+    ;; `M-v'/`C-s' work whether or not they are listed.  `C-s' uses
+    ;; `consult-line' (the config's own `C-s', init-completion.el) not
+    ;; isearch: isearch's `isearch-mode-map' would fight the transient
+    ;; keymap, whereas consult-line reads its pattern in the minibuffer.
+    ["Navigation"
+     :hide (lambda () (not fenrir/hideshow-menu--show-nav))
+     ("n"   "Next line" next-line           :transient t)
+     ("p"   "Prev line" previous-line       :transient t)
+     ("C-v" "Page down" scroll-up-command   :transient t)
+     ("M-v" "Page up"   scroll-down-command :transient t)
+     ("C-s" "Search"    consult-line        :transient t)]))
 
 (provide 'init-editing)
 ;;; init-editing.el ends here

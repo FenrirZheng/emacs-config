@@ -157,10 +157,15 @@ repeatedly. `which-key` still routes you in: press `C-c`, pause, and the panel s
 | `H` | `hs-hide-all` | Fold every block in the buffer |
 | `S` | `hs-show-all` | Unfold everything |
 | `l` | `hs-hide-level` | Fold all blocks one nesting level deep (`C-u N` then `l` for N levels) |
-| `n` / `p` | `next-line` / `previous-line` | Move point down / up *without leaving the menu* |
+| `n` / `p` | `next-line` / `previous-line` | Move point down / up *without leaving the menu*. **Bound and working but hidden** from the popup — `?` lists them |
+| `C-v` / `M-v` | `scroll-up-command` / `scroll-down-command` | Page down / up. **Bound and working but hidden** from the popup — `?` lists them |
+| `C-s` | `consult-line` | Search the buffer (the config's usual `C-s`); jump to a match, then the menu re-appears so you can fold there. **Hidden by default** — `?` lists it |
+| `?` | — | Show (or re-hide) the navigation keys above — they work either way, `?` only controls whether the popup *shows* them |
 | `q` | — | Quit the menu (`C-g` also works) |
 
-`t` / `h` / `s` / `H` / `S` / `l` / `n` / `p` are pressed *inside* the menu after `C-c @`.
+`t` / `h` / `s` / `H` / `S` / `l` / `?` are shown in the popup; the navigation keys
+`n` / `p` / `C-v` / `M-v` / `C-s` work but are hidden until `?`. All are pressed
+*inside* the menu after `C-c @`.
 hideshow folds by sexp / braces — strong for C-like, Lisp and JSON, weaker for
 indentation-structured languages like Python.
 
