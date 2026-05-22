@@ -35,9 +35,15 @@
 ;; any Magit buffer. vc keys with no crisp Magit counterpart (vc-register,
 ;; vc-log-incoming/outgoing, vc-region-history, vc-edit-next-command,
 ;; vc-update-change-log) are dropped -- those `C-x v' slots become undefined.
+;;
+;; One slot is an addition vc.el never had: `E' pairs with lowercase `e'
+;; (magit-ediff-dwim) -- `e' is the quick dwim, `E' compares the visited
+;; file against a revision you pick.  It runs the custom command
+;; `fenrir/ediff-buffer-vs-revision' (defined below), NOT `ediff-revision'.
 (defvar-keymap fenrir/magit-vc-map
   :doc "Magit replacements bound on the retired `C-x v' (vc.el) prefix."
   "e" #'magit-ediff-dwim          ; vc-ediff
+  "E" #'fenrir/ediff-buffer-vs-revision  ; addition (see below)
   "=" #'magit-diff-buffer-file    ; vc-diff
   "D" #'magit-diff                ; vc-root-diff
   "l" #'magit-log-buffer-file     ; vc-print-log
@@ -55,6 +61,45 @@
   "~" #'magit-find-file           ; vc-revision-other-window
   "x" #'magit-file-delete)        ; vc-delete-file
 (keymap-set ctl-x-map "v" fenrir/magit-vc-map)
+
+;; The `E' key of `fenrir/magit-vc-map' (C-x v E).  Emacs' own
+;; `ediff-revision' / `vc-diff' can't be used here: both route through
+;; vc.el, and `vc-handled-backends' is nil (set in the Magit block above),
+;; so they error "not under version control".  This goes through Magit
+;; instead -- `magit-find-file-noselect' shells out to git directly.
+(defun fenrir/ediff-buffer-vs-revision (rev)
+  "Ediff the current buffer against a past version of the visited file.
+Pick a branch, then a revision from that branch's commit history of the
+file (each commit annotated with date + subject) -- two steps, no hash
+to type from memory.  The current buffer is compared as-is, so unsaved
+edits are part of the diff."
+  (interactive
+   ;; `magit-*' helpers are not autoloaded, and an `interactive' form runs
+   ;; before the body -- so the require has to happen right here.
+   (progn
+     (require 'magit)
+     (unless buffer-file-name
+       (user-error "Buffer %s is not visiting a file" (buffer-name)))
+     (let* ((branch (magit-read-branch "Compare against a revision on branch"))
+            ;; Step 2's candidates: the file's modification history reachable
+            ;; from BRANCH (newest first) -- the revisions on that branch
+            ;; where an ediff against this file is meaningful.
+            (log    (magit-git-lines "log" branch "--max-count=200"
+                                     "--format=%h  %cs  %s"
+                                     "--" buffer-file-name)))
+       (unless log
+         (user-error "%s has no history on branch %s"
+                     (file-name-nondirectory buffer-file-name) branch))
+       ;; A candidate is "<hash>  <date>  <subject>" -- keep the first token
+       ;; (a hash typed by hand passes straight through too).
+       (list (car (split-string
+                   (magit-completing-read
+                    (format "Revision on %s" branch)
+                    log nil nil nil 'magit-revision-history)))))))
+  (unless rev
+    (user-error "No revision selected"))
+  (ediff-buffers (magit-find-file-noselect rev buffer-file-name)
+                 (current-buffer)))
 
 ;; diff-hl: show added/changed/removed lines in the fringe, live.
 ;; `diff-hl-dired-mode' is intentionally NOT hooked: in $HOME (which is itself
