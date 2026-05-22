@@ -18,23 +18,26 @@
   ;; elapsed time to *Messages*. M-x magit-toggle-verbose-refresh does the same.
   ;; (magit-refresh-verbose t)
   :config
-  ;; Built-in vc.el shells out to git for every file we open. With Magit doing
-  ;; the heavy lifting, vc-mode is pure overhead.
-  (setq vc-handled-backends nil)
+  ;; diff-hl computes its gutter through vc.el (`vc-backend'), so vc.el needs a
+  ;; backend enabled -- keep ONLY Git, since the stock list also probes
+  ;; CVS/SVN/Hg/Bzr/... once per file for nothing. Interactive VC still goes
+  ;; exclusively through Magit (see the `C-x v' remap below).
+  (setq vc-handled-backends '(Git))
   ;; $HOME is tracked with `status.showUntrackedFiles=no' (~1M hidden entries);
   ;; Magit doesn't honour that config and would still walk them. Drop the
   ;; section -- in normal repos `git status -s` is one keystroke away anyway.
   (remove-hook 'magit-status-sections-hook 'magit-insert-untracked-files))
 
 ;; C-x v : retire vc.el's prefix, hand it to Magit.
-;; `vc-handled-backends' is nil (set in the magit block above), so vc.el's
-;; stock `C-x v ...' prefix map is 23 keys that all error "not under version
-;; control". Replace the whole map: each Magit command keeps the slot vc.el
-;; used, so vc muscle memory carries straight over. Six targets are transient
-;; prefixes (diff/blame/pull/push/merge/tag) -- the key opens that menu, as in
-;; any Magit buffer. vc keys with no crisp Magit counterpart (vc-register,
-;; vc-log-incoming/outgoing, vc-region-history, vc-edit-next-command,
-;; vc-update-change-log) are dropped -- those `C-x v' slots become undefined.
+;; vc.el's stock `C-x v ...' commands work again (the Git backend is enabled
+;; in the magit block above) -- but every interactive VC task here goes
+;; through Magit by preference, so replace the whole prefix map: each Magit
+;; command keeps the slot vc.el used, so vc muscle memory carries straight
+;; over. Six targets are transient prefixes (diff/blame/pull/push/merge/tag)
+;; -- the key opens that menu, as in any Magit buffer. vc keys with no crisp
+;; Magit counterpart (vc-register, vc-log-incoming/outgoing, vc-region-history,
+;; vc-edit-next-command, vc-update-change-log) are dropped -- those `C-x v'
+;; slots become undefined.
 ;;
 ;; One slot is an addition vc.el never had: `E' pairs with lowercase `e'
 ;; (magit-ediff-dwim) -- `e' is the quick dwim, `E' compares the visited
@@ -62,11 +65,10 @@
   "x" #'magit-file-delete)        ; vc-delete-file
 (keymap-set ctl-x-map "v" fenrir/magit-vc-map)
 
-;; The `E' key of `fenrir/magit-vc-map' (C-x v E).  Emacs' own
-;; `ediff-revision' / `vc-diff' can't be used here: both route through
-;; vc.el, and `vc-handled-backends' is nil (set in the Magit block above),
-;; so they error "not under version control".  This goes through Magit
-;; instead -- `magit-find-file-noselect' shells out to git directly.
+;; The `E' key of `fenrir/magit-vc-map' (C-x v E).  A Magit-native take on
+;; Emacs' `ediff-revision': a two-step branch->revision picker (no hash to
+;; type) that also works from a Magit revision buffer, not just a working-
+;; tree file.  `magit-find-file-noselect' fetches the chosen blob via git.
 (defun fenrir/ediff-buffer-vs-revision (rev file)
   "Ediff the current buffer against REV's version of FILE.
 Works whether the current buffer is a working-tree file or a Magit
@@ -114,15 +116,36 @@ from a revision buffer it is a plain revision-vs-revision comparison."
       (user-error "Pick a revision other than the one this buffer shows"))
     (ediff-buffers rev-buffer (current-buffer))))
 
-;; diff-hl: show added/changed/removed lines in the fringe, live.
+;; diff-hl: show added/changed/removed lines in the window margin, live.
+;;
+;; Chosen over git-gutter: diff-hl integrates cleanly with Magit (the
+;; pre/post-refresh hooks below keep the margin in sync after a stage/commit)
+;; and is actively maintained. The price is a vc.el dependency -- diff-hl
+;; computes its diff via `vc-backend', which is why `vc-handled-backends' has
+;; to keep the Git backend (see the Magit block above).
+;;
 ;; `diff-hl-dired-mode' is intentionally NOT hooked: in $HOME (which is itself
 ;; a git repo with ~1500 tracked files), opening dired triggered a `git status'
 ;; + `git ls-files' sweep through the vc framework on every revert -- the
 ;; `emacs ./' in $HOME CPU spike. magit covers dired-side git status anyway.
 (use-package diff-hl
-  :hook ((prog-mode . diff-hl-mode)
-         ;; refresh the gutter right after a Magit commit/stage/...
-         (magit-post-refresh . diff-hl-magit-post-refresh)))
+  :hook
+  ;; pre/post pair: `pre' snapshots state before a Magit refresh so `post'
+  ;; redraws the margin accurately after a commit/stage/unstage/...
+  ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
+   (magit-post-refresh . diff-hl-magit-post-refresh))
+  :init
+  ;; Enable in every file buffer, not just `prog-mode': org notes, config
+  ;; files and prose are version-controlled too.
+  (global-diff-hl-mode 1)
+  :config
+  ;; Draw indicators in the margin, not the fringe: this config is TTY-only
+  ;; (emacsclient -nw in tmux) and TTY frames have no fringe -- without this
+  ;; diff-hl-mode is enabled but renders into nothing.
+  (diff-hl-margin-mode 1)
+  ;; Refresh as you type, not only on save / VC op / Magit refresh -- flydiff
+  ;; diffs the buffer against its committed blob, per-buffer, cheap in $HOME.
+  (diff-hl-flydiff-mode 1))
 
 ;; magit-todos: add a "TODOs" section to the Magit status buffer listing the
 ;; hl-todo keywords found across the repo, jumpable like any other section.  It
