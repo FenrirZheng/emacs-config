@@ -57,6 +57,20 @@
   (setq dirvish-large-directory-threshold 20000)
   (setq dirvish-fd-program (or (executable-find "fdfind")
                                (executable-find "fd")))
+  ;; Extend the `y' yank transient with a "copy absolute path" entry.
+  ;; `dirvish-yank-keys' is the documented extension point -- its `:set'
+  ;; (`dirvish-yank--menu-setter') regenerates the `dirvish-yank-menu'
+  ;; transient.  `dirvish-copy-file-path' already yields the absolute path
+  ;; of the marked files (or the file at point): `dired-get-marked-files'
+  ;; returns expanded names and `file-local-name' is a no-op off TRAMP.
+  ;; `with-eval-after-load' so the defcustom exists before `setopt' fires;
+  ;; the `assoc' guard keeps it idempotent across module reloads.
+  (with-eval-after-load 'dirvish-yank
+    (unless (assoc "w" dirvish-yank-keys)
+      (setopt dirvish-yank-keys
+              (append dirvish-yank-keys
+                      '(("w" "Copy absolute path of marked file(s)"
+                         dirvish-copy-file-path))))))
   :bind
   (("C-c f" . dirvish)
    ("C-c s" . dirvish-side)
