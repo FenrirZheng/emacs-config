@@ -318,6 +318,35 @@ expression syntax is the debuggee's language. An empty message removes the logpo
 | `C-x g` | `magit-status` | The full Git porcelain — stage hunks, commit, rebase, log, … |
 | `C-x M-g` | `magit-dispatch` | Menu of all Magit commands |
 
+**`C-x v …` — Magit on the retired `vc.el` prefix.** `vc-handled-backends` is
+`nil` (vc.el disabled), so its stock `C-x v` prefix map is repurposed wholesale:
+each key keeps the slot vc.el used, so vc muscle memory carries over. Keys marked
+*(menu)* open a Magit transient rather than acting immediately.
+
+| Key | Command | Was (vc) |
+|---|---|---|
+| `C-x v e` | `magit-ediff-dwim` | `vc-ediff` |
+| `C-x v =` | `magit-diff-buffer-file` | `vc-diff` |
+| `C-x v D` | `magit-diff` *(menu)* | `vc-root-diff` |
+| `C-x v l` | `magit-log-buffer-file` | `vc-print-log` |
+| `C-x v L` | `magit-log-current` | `vc-print-root-log` |
+| `C-x v g` | `magit-blame` *(menu)* | `vc-annotate` |
+| `C-x v d` | `magit-status` | `vc-dir` |
+| `C-x v v` | `magit-stage-buffer-file` | `vc-next-action` |
+| `C-x v u` | `magit-file-checkout` | `vc-revert` |
+| `C-x v +` | `magit-pull` *(menu)* | `vc-update` |
+| `C-x v P` | `magit-push` *(menu)* | `vc-push` |
+| `C-x v m` | `magit-merge` *(menu)* | `vc-merge` |
+| `C-x v s` | `magit-tag` *(menu)* | `vc-create-tag` |
+| `C-x v r` | `magit-branch-checkout` | `vc-retrieve-tag` |
+| `C-x v G` | `magit-gitignore` | `vc-ignore` |
+| `C-x v ~` | `magit-find-file` | `vc-revision-other-window` |
+| `C-x v x` | `magit-file-delete` | `vc-delete-file` |
+
+`vc-register`, `vc-log-incoming`/`vc-log-outgoing`, `vc-region-history`,
+`vc-edit-next-command`, and `vc-update-change-log` had no crisp Magit
+counterpart — those `C-x v` slots (`i`, `I`, `O`, `h`, `!`, `a`) are now undefined.
+
 - **diff-hl**: live added/changed/removed markers in the fringe (in `prog-mode` and
   Dired); refreshes right after a Magit commit/stage via `magit-post-refresh`.
 - **magit-todos**: adds a "TODOs" section to the Magit status buffer listing

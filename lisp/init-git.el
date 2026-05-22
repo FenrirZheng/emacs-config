@@ -26,6 +26,36 @@
   ;; section -- in normal repos `git status -s` is one keystroke away anyway.
   (remove-hook 'magit-status-sections-hook 'magit-insert-untracked-files))
 
+;; C-x v : retire vc.el's prefix, hand it to Magit.
+;; `vc-handled-backends' is nil (set in the magit block above), so vc.el's
+;; stock `C-x v ...' prefix map is 23 keys that all error "not under version
+;; control". Replace the whole map: each Magit command keeps the slot vc.el
+;; used, so vc muscle memory carries straight over. Six targets are transient
+;; prefixes (diff/blame/pull/push/merge/tag) -- the key opens that menu, as in
+;; any Magit buffer. vc keys with no crisp Magit counterpart (vc-register,
+;; vc-log-incoming/outgoing, vc-region-history, vc-edit-next-command,
+;; vc-update-change-log) are dropped -- those `C-x v' slots become undefined.
+(defvar-keymap fenrir/magit-vc-map
+  :doc "Magit replacements bound on the retired `C-x v' (vc.el) prefix."
+  "e" #'magit-ediff-dwim          ; vc-ediff
+  "=" #'magit-diff-buffer-file    ; vc-diff
+  "D" #'magit-diff                ; vc-root-diff
+  "l" #'magit-log-buffer-file     ; vc-print-log
+  "L" #'magit-log-current         ; vc-print-root-log
+  "g" #'magit-blame               ; vc-annotate
+  "d" #'magit-status              ; vc-dir
+  "v" #'magit-stage-buffer-file   ; vc-next-action
+  "u" #'magit-file-checkout       ; vc-revert
+  "+" #'magit-pull                ; vc-update
+  "P" #'magit-push                ; vc-push
+  "m" #'magit-merge               ; vc-merge
+  "s" #'magit-tag                 ; vc-create-tag
+  "r" #'magit-branch-checkout     ; vc-retrieve-tag
+  "G" #'magit-gitignore           ; vc-ignore
+  "~" #'magit-find-file           ; vc-revision-other-window
+  "x" #'magit-file-delete)        ; vc-delete-file
+(keymap-set ctl-x-map "v" fenrir/magit-vc-map)
+
 ;; diff-hl: show added/changed/removed lines in the fringe, live.
 ;; `diff-hl-dired-mode' is intentionally NOT hooked: in $HOME (which is itself
 ;; a git repo with ~1500 tracked files), opening dired triggered a `git status'
