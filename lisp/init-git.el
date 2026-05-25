@@ -147,6 +147,36 @@ from a revision buffer it is a plain revision-vs-revision comparison."
   ;; diffs the buffer against its committed blob, per-buffer, cheap in $HOME.
   (diff-hl-flydiff-mode 1))
 
+;; forge: Magit-native GitHub PR / Issue browsing.  Adds two sections to the
+;; magit-status buffer ("Pull requests" and "Issues") and a `@' transient
+;; (e.g. `@ p l' to fetch PRs, `@ p p' to act on the PR at point) that lives
+;; alongside Magit's other transients.  Same keybindings + UI as the rest of
+;; Magit, no second tool to learn.
+;;
+;; First-time setup (per machine, NOT in this repo):
+;;   1.  Mint a GitHub PAT with scopes `repo' + `read:org' --
+;;       `gh auth token' already prints one if `gh' is logged in; otherwise
+;;       create a fine-grained token under
+;;       https://github.com/settings/tokens.
+;;   2.  Store it in `~/.authinfo.gpg' as:
+;;          machine api.github.com login <user>^forge password <token>
+;;       The `^forge' suffix is how forge namespaces the credential apart
+;;       from any other api.github.com entry (e.g. `gh' / glab / hub).
+;;   3.  In the target repo: `M-x forge-add-repository' (or `@ a').  Forge
+;;       clones the issue/PR metadata into a local sqlite DB under
+;;       `forge-database-file' (no-littering parks it in `var/').
+;;
+;; Intentionally NOT enabled: `forge-pull-notifications' -- it polls
+;; api.github.com periodically and surfaces results via `message', which
+;; dirties the minibuffer in a TTY workflow where every echo-area line is
+;; precious.  Reach for `M-x forge-pull' on demand instead.
+;;
+;; First-run note: not in elpa/ on a fresh clone -- `M-x my/package-refresh'
+;; then restart the daemon once so the install runs.  The first
+;; `forge-add-repository' will also run a sqlite schema migration; let it.
+(use-package forge
+  :after magit)
+
 ;; magit-todos: add a "TODOs" section to the Magit status buffer listing the
 ;; hl-todo keywords found across the repo, jumpable like any other section.  It
 ;; auto-picks a scanner -- `rg' if present (it is here), else `git grep'.

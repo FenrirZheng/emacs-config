@@ -240,6 +240,29 @@ lists the follow-up keys — no need to memorise prefixes.
   ELPA (same author as eglot-booster and `indent-bars`).
 - **flymake** **(built-in)**: on-the-fly diagnostics, fed by Eglot from the LSP. `M-n` /
   `M-p` jump to the next / previous error.
+- **sideline** + **sideline-flymake**: VSCode "Error Lens"-style inline diagnostics.
+  The diagnostic for the line containing point is rendered to the **right of that
+  line** via overlay `after-string` — works identically in TTY and GUI, no fringe /
+  child-frame dependency. `sideline-flymake-display-mode` is set to `'point` (the
+  package default, spelled out at the call site) so only the current line's
+  diagnostic shows; the alternative `'line` decorates every diagnostic line at once
+  and is unbearable in any non-toy buffer. Walking errors with `M-n` / `M-p` above
+  drags the inline message along to wherever point lands.
+- **Code actions** — `C-c .` (in `eglot-mode-map`): VSCode `Ctrl+.` equivalent.
+  Opens Eglot's `eglot-code-actions` transient — the LSP-driven quick-fix list
+  ("Add missing import", "Organize imports", "Quickfix this diagnostic", …). The
+  user-prefix variant is used because `C-.` is already `embark-act` (§3); scoped
+  to `eglot-mode-map` so it doesn't shadow `C-c .` in non-LSP buffers. The unified
+  transient already lists `eglot-code-action-organize-imports` /
+  `eglot-code-action-quickfix` as entries, so no separate keys for those.
+- **Inlay hints**: parameter names, inferred types, `&` reference markers etc.
+  rendered inline by the LSP. Built-in in Emacs 30 — no external package. Enabled
+  via `(eglot-managed-mode . eglot-inlay-hints-mode)` so it lights up on every
+  Eglot-attached buffer (Go parameter names before each arg, Rust `: Vec<i32>`
+  after `let x = vec![…]`, …). Toggle per-buffer at runtime with
+  `M-x eglot-inlay-hints-mode`; disable for a noisy language by removing its
+  hook in [`init-languages.el`](lisp/init-languages.el) rather than touching the
+  global setting.
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
   `markdown-command` is `pandoc`.
 - **jinx**: fast spell checker for every text-mode buffer (org, markdown, gfm, ...).
@@ -354,6 +377,22 @@ counterpart — those `C-x v` slots (`i`, `I`, `O`, `h`, `!`, `a`) are now undef
 
 - **diff-hl**: live added/changed/removed markers in the fringe (in `prog-mode` and
   Dired); refreshes right after a Magit commit/stage via `magit-post-refresh`.
+- **forge**: GitHub PR / Issue browsing inside Magit. Adds "Pull requests" and
+  "Issues" sections to the `magit-status` buffer plus a `@` transient (e.g. `@ p l`
+  fetch PRs, `@ p p` act on the PR at point, `@ a` add the repo). First-time
+  per-machine setup:
+  1. Mint a GitHub PAT with scopes `repo` + `read:org` (`gh auth token` reuses the
+     existing `gh` token; otherwise <https://github.com/settings/tokens>).
+  2. Add to `~/.authinfo.gpg`:
+     `machine api.github.com login <user>^forge password <token>` — the `^forge`
+     suffix namespaces the credential apart from any other `api.github.com` entry.
+  3. In the target repo: `M-x forge-add-repository` (or `@ a`). Forge clones the
+     issue/PR metadata into a local sqlite DB under `forge-database-file`
+     (no-littering parks it in `var/`); the first add triggers a schema migration.
+
+  Intentionally NOT enabled: `forge-pull-notifications` — it polls api.github.com
+  periodically and dirties the minibuffer via `message`, which is precious real
+  estate in a TTY workflow. Reach for `M-x forge-pull` on demand instead.
 - **magit-todos**: adds a "TODOs" section to the Magit status buffer listing
   `TODO`/`FIXME`/`HACK`/`NOTE`/`BUG` keywords found across the repo (uses `rg` if present,
   else `git grep`); jump to them like any other section.

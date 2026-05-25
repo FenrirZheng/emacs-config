@@ -125,7 +125,16 @@ seems stuck on a stale answer."
          ;; so .lua files never reach the *-ts-mode.  Eglot 30.1's default
          ;; `eglot-server-programs' already maps `lua-mode' to the
          ;; `lua-language-server' binary (install per the lua-mode block).
-         (lua-mode        . eglot-ensure))
+         (lua-mode        . eglot-ensure)
+         ;; Inlay hints: parameter names, inferred types, `&` references etc.
+         ;; rendered inline by the language server.  Built-in in Emacs 30 --
+         ;; no external package.  `eglot-managed-mode' is the hook that fires
+         ;; once Eglot has attached to a buffer (every entry above eventually
+         ;; lands there via `eglot-ensure'), so this single line covers all
+         ;; the languages already hooked.  Toggle per-buffer at runtime with
+         ;; `M-x eglot-inlay-hints-mode'.  If a specific language's hints turn
+         ;; out too noisy, disable in that mode's hook rather than globally.
+         (eglot-managed-mode . eglot-inlay-hints-mode))
   :custom
   (eglot-autoshutdown t)                 ; kill the server when its last buffer closes
   (eglot-events-buffer-size 0)           ; don't log the (huge) JSON-RPC traffic
@@ -140,7 +149,18 @@ seems stuck on a stale answer."
   ;; Let `xref-find-definitions' (M-.) follow into vendored / library files
   ;; the LSP knows about, even when those files have no Eglot session of
   ;; their own.  Default `nil' silently stops at the project boundary.
-  (eglot-extend-to-xref t))
+  (eglot-extend-to-xref t)
+  ;; `C-c .' on `eglot-code-actions' mirrors VSCode's `Ctrl+.' Quick Fix.
+  ;; `C-.' is already bound to `embark-act' globally (see init-completion);
+  ;; the `C-c' prefix avoids the clash and matches Emacs' convention of
+  ;; user-facing commands living under `C-c'.  Scoped to `eglot-mode-map'
+  ;; so it doesn't shadow anything in non-LSP buffers.  Two related actions
+  ;; -- `eglot-code-action-organize-imports', `eglot-code-action-quickfix'
+  ;; -- are intentionally NOT bound: the unified `eglot-code-actions'
+  ;; transient already lists them, and adding separate keys clutters the map
+  ;; without saving keystrokes.
+  :bind (:map eglot-mode-map
+              ("C-c ." . eglot-code-actions)))
 
 ;; eglot-booster: speed up Eglot by routing the LSP server's stdio through
 ;; `emacs-lsp-booster' (Rust binary, blahgeek/emacs-lsp-booster v0.2.1).
@@ -431,6 +451,41 @@ seems stuck on a stale answer."
 (use-package flymake-eslint
   :hook ((js-ts-mode typescript-ts-mode tsx-ts-mode vue-mode) . flymake-eslint-enable)
   :custom (flymake-eslint-defer-binary-check t))
+
+;; sideline + sideline-flymake: VSCode-style "Error Lens" inline diagnostics.
+;;
+;; Why this matters on a TTY-only setup: Flymake's default surfaces are the
+;; fringe (GUI-only bitmaps -- invisible in `emacsclient -nw') and the echo
+;; area (single line, gets clobbered by `message' callers, dies the moment
+;; you move point).  `M-n' / `M-p' let you walk the diagnostic list but the
+;; full text only ever shows in that narrow echo slot.  sideline renders the
+;; message to the RIGHT of the line in the buffer itself via overlay
+;; `after-string' -- works identically in TTY and GUI, no fringe / child
+;; frame dependency.
+;;
+;; `sideline-flymake-display-mode 'point' shows the diagnostic ONLY for the
+;; line containing point; the alternative `line' shows on every diagnostic
+;; line which is unbearable in any non-toy buffer.  `point' tracks cursor
+;; movement, so the message follows you to the next error (M-n / M-p).
+;; `'point' is already sideline-flymake's default; spelled out so the value
+;; is visible at the call site rather than buried in upstream's defcustom.
+;;
+;; Hooked on `flymake-mode' rather than `prog-mode' so sideline only activates
+;; where there's actually something to display -- Flymake itself is hooked on
+;; `prog-mode' above, so the net effect is identical, but the dependency is
+;; explicit ("UI follows the data source").
+;;
+;; sideline + sideline-flymake aren't in elpa/ on a fresh clone -- run
+;; `M-x my/package-refresh' once and restart the daemon to pull them.
+(use-package sideline
+  :hook (flymake-mode . sideline-mode)
+  :custom
+  (sideline-backends-right '(sideline-flymake)))
+
+(use-package sideline-flymake
+  :after sideline
+  :custom
+  (sideline-flymake-display-mode 'point))
 
 ;; apheleia: async format-on-save.  Why not `eglot-format-buffer':
 ;; typescript-language-server explicitly does NOT implement textDocument/
