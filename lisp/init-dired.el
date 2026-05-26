@@ -3,16 +3,22 @@
 ;;; Commentary:
 ;; Replaces the previous `init-dirvish' module.  Rather than one big package
 ;; (Dirvish) that wraps Dired in its own UI + transient cockpit, this module
-;; keeps stock Dired and layers five small, orthogonal helpers:
+;; keeps stock Dired and layers small, orthogonal helpers:
 ;;
+;;   dired-x            -- built-in; only used for `dired-jump' on `C-x C-j'
 ;;   diredfl            -- per-column font-lock (perms / size / date / owner)
 ;;   nerd-icons-dired   -- file-type glyphs inline (reuses the existing
 ;;                         nerd-icons font, same one doom-modeline uses)
 ;;   dired-subtree      -- `TAB' expands a directory in place
 ;;   dired-narrow       -- `N' live-filters the current Dired buffer
+;;   dired-collapse     -- collapse single-child dir chains onto one line
+;;   async (dired-async-mode) -- non-blocking copy/rename/delete
 ;;   consult-dir        -- multi-source directory picker; integrates with
 ;;                         vertico/orderless/marginalia like the rest of the
 ;;                         minibuffer stack (see init-completion.el)
+;;
+;; Plus `wdired-allow-to-change-permissions = 'advanced' so `C-x C-q' edits
+;; mode bits, not just filenames.
 ;;
 ;; Things from Dirvish we explicitly DROP:
 ;;   * the preview side panel (was unused; TTY frames at 80 columns can't
@@ -39,8 +45,23 @@
   ;; because new users were surprised by the in-place replacement; we want
   ;; it on.
   (dired-kill-when-opening-new-dired-buffer t)
+  ;; wdired (`C-x C-q' inside Dired) is editable-buffer mode for Dired:
+  ;; rename files by editing the text.  `advanced' extends that to mode
+  ;; bits -- edit "-rw-r--r--" → "-rwxr-xr-x" and save to chmod.
+  (wdired-allow-to-change-permissions 'advanced)
   :config
   (put 'dired-find-alternate-file 'disabled nil))
+
+;; dired-x: built-in companion module.  We only need `dired-jump' -- from
+;; any buffer, pop a Dired on the directory containing the current file,
+;; with point already on that file.  Conventionally bound on `C-x C-j'.
+;; (`C-x C-j' in `vertico-map' is a separate binding for
+;; `consult-dir-jump-file' -- that one only fires inside an active
+;; minibuffer; this global one fires elsewhere.)
+(use-package dired-x
+  :ensure nil
+  :after dired
+  :bind (("C-x C-j" . dired-jump)))
 
 ;; diredfl: extra font-lock for Dired so permission bits, sizes, timestamps,
 ;; owner/group, and executable flags each get their own face.  Replaces
@@ -68,6 +89,20 @@
 (use-package dired-narrow
   :bind (:map dired-mode-map
               ("N" . dired-narrow)))
+
+;; dired-collapse: collapse single-child directory chains onto one line.
+;; `foo/bar/baz/file.txt' shows as a single entry when foo/, bar/, baz/
+;; each contain only their next child -- huge readability win in deeply
+;; nested project trees (Rust `target/`, Go `vendor/`, Java package paths).
+(use-package dired-collapse
+  :hook (dired-mode . dired-collapse-mode))
+
+;; dired-async: file operations (`C' copy, `R' rename/move, `D' delete)
+;; that would otherwise block Emacs run in a child process.  Pulls in
+;; `async' as a dep.  The mode hooks into Dired's dispatch table -- no
+;; per-command setup needed.
+(use-package async
+  :config (dired-async-mode 1))
 
 ;; consult-dir: the directory-picker counterpart to consult-buffer.  It
 ;; aggregates several sources -- recentf parent dirs, project roots,

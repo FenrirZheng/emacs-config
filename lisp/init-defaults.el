@@ -112,10 +112,45 @@
 
 ;; which-key: after a prefix key (C-x, C-c, ...) pops up a panel listing the
 ;; follow-up keys.  Built into Emacs 30 -- hence :ensure nil.
+;;
+;; TTY-first tuning (no posframe/child-frame -- those are GUI-only):
+;;   * `idle-delay 0.2' makes the first popup feel near-instant without
+;;     flashing when a chord is typed quickly.
+;;   * `idle-secondary-delay 0.05' keeps subsequent prefixes in the same
+;;     chain snappy once the panel is already up.
+;;   * `show-prefix 'echo' moves the "M-g-" label to the echo area so the
+;;     side-window stays a clean two-column key/command grid.
+;;
+;; Searchable bindings: with `prefix-help-command' set to
+;; `embark-prefix-help-command' (see :config below), pressing `C-h' AFTER
+;; a prefix opens a vertico minibuffer listing only that prefix's bindings
+;; -- type to filter.  Acts as "search inside which-key".  `C-h B' from
+;; anywhere still lists every active binding via `embark-bindings'.
 (use-package which-key
   :ensure nil
   :init (which-key-mode 1)
-  :custom (which-key-idle-delay 0.5))
+  :custom
+  (which-key-idle-delay 0.2)
+  (which-key-idle-secondary-delay 0.05)
+  (which-key-side-window-location 'bottom)
+  (which-key-side-window-max-height 0.5)
+  (which-key-side-window-max-width 0.5)
+  (which-key-min-display-lines 8)
+  (which-key-max-description-length 36)
+  (which-key-separator " → ")
+  (which-key-prefix-prefix "+")
+  (which-key-show-prefix 'echo)
+  (which-key-sort-order 'which-key-prefix-then-key-order)
+  (which-key-add-column-padding 1)
+  ;; Don't let which-key's own C-h dispatch swallow the prefix help binding --
+  ;; we want C-h after a prefix to go straight to `embark-prefix-help-command'.
+  (which-key-use-C-h-commands nil)
+  :config
+  ;; Built into Emacs 28+: when you hit a prefix then `C-h', Emacs delegates
+  ;; to whatever this variable points at.  Embark's version pops a vertico
+  ;; minibuffer with that prefix's bindings as candidates.
+  (with-eval-after-load 'embark
+    (setq prefix-help-command #'embark-prefix-help-command)))
 
 ;; ibuffer: replace the default `switch-to-buffer' on `C-x b' with ibuffer
 ;; (grouping, marking, batch operations).  `C-x C-b' is avoided because tmux'

@@ -433,17 +433,18 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 
 ## 12. File manager — Dired + small enhancers + consult-dir ([`init-dired.el`](lisp/init-dired.el))
 
-Plain `dired` **(built-in)** with five small enhancers layered on top — replaces the
-previous Dirvish stack. Same UX wins as §1 (Vertico/Consult/Marginalia for the
-minibuffer): each piece is small, orthogonal, and the directory picker (`consult-dir`)
-plugs into the same completion frontend.
+Plain `dired` **(built-in)** with small orthogonal enhancers layered on top — replaces
+the previous Dirvish stack. Same UX wins as §1 (Vertico/Consult/Marginalia for the
+minibuffer): each piece is independently swappable, and the directory picker
+(`consult-dir`) plugs into the same completion frontend.
 
 | Key | Command | What it does |
 |---|---|---|
 | `C-x d` | `dired` **(built-in)** | Open a Dired buffer for a directory |
+| `C-x C-j` | `dired-jump` **(built-in,** `dired-x`**)** | From any buffer, open Dired on the directory containing this file with point already on the file. From a Dired buffer it lands in the **parent** (the dir "containing" this dir), with point on the original subdir — the easy "up one" entry point. `C-u C-x C-j` prompts for a directory instead |
 | `C-x C-d` | `consult-dir` | Pick a directory from **recent files' parents / project roots / bookmarks / a curated "Quick" list** (`~`, `~/.emacs.d`, `~/.claude`, `~/code/obsidian`, `~/code/org-roam`, `~/fenrir-tools`) — Vertico drives the prompt, `<` then `r`/`p`/`b`/`q` narrows to one source. Replaces `list-directory` (the stock binding nobody uses) |
 | `C-x C-d` *(in minibuffer)* | `consult-dir` | Same picker, but inserts the chosen dir into the current `find-file` prompt — keeps the partial filename you've already typed |
-| `C-x C-j` *(in minibuffer)* | `consult-dir-jump-file` | Pick a dir, then immediately drop into a file-search prompt scoped to it |
+| `C-x C-j` *(in minibuffer)* | `consult-dir-jump-file` | Pick a dir, then immediately drop into a file-search prompt scoped to it. Distinct from the global `C-x C-j` above — this one only fires inside an active minibuffer prompt (`vertico-map`) |
 
 Inside a Dired buffer:
 
@@ -455,8 +456,9 @@ Inside a Dired buffer:
 | `w` | `dired-copy-filename-as-kill` **(built-in)** | Copy file **basename(s)** to kill ring |
 | `C-c w` | `fenrir/dired-copy-absolute-path` | Copy **absolute path(s)** of marked files (one per line) — paired with `w` above so both forms are one keystroke apart |
 | `a` | `dired-find-alternate-file` **(built-in)** | Open the entry under point, **reusing the current Dired buffer** instead of stacking a new one (this command is disabled by default; the module turns it on) |
+| `C-x C-q` | `wdired-change-to-wdired-mode` **(built-in)** | Make the Dired buffer **editable as plain text** — rename files by editing their names, then `C-c C-c` writes the renames back (or `C-c ESC` cancels). With `wdired-allow-to-change-permissions 'advanced` (set in this module) the `rwxr-xr-x` columns are editable too — edit them and the save fires `chmod` |
 
-Always-on visual polish:
+Always-on enhancers:
 
 - **diredfl** — distinct font-lock face per column (permissions / size / timestamp /
   owner / executable flag). Without it Dired is one foreground colour for everything;
@@ -464,6 +466,15 @@ Always-on visual polish:
   Dirvish's `file-time` / `file-size` attributes used to play.
 - **nerd-icons-dired** — inline file-type glyph at the start of each line, reuses the
   same nerd-icons font stack doom-modeline depends on (§11).
+- **dired-collapse** — auto-collapses single-child directory chains onto one line.
+  `foo/bar/baz/file.txt` displays as a single entry whenever each of `foo/`, `bar/`,
+  `baz/` contains only its next child. Huge readability win in deeply nested project
+  trees (Rust `target/`, Go `vendor/`, Java package paths). Auto-expands the moment a
+  collapsed dir gains a second entry.
+- **dired-async** — `C` (copy), `R` (rename / move), `D` (delete) and other file
+  operations run in a child Emacs so the main session doesn't block. Pulls in the
+  `async` package. No per-command setup: the mode hooks into Dired's dispatch table
+  so the same keystrokes you'd already use just don't freeze on big trees.
 - **`dired-kill-when-opening-new-dired-buffer t`** — descending into a directory
   reuses the current Dired buffer instead of leaving a trail.
 - **`dired-listing-switches`** pinned to
