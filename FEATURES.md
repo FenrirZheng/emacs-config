@@ -142,7 +142,7 @@ jump, a window switch, `consult-line` / `consult-imenu` / `consult-ripgrep`,
 
 **Code folding (HideShow)** — `hs-minor-mode` **(built-in)** is auto-enabled in every
 `prog-mode` buffer. `C-c @` (hideshow's own prefix, rebound here) opens a `transient`
-menu — the same menu style as `C-c a` for aidermacs (§14). hideshow's native sub-keys
+menu — the same menu style as `C-c a` for aidermacs (§15). hideshow's native sub-keys
 are unmemorable multi-modifier chords; this replaces the whole prefix with one
 discoverable, bottom-popup menu that **stays open** so you can navigate and fold
 repeatedly. `which-key` still routes you in: press `C-c`, pause, and the panel shows
@@ -426,12 +426,60 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 - **doom-themes** — `doom-one` loaded by default (swap for any `doom-*`); bold + italic
   enabled; `doom-themes-org-config` tweaks Org faces to match.
 - **doom-modeline** — `doom-modeline-mode`, height 25.
-- **nerd-icons** — glyph set used by doom-modeline (and optionally Dired/Corfu). Run
-  `M-x nerd-icons-install-fonts` **once** after install to fetch the font.
+- **nerd-icons** — glyph set used by doom-modeline, `nerd-icons-dired` (§12) and Corfu.
+  Run `M-x nerd-icons-install-fonts` **once** after install to fetch the font.
 
 ---
 
-## 12. Org-mode — light touch ([`init-org.el`](lisp/init-org.el))
+## 12. File manager — Dired + small enhancers + consult-dir ([`init-dired.el`](lisp/init-dired.el))
+
+Plain `dired` **(built-in)** with five small enhancers layered on top — replaces the
+previous Dirvish stack. Same UX wins as §1 (Vertico/Consult/Marginalia for the
+minibuffer): each piece is small, orthogonal, and the directory picker (`consult-dir`)
+plugs into the same completion frontend.
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-x d` | `dired` **(built-in)** | Open a Dired buffer for a directory |
+| `C-x C-d` | `consult-dir` | Pick a directory from **recent files' parents / project roots / bookmarks / a curated "Quick" list** (`~`, `~/.emacs.d`, `~/.claude`, `~/code/obsidian`, `~/code/org-roam`, `~/fenrir-tools`) — Vertico drives the prompt, `<` then `r`/`p`/`b`/`q` narrows to one source. Replaces `list-directory` (the stock binding nobody uses) |
+| `C-x C-d` *(in minibuffer)* | `consult-dir` | Same picker, but inserts the chosen dir into the current `find-file` prompt — keeps the partial filename you've already typed |
+| `C-x C-j` *(in minibuffer)* | `consult-dir-jump-file` | Pick a dir, then immediately drop into a file-search prompt scoped to it |
+
+Inside a Dired buffer:
+
+| Key | Command | What it does |
+|---|---|---|
+| `TAB` | `dired-subtree-toggle` | Expand / collapse the directory at point inline (no new buffer) |
+| `S-TAB` | `dired-subtree-cycle` | Cycle fold depth |
+| `N` | `dired-narrow` | Live minibuffer filter over the current Dired listing — `RET` commits the filtered view, `g` (`revert-buffer`) returns to full |
+| `w` | `dired-copy-filename-as-kill` **(built-in)** | Copy file **basename(s)** to kill ring |
+| `C-c w` | `fenrir/dired-copy-absolute-path` | Copy **absolute path(s)** of marked files (one per line) — paired with `w` above so both forms are one keystroke apart |
+| `a` | `dired-find-alternate-file` **(built-in)** | Open the entry under point, **reusing the current Dired buffer** instead of stacking a new one (this command is disabled by default; the module turns it on) |
+
+Always-on visual polish:
+
+- **diredfl** — distinct font-lock face per column (permissions / size / timestamp /
+  owner / executable flag). Without it Dired is one foreground colour for everything;
+  with it sizes pop in green, dates in cyan, symlinks in pink, etc. — same role
+  Dirvish's `file-time` / `file-size` attributes used to play.
+- **nerd-icons-dired** — inline file-type glyph at the start of each line, reuses the
+  same nerd-icons font stack doom-modeline depends on (§11).
+- **`dired-kill-when-opening-new-dired-buffer t`** — descending into a directory
+  reuses the current Dired buffer instead of leaving a trail.
+- **`dired-listing-switches`** pinned to
+  `-l --almost-all --human-readable --group-directories-first --no-group`. Directories
+  sort first; human-readable sizes; the noisy "group" column is dropped.
+
+Dropped vs. the old Dirvish module: the `?` dispatch transient, `dirvish-side`
+sidebar, preview side panel, async fd-based listing for >20 k-entry dirs, and the `o`
+quick-access transient. The six quick-access destinations live on as a `consult-dir`
+source — narrow to them with `< q`. To get a preview side panel back, add
+`(use-package dired-preview :hook (dired-mode . dired-preview-mode))` to
+[`lisp/init-dired.el`](lisp/init-dired.el).
+
+---
+
+## 13. Org-mode — light touch ([`init-org.el`](lisp/init-org.el))
 
 - `org-startup-indented` (visually indent by outline level), `org-hide-emphasis-markers`
   (show `*bold*` as bold, hide the stars), `org-src-fontify-natively` (highlight inside
@@ -446,7 +494,7 @@ between fields. Personal snippets live in [`snippets/`](snippets/).
 
 ---
 
-## 13. org-roam — Zettelkasten over `~/code/org-roam` ([`init-org-roam.el`](lisp/init-org-roam.el))
+## 14. org-roam — Zettelkasten over `~/code/org-roam` ([`init-org-roam.el`](lisp/init-org-roam.el))
 
 `~/code/org-roam/` is the `.org` vault (~1400 notes, originally converted from the
 Markdown Obsidian vault by `~/code/obsidian-to-org-roam.py`). org-roam layers an
@@ -483,7 +531,7 @@ the side-window `org-roam-buffer` shows the backlinks of whatever you're viewing
 
 ---
 
-## 14. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el), [`init-tmux-claude.el`](lisp/init-tmux-claude.el))
+## 15. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el), [`init-tmux-claude.el`](lisp/init-tmux-claude.el))
 
 [`gptel`](https://github.com/karthink/gptel) — LLM chat client. Defaults to Gemini (model
 `gemini-pro-latest`); switch backend/model via `M-x gptel-menu`. Seed API keys with

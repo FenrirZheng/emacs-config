@@ -16,7 +16,8 @@
 ;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
 ;;   init-terminal       -- vterm
 ;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
-;;   init-dirvish        -- Dirvish: polished Dired with icons + preview
+;;   init-dired          -- Dired + small enhancers (diredfl, nerd-icons-dired,
+;;                          dired-subtree, dired-narrow) + consult-dir
 ;;   init-org            -- Org-mode (light touch)
 ;;   init-org-roam       -- org-roam Zettelkasten (~/code/org-roam/)
 ;;   init-ai             -- AI / agent tooling (claude-jobs-view, gptel)
@@ -140,7 +141,7 @@ up new or changed files.  Progress and warnings land in the
         init-git
         init-terminal
         init-appearance
-        init-dirvish
+        init-dired
         init-org
         init-org-roam
         init-ai

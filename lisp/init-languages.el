@@ -137,7 +137,13 @@ seems stuck on a stale answer."
          (eglot-managed-mode . eglot-inlay-hints-mode))
   :custom
   (eglot-autoshutdown t)                 ; kill the server when its last buffer closes
-  (eglot-events-buffer-size 0)           ; don't log the (huge) JSON-RPC traffic
+  ;; Don't log the (huge) JSON-RPC traffic.  The old defcustom name
+  ;; `eglot-events-buffer-size' went obsolete in Eglot 1.16 (Emacs 30.x);
+  ;; the replacement is a plist with `:size' (bytes, 0 = disabled) and
+  ;; `:format' (`full' / `lisp' / `short' -- controls how messages are
+  ;; pretty-printed when logging IS on).  Toggle live via
+  ;; `fenrir/eglot-debug-on' / `-off' below.
+  (eglot-events-buffer-config '(:size 0 :format full))
   ;; Block up to 1s for the server's initial handshake before returning
   ;; control; longer than that, finish async.  Default `nil' means "wait
   ;; forever synchronously" which freezes the UI while gopls indexes a big
@@ -150,6 +156,86 @@ seems stuck on a stale answer."
   ;; the LSP knows about, even when those files have no Eglot session of
   ;; their own.  Default `nil' silently stops at the project boundary.
   (eglot-extend-to-xref t)
+  ;; Server-initiated `applyEdit' requests (organize-imports, project-wide
+  ;; rename, batch quickfix code actions) hit multiple files at once.
+  ;; Default `'confirm' prompts per file -- noisy for any rename that
+  ;; touches more than three.  Set to nil so refactors apply in one go;
+  ;; the aggregate diff still lands in `git diff' for review before commit.
+  (eglot-confirm-server-initiated-edits nil)
+  ;; Per-server `workspace/configuration': pushed via
+  ;; `workspace/didChangeConfiguration' on session start, and re-served
+  ;; when a server polls.  Eglot turns this alist into JSON; the section
+  ;; keys mirror VSCode's `settings.json' structure.  Without this block
+  ;; every server runs on its ship-default config, which on most servers
+  ;; means inlay hints are silently OFF (the `eglot-inlay-hints-mode' hook
+  ;; in `:hook' above produces nothing in .ts / .py / .go buffers until
+  ;; the *server side* enables hint emission).  Per-project overrides go
+  ;; in `.dir-locals.el' under the same variable name.
+  (eglot-workspace-configuration
+   '(;; gopls: extra static analyses + the full inlay-hint set VSCode's
+     ;; Go extension enables by default.  `staticcheck' folds the
+     ;; standalone tool's checks into LSP diagnostics; `gofumpt' is
+     ;; stricter `gofmt' (apheleia / `M-x eglot-format-buffer' both pick
+     ;; this up automatically).
+     (:gopls .
+             (:staticcheck t
+              :gofumpt t
+              :analyses (:unusedparams t
+                         :shadow t
+                         :unusedwrite t
+                         :nilness t)
+              :hints (:assignVariableTypes t
+                      :compositeLiteralFields t
+                      :compositeLiteralTypes t
+                      :constantValues t
+                      :functionTypeParameters t
+                      :parameterNames t
+                      :rangeVariableTypes t)))
+     ;; pyright / basedpyright: workspace-wide diagnostics (default
+     ;; "openFilesOnly" silently misses cross-file regressions) plus
+     ;; type-checking on "basic" -- catches the obvious wrongs without
+     ;; the false-positive flood of "strict".  Bump to "strict" via
+     ;; `.dir-locals.el' for codebases that warrant it.
+     (:python .
+              (:analysis (:typeCheckingMode "basic"
+                          :diagnosticMode "workspace"
+                          :autoImportCompletions t
+                          :inlayHints (:variableTypes t
+                                       :functionReturnTypes t
+                                       :callArgumentNames t))))
+     ;; rust-analyzer: `clippy' as the on-save check (mirrors what you'd
+     ;; run in a terminal) and proc-macros expanded so derive macros stop
+     ;; showing as "unknown".  `closingBraceHints` 25-line threshold
+     ;; matches VSCode's default -- short blocks don't get cluttered.
+     (:rust-analyzer .
+                     (:checkOnSave (:command "clippy")
+                      :procMacro (:enable t)
+                      :cargo (:buildScripts (:enable t))
+                      :inlayHints (:bindingModeHints (:enable t)
+                                   :closingBraceHints (:enable t :minLines 25)
+                                   :parameterHints (:enable t)
+                                   :typeHints (:enable t)
+                                   :chainingHints (:enable t))))
+     ;; typescript-language-server / vtsls: parameter + return-type +
+     ;; variable type hints all on.  Servers default these to "none" --
+     ;; without this block `eglot-inlay-hints-mode' renders nothing in
+     ;; .ts / .tsx buffers.  Both `:typescript' and `:javascript' need
+     ;; the same payload because tsserver routes .js / .jsx through the
+     ;; javascript section, not typescript.
+     (:typescript .
+                  (:inlayHints (:includeInlayParameterNameHints "all"
+                                :includeInlayParameterNameHintsWhenArgumentMatchesName t
+                                :includeInlayFunctionParameterTypeHints t
+                                :includeInlayVariableTypeHints t
+                                :includeInlayVariableTypeHintsWhenTypeMatchesName t
+                                :includeInlayPropertyDeclarationTypeHints t
+                                :includeInlayFunctionLikeReturnTypeHints t
+                                :includeInlayEnumMemberValueHints t)))
+     (:javascript .
+                  (:inlayHints (:includeInlayParameterNameHints "all"
+                                :includeInlayFunctionParameterTypeHints t
+                                :includeInlayVariableTypeHints t
+                                :includeInlayFunctionLikeReturnTypeHints t)))))
   ;; `C-c .' on `eglot-code-actions' mirrors VSCode's `Ctrl+.' Quick Fix.
   ;; `C-.' is already bound to `embark-act' globally (see init-completion);
   ;; the `C-c' prefix avoids the clash and matches Emacs' convention of
@@ -161,6 +247,48 @@ seems stuck on a stale answer."
   ;; without saving keystrokes.
   :bind (:map eglot-mode-map
               ("C-c ." . eglot-code-actions)))
+
+;; Events-buffer debug toggle.  `eglot-events-buffer-config' is set to
+;; `:size 0' above (no logging) -- when a server hangs, returns nonsense,
+;; or you want to inspect a specific JSON-RPC message, flip these on, repro
+;; the issue, then visit the `*EGLOT events*' buffer.  Both helpers
+;; reconnect the current session so the new size takes effect (Eglot reads
+;; the config when the events buffer is materialised, not per message).
+(defun fenrir/eglot-debug-on ()
+  "Turn ON Eglot's JSON-RPC events log (2MB) and reconnect."
+  (interactive)
+  (setq eglot-events-buffer-config '(:size 2000000 :format full))
+  (when (eglot-current-server) (eglot-reconnect (eglot-current-server)))
+  (message "eglot: events log ON (2MB); reconnected"))
+
+(defun fenrir/eglot-debug-off ()
+  "Turn OFF Eglot's JSON-RPC events log and reconnect."
+  (interactive)
+  (setq eglot-events-buffer-config '(:size 0 :format full))
+  (when (eglot-current-server) (eglot-reconnect (eglot-current-server)))
+  (message "eglot: events log OFF"))
+
+;; vtsls: VSCode's bundled TypeScript server wrapped in an LSP shim
+;; (yioneko/vtsls).  Two practical wins over the stock
+;; `typescript-language-server' (Eglot's default for *-ts-mode):
+;;   * Implements `textDocument/formatting' -- a project without Prettier
+;;     can rely on `M-x eglot-format-buffer'.  Apheleia still wins when a
+;;     project pins Prettier (it's a sibling subprocess, not LSP).
+;;   * Diagnostics closer to VSCode: catches unused imports, narrows
+;;     better in conditional blocks, picks up `tsconfig.json' changes
+;;     without a manual restart.
+;; Install once: `npm i -g @vtsls/language-server'.  The override is
+;; gated on `executable-find' so a missing binary silently falls back to
+;; the default Eglot wiring -- mirrors the `flymake-eslint-defer-binary-
+;; check' pattern further down.  Note the hook list in the eglot block
+;; covers `js-ts-mode' too, so the override deliberately claims all three
+;; major modes; otherwise tsserver would still own .js while vtsls owned
+;; .ts, splitting projects across two server processes for no benefit.
+(with-eval-after-load 'eglot
+  (when (executable-find "vtsls")
+    (add-to-list 'eglot-server-programs
+                 '((typescript-ts-mode tsx-ts-mode js-ts-mode)
+                   . ("vtsls" "--stdio")))))
 
 ;; eglot-booster: speed up Eglot by routing the LSP server's stdio through
 ;; `emacs-lsp-booster' (Rust binary, blahgeek/emacs-lsp-booster v0.2.1).
@@ -220,6 +348,45 @@ seems stuck on a stale answer."
   :bind (:map eglot-mode-map
               ("M-g s" . consult-eglot-symbols)))
 
+;; xref backend tuning -- affects M-. (find-definitions) and M-? (find-
+;; references) across both LSP and non-LSP buffers.
+;;   * `xref-search-program' picks the search engine for
+;;     `xref-find-references' / `xref-find-apropos' when there's no
+;;     LSP / GTAGS backend on the buffer.  Default is `grep'; switch to
+;;     `ripgrep' to align with the project-wide rg/fdfind mandate
+;;     (CLAUDE.md, "Tool Preferences").  Pure speedup -- no UI change.
+;;   * `xref-show-xrefs-function' / `xref-show-definitions-function'
+;;     replace the default *xref* list buffer with consult's minibuffer
+;;     UI -- vertico + orderless + live preview, same look and ergonomics
+;;     as `consult-imenu' (M-g i) and `consult-eglot-symbols' (M-g s).
+;;     `consult-xref' is autoloaded by `consult', so no extra `:after'
+;;     wiring needed; the function symbol resolves on first xref hit.
+(use-package xref
+  :ensure nil
+  :custom
+  (xref-search-program 'ripgrep)
+  (xref-show-xrefs-function #'consult-xref)
+  (xref-show-definitions-function #'consult-xref))
+
+;; breadcrumb: header-line "module > class > method" path of the location
+;; at point -- VSCode's breadcrumb bar.  Backed by imenu (regex /
+;; structural) and, when Eglot is attached, LSP `textDocument/document-
+;; Symbol'.  So the path reflects the same symbol tree `consult-imenu'
+;; (M-g i) and `consult-eglot-symbols' (M-g s) walk, just rendered as a
+;; persistent header instead of a transient minibuffer list.
+;;
+;; Why this works on TTY frames: header-line is a buffer-local STRING,
+;; not a fringe glyph or child frame.  Renders identically in
+;; `emacsclient -nw' and a GUI frame.  Same author as Eglot
+;; (joaotavora), so the LSP integration tracks Eglot's documentSymbol
+;; output without a custom adapter.
+;;
+;; Hooked on `prog-mode' only -- text-mode (org / markdown) has its own
+;; heading-navigation surfaces (`org-mode' outline, `consult-outline')
+;; and a redundant breadcrumb would clash visually in long org buffers.
+(use-package breadcrumb
+  :hook (prog-mode . breadcrumb-local-mode))
+
 ;; vue-mode: syntax highlighting for .vue files only.  Eglot is intentionally
 ;; NOT hooked here -- Vue's LSP options (Volar 3 in "Hybrid Mode") are
 ;; sluggish on cold start and the per-request jsonrpc timeouts get noisy in
@@ -272,6 +439,16 @@ seems stuck on a stale answer."
 ;; Emacs runs in tmux) eldoc-box silently no-ops AND bypasses the echo area
 ;; fallback, so the user sees nothing at all.
 (setq eldoc-echo-area-use-multiline-p t)
+
+;; Multiple eldoc sources can be live at the same point: Eglot hover, Flymake
+;; at point, the major mode's own ElDoc (e.g. emacs-lisp-mode signature info).
+;; Default strategy `eldoc-documentation-default' shows ONLY the first source
+;; that returns content -- the rest are silently dropped.  `compose' renders
+;; them all, separated, in the doc buffer.  Concretely: a line with both a
+;; flymake error AND a function-signature hover now shows both at once when
+;; you hit `C-c d' (the docked side window from above renders multi-source
+;; content cleanly; the single-line echo area still truncates).
+(setq eldoc-documentation-strategy #'eldoc-documentation-compose)
 
 ;; Eldoc names its dedicated doc buffer " *eldoc for SYMBOL*" with a leading
 ;; space (Emacs' "hidden internal buffer" convention).  Once `eldoc-doc-buffer'
