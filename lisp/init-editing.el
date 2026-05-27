@@ -42,7 +42,19 @@
          ("M-g 2" . avy-goto-char-2))
   :custom
   (avy-keys '(?a ?s ?d ?f ?j ?k ?l ?\;))
-  (avy-timeout-seconds 0.3))
+  (avy-timeout-seconds 0.3)
+  :config
+  ;; magit-section collapses regions with overlays carrying `invisible t' while
+  ;; leaving `buffer-invisibility-spec' at its default value `t'.  Emacs hides
+  ;; that text on display; avy's own `avy--visible-p' reads `(eq t spec)' as
+  ;; "nothing is hidden" (the opposite of Emacs' actual rule) and emits jump
+  ;; labels INSIDE collapsed Magit sections -- the overlay hides the labels,
+  ;; the user sees a sparse set and a `M-g s' pick often jumps to an off-screen
+  ;; position.  Delegate to the built-in `invisible-p' (C) which honours every
+  ;; spec form correctly.  Fixes avy-goto-{char-timer,symbol-1,word-1,char-2}
+  ;; inside any magit-section-derived buffer (status / log / diff / ...).
+  (advice-add 'avy--visible-p :override
+              (lambda (s) (not (invisible-p s)))))
 
 ;; ace-link: in Help / Info / EWW / Compilation / Customize / Woman /
 ;; Helpful buffers, press `o' to avy-jump to the next link / URL / file
@@ -67,26 +79,24 @@
          (:map magit-mode-map    ("C-c o" . ace-link-addr)))
   :init (ace-link-setup-default))
 
-;; avy-zap: replace `M-z' (was `zap-to-char') with `avy-zap-to-char-dwim'.
-;; Native `zap-to-char' deletes forward up to the FIRST occurrence of a
-;; single char -- limiting in a long buffer when the target is the 3rd or
-;; 5th instance.  avy-zap puts avy labels on every candidate char in the
-;; visible buffer (both directions) so you can pick the exact target;
-;; the `-dwim' variant falls back to plain zap when there's no ambiguity.
+;; avy-zap: replace `M-z' with `avy-zap-to-char-dwim'.  Native
+;; `zap-to-char' is forward-only + first-occurrence; avy-zap labels every
+;; candidate char in the visible buffer (both directions) so you can pick
+;; the Nth or a backward one.  `C-u M-z' still falls back to native.
+;;
+;; CALIBRATION (added 2026-05-27 after honest re-assessment): this is an
+;; insurance binding, ~2-5% of kill operations.  Structural commands cover
+;; the rest -- `M-d' / `M-DEL' (word), `C-M-k' (sexp), `C-k' (line),
+;; `C-=' + `C-w' (semantic region via expand-region).  `M-z' only wins
+;; when ALL three hold: (a) target isn't on a structural boundary,
+;; (b) it's a specific char visible on screen, (c) the Nth occurrence or
+;; a backward direction matters.  Real hot spots: YAML/JSON `:'
+;; delimiters, string-internal partial cuts, zap-to-punctuation past
+;; abbreviations (`e.g.', `i.e.', ...).  If a month passes with no `M-z'
+;; reach, drop this whole `use-package' block -- `M-z' returns to native
+;; `zap-to-char' automatically and nothing else depends on avy-zap.
 (use-package avy-zap
   :bind ("M-z" . avy-zap-to-char-dwim))
-
-;; ace-pinyin: extend `avy-goto-char' family so pinyin initials match Han
-;; characters in addition to themselves.  Pressing `s' picks up Han chars
-;; whose pinyin starts with `s' (`設' -> shè, `山' -> shān, ...) -- useful
-;; in mixed-language org-roam notes, Chinese code comments, and
-;; CJK-heavy text buffers.  Tonal differences are ignored; Traditional
-;; and Simplified glyphs share the same pinyin so this works for the
-;; zh-TW notes in `~/code/org-roam/' transparently.  Cost on pure-ASCII
-;; buffers is negligible (the pinyin dispatch only activates when a Han
-;; codepoint is in the visible region).
-(use-package ace-pinyin
-  :init (ace-pinyin-global-mode 1))
 
 ;; expand-region: C-= grows the region semantically (word -> sexp -> string ->
 ;; defun -> ...); shift-C-= shrinks it again.

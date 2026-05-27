@@ -348,6 +348,220 @@ seems stuck on a stale answer."
   :bind (:map eglot-mode-map
               ("M-g s" . consult-eglot-symbols)))
 
+;; ----- Java exception: lsp-mode + lsp-java -------------------------------
+;; Java is the one language where this config diverges from the
+;; "Eglot for everything" policy stated in CLAUDE.md.  Rationale:
+;;
+;;   * eclipse.jdt.ls is heavy enough that `textDocument/references' and
+;;     workspace/symbol latency is dominated by the LSP client's ability to
+;;     stream partial results, cancel stale requests, and pre-parse JSON.
+;;     Eglot is synchronous on references (xref-find-references waits for
+;;     the full array) and has no `partialResultToken' support; lsp-mode
+;;     does both.
+;;   * lsp-java pre-wires the JDT settings that actually matter for
+;;     references speed (`includeDecompiledSources', `includeAccessors',
+;;     vmargs preset) and auto-installs the server via `lsp-install-server'.
+;;   * dap-java (debugger) only works against lsp-mode, not Eglot.
+;;
+;; Scope guard: lsp-mode ONLY hooks `java-mode' / `java-ts-mode'.  Every
+;; other language stays on Eglot above; do NOT add more lsp-mode hooks here
+;; without revisiting the architecture note in CLAUDE.md.
+;; Plist representation note: `lsp-use-plists' is a `defconst' inside
+;; lsp-mode that reads the `LSP_USE_PLISTS' env var at both byte-compile
+;; and load time -- runtime `setq' on it is a no-op (defconst always
+;; resets the binding).  The env var lives in `early-init.el' so it's
+;; in `process-environment' before any package load and before lsp-mode's
+;; .elc is byte-compiled.  Plists are 2-3x faster than hashtable repr on
+;; large workspace/symbol responses and are required by `emacs-lsp-booster'
+;; (the booster advice below reads `lsp-use-plists' at runtime to decide
+;; whether to prepend the booster binary).
+(use-package lsp-mode
+  :commands (lsp lsp-deferred lsp-install-server)
+  :custom
+  (lsp-keymap-prefix "C-c l")               ; default in recent versions
+  ;; Route diagnostics to flymake so the existing sideline-flymake / M-n /
+  ;; M-p stack works.  Without this, lsp-mode silently switches to flycheck
+  ;; if available, splitting the diagnostics UI across two backends.
+  (lsp-diagnostics-provider :flymake)
+  ;; Cosmetics: this config already has breadcrumb (package) on the
+  ;; header-line and doom-modeline owns the modeline.  Disable lsp-mode's
+  ;; equivalents so they don't double-up or fight the existing UI.
+  (lsp-headerline-breadcrumb-enable nil)
+  (lsp-modeline-code-actions-enable nil)
+  (lsp-modeline-diagnostics-enable nil)
+  ;; Noise reduction.
+  (lsp-enable-symbol-highlighting nil)      ; constant flicker on cursor move
+  (lsp-enable-on-type-formatting nil)
+  (lsp-eldoc-render-all nil)                ; one-line hover, expand via C-c d
+  (lsp-signature-render-documentation nil)
+  (lsp-log-io nil)                          ; flip on for debugging only
+  (lsp-idle-delay 0.5)
+  :hook ((java-mode java-ts-mode) . lsp-deferred))
+
+(use-package lsp-java
+  :after lsp-mode
+  :demand t                                 ; pull in eagerly once lsp-mode loads
+  :custom
+  ;; JVM tuning: copy of vscode-java's defaults (ParallelGC + GCTimeRatio +
+  ;; AdaptiveSizePolicyWeight is throughput-oriented, beats G1 for index
+  ;; build).  Bump heap to 3G -- jdtls' 1G default is the most common
+  ;; reason references / hover stall in any non-trivial Maven project.
+  (lsp-java-vmargs
+   '("-XX:+UseParallelGC" "-XX:GCTimeRatio=4" "-XX:AdaptiveSizePolicyWeight=90"
+     "-Dsun.zip.disableMemoryMapping=true" "-Xmx3G" "-Xms200m"))
+  ;; References speed knobs (mirror VSCode's Red Hat Java extension):
+  ;;   includeDecompiledSources = nil  -> don't re-decompile every class file
+  ;;     on each find-references call (huge win on dep-heavy projects).
+  ;;   includeAccessors        = nil   -> skip getter/setter matches (rarely
+  ;;     what you want when chasing real references).
+  (lsp-java-references-include-decompiled-sources nil)
+  (lsp-java-references-include-accessors nil)
+  ;; Disable the inline code-lens overlays for references / implementations
+  ;; -- they trigger continuous background `textDocument/references' calls
+  ;; that load the indexer and add nothing the modeline / consult-lsp
+  ;; doesn't already give us.
+  (lsp-java-references-code-lens-enabled nil)
+  (lsp-java-implementations-code-lens-enabled nil)
+  (lsp-java-format-on-type-enabled nil)
+  ;; Build tool imports: both on -- jdtls auto-detects pom.xml vs build.gradle
+  ;; per project root, so leaving them both enabled is free.
+  (lsp-java-import-maven-enabled t)
+  (lsp-java-import-gradle-enabled t))
+
+;; consult-lsp: the lsp-mode counterpart to consult-eglot above.  Same
+;; M-g s binding shape, scoped to lsp-mode-map so it doesn't clobber the
+;; eglot binding in non-Java buffers.
+(use-package consult-lsp
+  :after lsp-mode
+  :bind (:map lsp-mode-map
+              ("M-g s" . consult-lsp-symbols)))
+
+;; dap-mode + dap-java: Java debugger.  CLAUDE.md flags dap-mode as
+;; rejected (fringe-bitmap breakpoints are invisible in TTY frames) -- this
+;; block is the Java-debug exception, used ONLY from GUI Emacs frames.  Do
+;; not pull dap-mode into any other language's flow; dape remains the TTY-
+;; safe debugger for Go / Python / etc.
+;;
+;; Bundle install is a separate step -- `lsp-install-server RET jdtls' only
+;; installs the language server itself, not the java-debug / java-test JARs.
+;; See lsp-java's README for the bundle download recipe; revisit when actually
+;; debugging a Java program.
+(use-package dap-mode
+  :after lsp-mode
+  :commands (dap-debug dap-debug-edit-template)
+  :custom
+  ;; Drop the GUI-only `controls' toolbar; keep the data panels that work
+  ;; in both GUI and TTY (the panels render fine on TTY; only the
+  ;; breakpoint MARKERS are fringe-bitmap and TTY-invisible).
+  (dap-auto-configure-features '(sessions locals breakpoints expressions tooltip))
+  :config
+  (require 'dap-java))
+
+;; Bulk-register every Maven / Gradle root reachable from a container
+;; directory as an lsp workspace folder.  Typical use: a "monorepo wrapper"
+;; directory (e.g. ~/code/hitok2/, or just ~/code/) that holds many unrelated
+;; Java repos at varying depths -- registering their Maven / Gradle parents
+;; in one shot is what makes cross-repo jdtls navigation work.
+;;
+;; Scan is recursive-with-prune: once a directory matches a marker, descent
+;; into it STOPS.  That's load-bearing -- it avoids double-registering Maven
+;; multi-module sub-modules (their pom.xml would otherwise be picked up
+;; separately and jdtls complains `project already exists').
+;;
+;; Detection markers (any one at the directory's top level counts):
+;;   * pom.xml                                   -- Maven.
+;;   * build.gradle / build.gradle.kts /
+;;     settings.gradle / settings.gradle.kts     -- Gradle (Groovy or Kotlin DSL).
+;;
+;; `lsp-workspace-folders-add' dedupes against the existing session list, so
+;; re-running is idempotent.  After this call you must `lsp-workspace-restart'
+;; for jdtls to actually re-index -- adding folders only mutates the session.
+(defvar fenrir/lsp-java-scan-skip-dirs
+  '("target" "build" "node_modules" "out" "dist" "vendor"
+    ".gradle" ".idea" ".mvn" ".m2")
+  "Directory basenames never descended into by `fenrir/lsp-java-add-roots-under'.
+Dotfile prefixes are already skipped by the directory-walk regex; this list
+exists for non-dotfile noise (`target', `build', `node_modules', etc.).")
+
+(defun fenrir/lsp-java--scan-roots (dir markers)
+  "Return absolute paths of Java build roots reachable from DIR (inclusive).
+A directory counts as a root if any of MARKERS exists at its top level;
+once matched, descent into that directory stops."
+  (let ((results '())
+        (queue (list (expand-file-name dir))))
+    (while queue
+      (let ((d (pop queue)))
+        (when (file-directory-p d)
+          (if (seq-some (lambda (m) (file-exists-p (expand-file-name m d))) markers)
+              (push d results)
+            (dolist (child (directory-files d t "\\`[^.]"))
+              (when (and (file-directory-p child)
+                         (not (file-symlink-p child))
+                         (not (member (file-name-nondirectory child)
+                                      fenrir/lsp-java-scan-skip-dirs)))
+                (push child queue)))))))
+    (nreverse results)))
+
+(defun fenrir/lsp-java-add-roots-under (dir)
+  "Register every Maven / Gradle root reachable from DIR as an lsp workspace folder.
+Recursive with prune-on-match (see commentary above).  Interactive call
+prompts for DIR (default ~/code/)."
+  (interactive (list (read-directory-name "Container dir: " "~/code/")))
+  (require 'lsp-mode)
+  (let* ((markers '("pom.xml"
+                    "build.gradle" "build.gradle.kts"
+                    "settings.gradle" "settings.gradle.kts"))
+         (roots (fenrir/lsp-java--scan-roots dir markers)))
+    (dolist (r roots)
+      (lsp-workspace-folders-add r))
+    (message "lsp-java: scanned %s, %d root(s): %s -- run `lsp-workspace-restart' to re-index"
+             (abbreviate-file-name (expand-file-name dir))
+             (length roots) roots)))
+
+;; emacs-lsp-booster integration (mirror of the eglot-booster setup above).
+;; The booster binary is the same Rust executable (~/.cargo/bin/emacs-lsp-
+;; booster, installed via `cargo install --locked --version 0.2.1
+;; emacs-lsp-booster').  Two advice forms are needed:
+;;   1. Parse bytecode responses the booster emits (skipped if response is
+;;      regular JSON, falling back to the original `json-parse-buffer').
+;;   2. Prepend `emacs-lsp-booster' to the LSP server's argv, so the booster
+;;      sits between Emacs and the server's stdio.
+;; Gated on `lsp-use-plists' -- whose canonical source is the
+;; `LSP_USE_PLISTS=true' env var set in `early-init.el'.  The booster
+;; emits plist bytecode; if `lsp-use-plists' is nil (env var unset, or
+;; lsp-mode's .elc was compiled without it), the handler chokes with
+;; `wrong-type-argument hash-table-p' on every progress notification.
+(with-eval-after-load 'lsp-mode
+  (when (executable-find "emacs-lsp-booster")
+    (defun fenrir/lsp-booster--advice-json-parse (old-fn &rest args)
+      "Try to parse bytecode (emitted by emacs-lsp-booster) instead of JSON."
+      (or (when (equal (following-char) ?#)
+            (let ((bytecode (read (current-buffer))))
+              (when (byte-code-function-p bytecode)
+                (funcall bytecode))))
+          (apply old-fn args)))
+    (advice-add (if (progn (require 'json) (fboundp 'json-parse-buffer))
+                    'json-parse-buffer
+                  'json-read)
+                :around #'fenrir/lsp-booster--advice-json-parse)
+    (defun fenrir/lsp-booster--advice-final-command (old-fn cmd &optional test?)
+      "Prepend `emacs-lsp-booster' to the resolved LSP server command."
+      (let ((orig-result (funcall old-fn cmd test?)))
+        (if (and (not test?)
+                 (not (file-remote-p default-directory))
+                 lsp-use-plists
+                 (not (functionp 'json-rpc-connection))
+                 (executable-find "emacs-lsp-booster"))
+            (progn
+              (when-let ((cmd-from-exec-path (executable-find (car orig-result))))
+                (setcar orig-result cmd-from-exec-path))
+              (cons "emacs-lsp-booster" orig-result))
+          orig-result)))
+    (advice-add 'lsp-resolve-final-command :around
+                #'fenrir/lsp-booster--advice-final-command)))
+
+;; ----- end Java / lsp-mode exception ------------------------------------
+
 ;; xref backend tuning -- affects M-. (find-definitions) and M-? (find-
 ;; references) across both LSP and non-LSP buffers.
 ;;   * `xref-search-program' picks the search engine for

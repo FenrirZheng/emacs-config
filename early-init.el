@@ -15,6 +15,27 @@
 ;;; Code:
 
 ;; ---------------------------------------------------------------------------
+;; lsp-mode plist representation (booster prerequisite)
+;; ---------------------------------------------------------------------------
+;; `lsp-mode' decides hash-table vs plist representation via a `defconst'
+;; that reads the `LSP_USE_PLISTS' env var at load time AND at byte-compile
+;; time -- so a runtime `(setq lsp-use-plists t)' is too late once lsp-mode
+;; is loaded, and a .elc compiled without this env var bakes in hash-tables
+;; permanently.  `emacs-lsp-booster' emits plist bytecode, so when the two
+;; disagree the *Messages* buffer fills with `wrong-type-argument hash-table-p'
+;; on every progress notification.
+;;
+;; Setting it here in early-init.el guarantees it's in `process-environment'
+;; before the package system activates and before any `:hook'-deferred
+;; lsp-mode load.  When the lsp-mode / lsp-java .elc files are stale (compiled
+;; without this env var), run `M-x package-recompile RET lsp-mode RET' (and
+;; `lsp-java') once -- after that the .elc is correctly plist-baked and the
+;; recompile is a no-op on subsequent restarts.
+;;
+;; See `lisp/init-languages.el' for the booster advice that depends on this.
+(setenv "LSP_USE_PLISTS" "true")
+
+;; ---------------------------------------------------------------------------
 ;; GC during startup
 ;; ---------------------------------------------------------------------------
 ;; Default `gc-cons-threshold' is 800k -- with 60+ use-package blocks that

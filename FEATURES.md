@@ -542,7 +542,7 @@ the side-window `org-roam-buffer` shows the backlinks of whatever you're viewing
 
 ---
 
-## 15. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el), [`init-tmux-claude.el`](lisp/init-tmux-claude.el))
+## 15. AI / agent tooling ([`init-ai.el`](lisp/init-ai.el), [`init-aidermacs.el`](lisp/init-aidermacs.el), [`init-tmux-claude.el`](lisp/init-tmux-claude.el), [`init-alacritty-claude.el`](lisp/init-alacritty-claude.el))
 
 [`gptel`](https://github.com/karthink/gptel) — LLM chat client. Defaults to Gemini (model
 `gemini-pro-latest`); switch backend/model via `M-x gptel-menu`. Seed API keys with
@@ -573,6 +573,19 @@ no pane: Emacs not inside a tmux session (`$TMUX` unset), or `claude` not on `ex
 The new pane runs `claude` as its command, so it closes when `claude` exits. The pane
 title is only *visible* when your `tmux.conf` enables `pane-border-status` —
 `select-pane -T` sets it regardless. `M-x`-only, no key binding.
+
+`M-x fenrir/alacritty-tmux-claude` ([`init-alacritty-claude.el`](lisp/init-alacritty-claude.el))
+— the "from-scratch external window" companion to `fenrir/tmux-claude-split`. Spawns a new
+`alacritty` window asynchronously (`start-process`), runs `tmux new-session claude` inside
+it, and inherits Emacs' `default-directory` via `--working-directory` so `claude` sees the
+current project. Each invocation creates an independent tmux session (no `-A`, no fixed
+`-s` name — `tmux ls` will show them auto-named `0`, `1`, …); two calls = two alacritty
+windows = two unrelated sessions. Teardown is automatic: `claude` exits → window exits →
+session exits → tmux exits → alacritty closes. Up-front guards abort with `user-error` if
+any of `alacritty` / `tmux` / `claude` is missing from `exec-path`. The child's
+query-on-exit flag is cleared so quitting Emacs doesn't prompt about it. `M-x`-only, no
+key binding. Pick this one when Emacs is a GUI/daemon outside any tmux; pick
+`tmux-claude-split` when you're already inside a tmux pane.
 
 ---
 
