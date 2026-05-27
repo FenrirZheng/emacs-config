@@ -84,11 +84,43 @@
 ;; Emit OSC 52 on every cut; tmux's `set-clipboard on' in
 ;; [.tmux.conf](../.tmux.conf) relays the escape to the outer terminal, which
 ;; writes the real system clipboard.  Works across SSH; no xclip/wl-copy needed.
-(unless (display-graphic-p)
-  (defun fenrir/osc52-copy (text)
+;; The TTY check happens at cut time, not load time -- under a daemon
+;; `display-graphic-p' is nil at init.el load (no frame exists yet), so a
+;; load-time guard would install this for GUI clients too and `C-w' in a GUI
+;; frame would crash with "Device N is not a termcap terminal device".
+(defun fenrir/osc52-copy (text)
+  (when (eq (framep (selected-frame)) t)   ; t = TTY frame; x/w32/ns/pgtk = GUI
     (let ((b64 (base64-encode-string (encode-coding-string text 'utf-8) t)))
-      (send-string-to-terminal (format "\e]52;c;%s\a" b64))))
-  (setq interprogram-cut-function #'fenrir/osc52-copy))
+      (send-string-to-terminal (format "\e]52;c;%s\a" b64)))))
+(setq interprogram-cut-function #'fenrir/osc52-copy)
+
+;; External clipboard push: callable via `emacsclient --eval' from outside.
+;; Routes around two quirks of this config:
+;;   (1) `kill-new' alone misses the system clipboard in GUI mode -- the
+;;       OSC 52 override above displaces the default `gui-select-text' path,
+;;       so we re-dispatch on frame type here.
+;;   (2) Shell quoting around `emacsclient --eval' breaks on `$' / backticks /
+;;       newlines / unbalanced quotes -- the `-from-file' variant routes the
+;;       payload through the filesystem instead of argv.
+;; Returns the character length of the pushed string so the caller can
+;; verify arrival + size from the eval result.
+(defun fenrir/clipboard-push (text)
+  "Push TEXT onto the kill-ring AND to the system clipboard.
+Designed for `emacsclient --eval' callers."
+  (kill-new text)
+  (cond
+   ((display-graphic-p) (gui-select-text text))
+   (t                   (fenrir/osc52-copy text)))
+  (length text))
+
+(defun fenrir/clipboard-push-from-file (path)
+  "File-payload variant of `fenrir/clipboard-push'.
+Use when payload has newlines / quotes / `$' / backticks -- those survive
+the filesystem round-trip but not `emacsclient --eval' argv quoting."
+  (fenrir/clipboard-push
+   (with-temp-buffer
+     (insert-file-contents path)
+     (buffer-string))))
 
 ;; gcmh: Garbage Collector Magic Hack.  Replaces the fixed post-startup
 ;; `gc-cons-threshold' (16 MB floor set in `early-init.el') with an adaptive
