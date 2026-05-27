@@ -150,18 +150,23 @@
 
 ;; Tiny replacement for Dirvish's `dirvish-yank-menu' -> `w' "copy absolute
 ;; path" entry.  Pushes the marked files' (or the file at point's) absolute
-;; paths onto the kill ring, one per line.  `dired-get-marked-files' already
-;; returns expanded paths, so no need for `expand-file-name'.
+;; paths onto the kill ring AND the system clipboard, one per line.
+;; `dired-get-marked-files' already returns expanded paths, so no need for
+;; `expand-file-name'.  Routes via `fenrir/clipboard-push' (defined in
+;; [init-defaults.el](init-defaults.el)) so the path crosses the
+;; tmux/SSH boundary in TTY frames and reaches the X / Wayland selection in
+;; GUI frames -- plain `kill-new' misses both in this config (see comments
+;; at the top of `fenrir/clipboard-push' for the why).
 ;;
 ;; Bound on `C-c w' inside `dired-mode-map' to avoid colliding with stock
 ;; Dired's `w' (`dired-copy-filename-as-kill', which yanks BASENAMES -- a
 ;; useful sibling to keep around).
 (defun fenrir/dired-copy-absolute-path ()
-  "Copy the absolute path(s) of the marked file(s) to the kill ring."
+  "Copy the absolute path(s) of the marked file(s) to the system clipboard."
   (interactive)
   (let* ((files (dired-get-marked-files))
          (text  (mapconcat #'identity files "\n")))
-    (kill-new text)
+    (fenrir/clipboard-push text)
     (message "Copied %d path%s: %s"
              (length files)
              (if (= 1 (length files)) "" "s")
