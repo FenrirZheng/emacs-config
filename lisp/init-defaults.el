@@ -88,10 +88,16 @@
 ;; `display-graphic-p' is nil at init.el load (no frame exists yet), so a
 ;; load-time guard would install this for GUI clients too and `C-w' in a GUI
 ;; frame would crash with "Device N is not a termcap terminal device".
+;;
+;; GUI frames must still reach the X/Wayland clipboard, so dispatch on frame
+;; type here.  Installing this as `interprogram-cut-function' unconditionally
+;; would otherwise displace the default `gui-select-text' and break C-w/M-w
+;; on every GUI frame served by the daemon.
 (defun fenrir/osc52-copy (text)
-  (when (eq (framep (selected-frame)) t)   ; t = TTY frame; x/w32/ns/pgtk = GUI
-    (let ((b64 (base64-encode-string (encode-coding-string text 'utf-8) t)))
-      (send-string-to-terminal (format "\e]52;c;%s\a" b64)))))
+  (if (eq (framep (selected-frame)) t)   ; t = TTY frame; x/w32/ns/pgtk = GUI
+      (let ((b64 (base64-encode-string (encode-coding-string text 'utf-8) t)))
+        (send-string-to-terminal (format "\e]52;c;%s\a" b64)))
+    (gui-select-text text)))
 (setq interprogram-cut-function #'fenrir/osc52-copy)
 
 ;; External clipboard push: callable via `emacsclient --eval' from outside.
