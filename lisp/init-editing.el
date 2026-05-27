@@ -10,10 +10,83 @@
 
 ;; avy: jump to any visible position with a 2-3 keystroke "decision tree"
 ;; (the Emacs analogue of tmux-jump / ace-jump).
+;;
+;; Bindings beyond the obvious three:
+;;   M-g s   symbol-aware jump -- uses `find-tag-default' boundaries so
+;;           camelCase / snake_case identifiers stay whole, better than
+;;           word-1 in code.
+;;   M-g r   resume the previous avy with the same input -- press once to
+;;           re-trigger after the buffer scrolled, instead of re-typing the
+;;           search chars.
+;;   M-g 2   two-character input -- candidate set shrinks fast, typically a
+;;           one-key jump; complements `avy-goto-char-timer' (which is
+;;           variable-length + timeout-driven).
+;;
+;; `avy-keys' rationale: the default `(a s d f g h j k l)' is left-hand
+;; heavy (only `j k l' on the right, no `;'); for multi-key labels,
+;; alternating hands is measurably faster than same-hand chains.  Dropping
+;; `g'/`h' also removes the worst label/search-char visual collisions
+;; (both are high-frequency in English text and code).  The chosen set
+;; matches `aw-keys' below, so the home-row picker intuition is shared
+;; between window jumps (`M-o') and char jumps (`C-:').
+;;
+;; `avy-timeout-seconds' 0.3: default 0.5 feels laggy on quick taps; 0.3
+;; activates the label overlay promptly without cutting off slower typers
+;; -- raise to 0.4 if multi-char input regularly misses.
 (use-package avy
   :bind (("C-:"   . avy-goto-char-timer)  ; type a few chars, then pick
          ("M-g w" . avy-goto-word-1)
-         ("M-g l" . avy-goto-line)))
+         ("M-g l" . avy-goto-line)
+         ("M-g s" . avy-goto-symbol-1)
+         ("M-g r" . avy-resume)
+         ("M-g 2" . avy-goto-char-2))
+  :custom
+  (avy-keys '(?a ?s ?d ?f ?j ?k ?l ?\;))
+  (avy-timeout-seconds 0.3))
+
+;; ace-link: in Help / Info / EWW / Compilation / Customize / Woman /
+;; Helpful buffers, press `o' to avy-jump to the next link / URL / file
+;; reference visible in the buffer.  Saves a lot of `n'/`p'/`TAB' walking
+;; through helpful pages and helper-info screens.  GNU ELPA, pure elisp,
+;; no native deps.  `ace-link-setup-default' wires the `o' binding into
+;; every mode it knows about (idempotent -- safe to call once at init).
+;;
+;; `ace-link-setup-default' deliberately skips three modes we care about:
+;;   * magit-mode-map -- `o' is already `magit-submodule' (the submodule
+;;     transient), too valuable to silently shadow.
+;;   * org-mode-map / markdown-mode-map -- they're text-editing majors, so
+;;     a bare `o' would self-insert; ace-link doesn't presume a key.
+;; We rebind on `C-c o' in those three modes instead -- `C-c <letter>' is
+;; the Elisp-convention space reserved for users, so no major mode should
+;; collide.  `ace-link-org' is org-link-syntax-aware; magit and markdown
+;; have no specialised function so fall back to `ace-link-addr', which
+;; scans the visible buffer for URLs / email / file references.
+(use-package ace-link
+  :bind ((:map org-mode-map      ("C-c o" . ace-link-org))
+         (:map markdown-mode-map ("C-c o" . ace-link-addr))
+         (:map magit-mode-map    ("C-c o" . ace-link-addr)))
+  :init (ace-link-setup-default))
+
+;; avy-zap: replace `M-z' (was `zap-to-char') with `avy-zap-to-char-dwim'.
+;; Native `zap-to-char' deletes forward up to the FIRST occurrence of a
+;; single char -- limiting in a long buffer when the target is the 3rd or
+;; 5th instance.  avy-zap puts avy labels on every candidate char in the
+;; visible buffer (both directions) so you can pick the exact target;
+;; the `-dwim' variant falls back to plain zap when there's no ambiguity.
+(use-package avy-zap
+  :bind ("M-z" . avy-zap-to-char-dwim))
+
+;; ace-pinyin: extend `avy-goto-char' family so pinyin initials match Han
+;; characters in addition to themselves.  Pressing `s' picks up Han chars
+;; whose pinyin starts with `s' (`設' -> shè, `山' -> shān, ...) -- useful
+;; in mixed-language org-roam notes, Chinese code comments, and
+;; CJK-heavy text buffers.  Tonal differences are ignored; Traditional
+;; and Simplified glyphs share the same pinyin so this works for the
+;; zh-TW notes in `~/code/org-roam/' transparently.  Cost on pure-ASCII
+;; buffers is negligible (the pinyin dispatch only activates when a Han
+;; codepoint is in the visible region).
+(use-package ace-pinyin
+  :init (ace-pinyin-global-mode 1))
 
 ;; expand-region: C-= grows the region semantically (word -> sexp -> string ->
 ;; defun -> ...); shift-C-= shrinks it again.
@@ -63,7 +136,12 @@
 (use-package pulsar
   :init (pulsar-global-mode 1)
   :config
-  (dolist (fn '(avy-goto-char-timer avy-goto-line avy-goto-word-1))
+  (dolist (fn '(avy-goto-char-timer
+                avy-goto-line
+                avy-goto-word-1
+                avy-goto-symbol-1
+                avy-goto-char-2
+                avy-resume))
     (add-to-list 'pulsar-pulse-functions fn))
   ;; consult exposes this hook on every jump (consult-line/imenu/ripgrep ...).
   (add-hook 'consult-after-jump-hook #'pulsar-recenter-center)
