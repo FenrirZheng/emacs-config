@@ -364,6 +364,40 @@ Returns nil if neither applies, deferring to other `project-find-functions'."
               ("C-c h c" . eglot-show-call-hierarchy)
               ("C-c h t" . eglot-show-type-hierarchy)))
 
+;; Call-hierarchy glyphs (TTY: pure text, no image theme -- all frames here are
+;; `emacsclient -nw').  Two independent layers in the `*EGLOT call hierarchy*'
+;; buffer:
+;;  (A) The direction bullets (` <- ' incoming / ` -> ' outgoing) are BAKED into
+;;      `eglot-show-call-hierarchy' by the internal `eglot--define-hierarchy-
+;;      command' macro -- there is no defcustom or variable seam.  Override by
+;;      re-expanding the SAME macro with new bullet strings (this is exactly how
+;;      Eglot defines the command, so it tracks Eglot's own rendering).  The
+;;      `(eval '(...) t)' wrapper defers macroexpansion to RUNTIME: a bare macro
+;;      call here would be expanded when this module is byte-compiled, at which
+;;      point Eglot may be unloaded -> "function definition void".  Only call
+;;      hierarchy is touched; type hierarchy keeps its ` up '/` down ' arrows.
+;;  (B) The [+]/[-]/[X] expand toggles come from built-in `tree-widget' icon
+;;      `:tag's.  Eglot maps each node's :empty-icon to its :leaf-icon, so the
+;;      leaf icon (not the empty icon) governs childless expanded nodes.  NOTE:
+;;      redefining these widgets is GLOBAL -- it restyles every `tree-widget' UI
+;;      and Eglot's type-hierarchy toggles too (no per-buffer seam without
+;;      advising `eglot--hierarchy-2', not worth the surface).
+(with-eval-after-load 'eglot
+  (eval '(eglot--define-hierarchy-command
+          eglot-show-call-hierarchy "call"
+          :callHierarchyProvider :textDocument/prepareCallHierarchy
+          ((:callHierarchy/incomingCalls " ⮜ " incoming "incoming calls" "called by"
+                                         :from :fromRanges)
+           (:callHierarchy/outgoingCalls " ⮞ " base "outgoing calls" "calls"
+                                         :to :fromRanges)))
+        t))
+
+(with-eval-after-load 'tree-widget
+  (define-widget 'tree-widget-open-icon  'tree-widget-icon "" :tag "▾" :glyph-name "open")
+  (define-widget 'tree-widget-close-icon 'tree-widget-icon "" :tag "▸" :glyph-name "close")
+  (define-widget 'tree-widget-leaf-icon  'tree-widget-icon "" :tag "·" :glyph-name "leaf")
+  (define-widget 'tree-widget-empty-icon 'tree-widget-icon "" :tag "·" :glyph-name "empty"))
+
 ;; Events-buffer debug toggle.  `eglot-events-buffer-config' is set to
 ;; `:size 0' above (no logging) -- when a server hangs, returns nonsense,
 ;; or you want to inspect a specific JSON-RPC message, flip these on, repro
