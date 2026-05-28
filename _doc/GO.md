@@ -114,7 +114,7 @@ LSP-driven via xref. Eglot's xref backend prepends itself to `xref-backend-funct
 | `M-g I` | `consult-imenu-multi` | Same, but across every open buffer that shares the major mode — useful for jumping between files in the same package |
 | `M-s r` | `consult-ripgrep` | Project-wide text search — orthogonal to LSP, useful when gopls doesn't know |
 
-`ggtags` is in the config (see [init.el's ggtags block](../init.el)) but only takes over in buffers without an active LSP session — for Go, eglot always wins. Mostly relevant for Java, where Eglot isn't auto-hooked.
+`ggtags` is in the config (see [init.el's ggtags block](../init.el)) but only takes over in buffers without an active LSP session — for Go, eglot always wins. Useful as a fallback in modes without an LSP server hooked.
 
 ## Diagnostics
 
@@ -235,7 +235,7 @@ Likely a large module + analyses enabled. Disable `staticcheck` and the heavier 
 
 | Feature | Why not | Workaround |
 |---|---|---|
-| Debugging (DAP) | `dap-mode` is lsp-mode-flavoured; `dape` is the Eglot-aligned alternative but not configured yet | Use `dlv` from the command line in a separate `vterm` |
+| Debugging (DAP) | `dape` (the Eglot-aligned DAP client) is configured in [`lisp/init-languages.el`](../lisp/init-languages.el) — works for Go via `dlv`, see [FEATURES.md §7](../FEATURES.md) | `M-x dape` to launch, or `dlv` from a separate `vterm` if you prefer CLI |
 | `gofmt` on save | Would require `eglot-format-buffer` hook + per-mode opt-in | `M-x eglot-format-buffer` manually, or run `gofmt -w .` from shell |
 | `goimports` on save | Same as above; gopls handles imports incrementally during completion | Auto-import via the completion flow handles 90% of cases |
 | Test runner UI | None | `M-x compile RET go test ./... RET` |

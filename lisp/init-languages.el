@@ -58,6 +58,89 @@ seems stuck on a stale answer."
   (setq vc-file-prop-obarray (obarray-make 17))
   (message "vc-file-prop-obarray cleared"))
 
+;; Java/Maven workspace-root finder.  The default `project-try-vc' +
+;; `project-vc-extra-root-markers' approach picks the FIRST (= deepest)
+;; ancestor that has `.project' walking up from the file.  Eclipse m2e (which
+;; jdtls bundles) auto-generates `.project' inside every Maven module on
+;; import, so even if a developer drops a single `.project' at the monorepo
+;; root, the import re-creates deeper ones and the next `project-current'
+;; call snaps back to the wrong (too-deep) module.
+;;
+;; This finder resolves a Java buffer's project in two tiers:
+;;
+;;   Tier 1 (container marker): if any ancestor holds
+;;     `fenrir/java-workspace-marker' (default `.eglot-java-workspace'), that
+;;     ancestor is THE root for every Java file beneath it.  Use this to fuse
+;;     several independent Maven/Gradle reactors sitting under one container
+;;     dir (e.g. ~/code/hitok2/ holding im-combined-hitok + im-combined-api +
+;;     hitok-java-backend) into a SINGLE Eglot server -> SINGLE jdtls Eclipse
+;;     workspace, so cross-project find-references / navigation work and you
+;;     never spawn a second jdtls (which would fight over the shared `-data').
+;;     Pair with `java.import.exclusions' (see the :java workspace config) to
+;;     keep jdtls from importing non-Java subtrees under the container.
+;;
+;;   Tier 2 (topmost-pom): otherwise return the TOPMOST consecutive ancestor
+;;     with `pom.xml' / `build.gradle*' -- the multi-module reactor root for a
+;;     standalone Maven/Gradle project.  Ignores `.project' markers entirely.
+;;
+;; Non-Java files (no marker in either tier) return nil so `project-try-vc'
+;; still owns them.
+;;
+;; Return shape matches `project-try-vc's `(list 'vc BACKEND ROOT)' so that
+;; eglot's session hash (keyed on the project object) sees the SAME key
+;; regardless of which `project-find-functions' entry resolved a given
+;; buffer.  Otherwise sibling buffers in the same workspace would spawn
+;; separate jdtls sessions.
+(defcustom fenrir/java-workspace-marker ".eglot-java-workspace"
+  "Filename that pins a directory as a unified jdtls workspace root.
+When present in an ancestor of a Java file, that ancestor becomes the
+project root for ALL Java files beneath it, fusing multiple independent
+Maven/Gradle reactors under one container into a single Eglot server.
+Takes precedence over the topmost-pom heuristic."
+  :type 'string
+  :group 'fenrir)
+
+(defun fenrir/project-find-java-build-root (dir)
+  "Resolve DIR's Java project root as a project object (a (vc BACKEND ROOT) list).
+Tier 1: the nearest ancestor containing `fenrir/java-workspace-marker'.
+Tier 2: the topmost consecutive ancestor with a Maven/Gradle build file.
+Returns nil if neither applies, deferring to other `project-find-functions'."
+  (let* ((d (file-name-as-directory (expand-file-name (or dir default-directory))))
+         ;; `abbreviate-file-name' so the project path matches what
+         ;; `project-try-vc' produces elsewhere -- otherwise sibling buffers
+         ;; spawn separate eglot sessions because `equal' on the project
+         ;; struct compares "~/..." vs "/home/..." paths byte-for-byte.
+         (as-project
+          (lambda (root)
+            (let ((r (file-name-as-directory (expand-file-name root))))
+              (list 'vc (ignore-errors (vc-responsible-backend r))
+                    (abbreviate-file-name r)))))
+         (container (locate-dominating-file d fenrir/java-workspace-marker)))
+    (if container
+        (funcall as-project container)
+      (let* ((markers '("pom.xml" "build.gradle" "build.gradle.kts"
+                        "settings.gradle" "settings.gradle.kts"))
+             (has-marker
+              (lambda (dd)
+                (and dd (seq-some (lambda (m) (file-exists-p (expand-file-name m dd)))
+                                  markers))))
+             (cur d)
+             (root nil))
+        (while (and cur (not (string-equal cur "/")) (not (funcall has-marker cur)))
+          (let ((up (file-name-directory (directory-file-name cur))))
+            (setq cur (and (not (string-equal up cur)) up))))
+        (when (and cur (funcall has-marker cur))
+          (setq root cur)
+          (let ((up (file-name-directory (directory-file-name cur))))
+            (while (and up (not (string-equal up "/")) (funcall has-marker up))
+              (setq root up
+                    up (file-name-directory (directory-file-name up))))))
+        (when root (funcall as-project root))))))
+
+;; Place AHEAD of `project-try-vc' so Java/Maven roots win the `.project'
+;; race.  `project-find-functions' is run in order, first non-nil wins.
+(add-to-list 'project-find-functions #'fenrir/project-find-java-build-root)
+
 ;; envrc: direnv integration -- when you enter a buffer whose file lives under
 ;; a directory with an `.envrc', envrc runs `direnv export json' and applies
 ;; the resulting env vars BUFFER-LOCALLY (sets `process-environment' and
@@ -126,6 +209,15 @@ seems stuck on a stale answer."
          ;; `eglot-server-programs' already maps `lua-mode' to the
          ;; `lua-language-server' binary (install per the lua-mode block).
          (lua-mode        . eglot-ensure)
+         ;; Java attaches on BOTH `java-mode' (built-in regex) and `java-ts-mode'
+         ;; (tree-sitter) -- treesit-auto remaps .java files to the ts variant
+         ;; when the grammar is installed, but the non-ts hook is kept for
+         ;; safety on machines that haven't grabbed the grammar yet.  The
+         ;; jdtls launcher entry, `:java' workspace-configuration, and the
+         ;; jdt:// URI handler all live in the dedicated Java block lower down
+         ;; in this file -- see `fenrir/jdtls-launch-command'.
+         (java-mode       . eglot-ensure)
+         (java-ts-mode    . eglot-ensure)
          ;; Inlay hints: parameter names, inferred types, `&` references etc.
          ;; rendered inline by the language server.  Built-in in Emacs 30 --
          ;; no external package.  `eglot-managed-mode' is the hook that fires
@@ -348,142 +440,269 @@ seems stuck on a stale answer."
   :bind (:map eglot-mode-map
               ("M-g s" . consult-eglot-symbols)))
 
-;; ----- Java exception: lsp-mode + lsp-java -------------------------------
-;; Java is the one language where this config diverges from the
-;; "Eglot for everything" policy stated in CLAUDE.md.  Rationale:
+;; ----- Java: Eglot + jdtls --------------------------------------------------
+;; Java migrated from lsp-mode to Eglot on the `try/java-on-eglot' branch.
+;; Architecture:
 ;;
-;;   * eclipse.jdt.ls is heavy enough that `textDocument/references' and
-;;     workspace/symbol latency is dominated by the LSP client's ability to
-;;     stream partial results, cancel stale requests, and pre-parse JSON.
-;;     Eglot is synchronous on references (xref-find-references waits for
-;;     the full array) and has no `partialResultToken' support; lsp-mode
-;;     does both.
-;;   * lsp-java pre-wires the JDT settings that actually matter for
-;;     references speed (`includeDecompiledSources', `includeAccessors',
-;;     vmargs preset) and auto-installs the server via `lsp-install-server'.
-;;   * dap-java (debugger) only works against lsp-mode, not Eglot.
+;;   * jdtls is launched directly from this config rather than via lsp-java's
+;;     `lsp-install-server' machinery.  The bundle still lives at the
+;;     historic path `var/lsp-java/eclipse.jdt.ls/server/' (~150 MB,
+;;     originally downloaded by lsp-java) so no re-install is needed -- only
+;;     the workspace metadata at `var/lsp-java/workspace/' may be wiped
+;;     out-of-band to force re-import from scratch.
 ;;
-;; Scope guard: lsp-mode ONLY hooks `java-mode' / `java-ts-mode'.  Every
-;; other language stays on Eglot above; do NOT add more lsp-mode hooks here
-;; without revisiting the architecture note in CLAUDE.md.
-;; Plist representation note: `lsp-use-plists' is a `defconst' inside
-;; lsp-mode that reads the `LSP_USE_PLISTS' env var at both byte-compile
-;; and load time -- runtime `setq' on it is a no-op (defconst always
-;; resets the binding).  The env var lives in `early-init.el' so it's
-;; in `process-environment' before any package load and before lsp-mode's
-;; .elc is byte-compiled.  Plists are 2-3x faster than hashtable repr on
-;; large workspace/symbol responses and are required by `emacs-lsp-booster'
-;; (the booster advice below reads `lsp-use-plists' at runtime to decide
-;; whether to prepend the booster binary).
-(use-package lsp-mode
-  :commands (lsp lsp-deferred lsp-install-server)
-  :custom
-  (lsp-keymap-prefix "C-c l")               ; default in recent versions
-  ;; Route diagnostics to flymake so the existing sideline-flymake / M-n /
-  ;; M-p stack works.  Without this, lsp-mode silently switches to flycheck
-  ;; if available, splitting the diagnostics UI across two backends.
-  (lsp-diagnostics-provider :flymake)
-  ;; Cosmetics: this config already has breadcrumb (package) on the
-  ;; header-line and doom-modeline owns the modeline.  Disable lsp-mode's
-  ;; equivalents so they don't double-up or fight the existing UI.
-  (lsp-headerline-breadcrumb-enable nil)
-  (lsp-modeline-code-actions-enable nil)
-  (lsp-modeline-diagnostics-enable nil)
-  ;; Noise reduction.
-  (lsp-enable-symbol-highlighting nil)      ; constant flicker on cursor move
-  (lsp-enable-on-type-formatting nil)
-  (lsp-eldoc-render-all nil)                ; one-line hover, expand via C-c d
-  (lsp-signature-render-documentation nil)
-  (lsp-log-io nil)                          ; flip on for debugging only
-  (lsp-idle-delay 0.5)
-  :hook ((java-mode java-ts-mode) . lsp-deferred))
+;;   * `jdt://' URI scheme handler is registered as a `file-name-handler-
+;;     alist' entry below.  Without it, M-. into JDK / third-party-jar
+;;     classes (which jdtls returns as `jdt://contents/...' URIs) silently
+;;     fails -- Eglot leaves non-`file://' URIs unchanged and `find-file-
+;;     noselect' then doesn't know what to do with them.  Our handler
+;;     resolves contents via jdtls' `java/classFileContents' LSP extension.
+;;
+;;   * eglot-booster (above) wraps the new connection automatically -- its
+;;     `eglot--connect' advice is generic, no Java-specific wiring needed.
+;;
+;;   * consult-eglot-symbols (above) covers the new sessions through the
+;;     same `eglot-mode-map' binding on M-g s.
+;;
+;;   * dap-java is gone with lsp-mode; Java debug is unsupported in this
+;;     config until either dape grows a Java adapter or a manual
+;;     java-debug bridge is added.  Use IntelliJ / VSCode for real Java
+;;     debugging until then.
 
-(use-package lsp-java
-  :after lsp-mode
-  :demand t                                 ; pull in eagerly once lsp-mode loads
-  :custom
-  ;; JVM tuning: copy of vscode-java's defaults (ParallelGC + GCTimeRatio +
-  ;; AdaptiveSizePolicyWeight is throughput-oriented, beats G1 for index
-  ;; build).  Bump heap to 3G -- jdtls' 1G default is the most common
-  ;; reason references / hover stall in any non-trivial Maven project.
-  (lsp-java-vmargs
-   '("-XX:+UseParallelGC" "-XX:GCTimeRatio=4" "-XX:AdaptiveSizePolicyWeight=90"
-     "-Dsun.zip.disableMemoryMapping=true" "-Xmx3G" "-Xms200m"))
-  ;; References speed knobs (mirror VSCode's Red Hat Java extension):
-  ;;   includeDecompiledSources = nil  -> don't re-decompile every class file
-  ;;     on each find-references call (huge win on dep-heavy projects).
-  ;;   includeAccessors        = nil   -> skip getter/setter matches (rarely
-  ;;     what you want when chasing real references).
-  (lsp-java-references-include-decompiled-sources nil)
-  (lsp-java-references-include-accessors nil)
-  ;; Disable the inline code-lens overlays for references / implementations
-  ;; -- they trigger continuous background `textDocument/references' calls
-  ;; that load the indexer and add nothing the modeline / consult-lsp
-  ;; doesn't already give us.
-  (lsp-java-references-code-lens-enabled nil)
-  (lsp-java-implementations-code-lens-enabled nil)
-  (lsp-java-format-on-type-enabled nil)
-  ;; Build tool imports: both on -- jdtls auto-detects pom.xml vs build.gradle
-  ;; per project root, so leaving them both enabled is free.
-  (lsp-java-import-maven-enabled t)
-  (lsp-java-import-gradle-enabled t))
+(defcustom fenrir/jdtls-bundle-dir
+  (expand-file-name "var/lsp-java/eclipse.jdt.ls/server/" user-emacs-directory)
+  "Root of the eclipse.jdt.ls server bundle.
+Inherited from lsp-java's install location."
+  :type 'directory
+  :group 'fenrir)
 
-;; consult-lsp: the lsp-mode counterpart to consult-eglot above.  Same
-;; M-g s binding shape, scoped to lsp-mode-map so it doesn't clobber the
-;; eglot binding in non-Java buffers.
-(use-package consult-lsp
-  :after lsp-mode
-  :bind (:map lsp-mode-map
-              ("M-g s" . consult-lsp-symbols)))
+(defcustom fenrir/jdtls-workspace-dir
+  (expand-file-name "var/lsp-java/workspace/" user-emacs-directory)
+  "Per-project workspace metadata directory for jdtls.
+Re-created on first launch.  Delete this directory out-of-band to force
+jdtls to re-import all projects from scratch."
+  :type 'directory
+  :group 'fenrir)
 
-;; dap-mode + dap-java: Java debugger.  CLAUDE.md flags dap-mode as
-;; rejected (fringe-bitmap breakpoints are invisible in TTY frames) -- this
-;; block is the Java-debug exception, used ONLY from GUI Emacs frames.  Do
-;; not pull dap-mode into any other language's flow; dape remains the TTY-
-;; safe debugger for Go / Python / etc.
-;;
-;; Bundle install is a separate step -- `lsp-install-server RET jdtls' only
-;; installs the language server itself, not the java-debug / java-test JARs.
-;; See lsp-java's README for the bundle download recipe; revisit when actually
-;; debugging a Java program.
-(use-package dap-mode
-  :after lsp-mode
-  :commands (dap-debug dap-debug-edit-template)
-  :custom
-  ;; Drop the GUI-only `controls' toolbar; keep the data panels that work
-  ;; in both GUI and TTY (the panels render fine on TTY; only the
-  ;; breakpoint MARKERS are fringe-bitmap and TTY-invisible).
-  (dap-auto-configure-features '(sessions locals breakpoints expressions tooltip))
-  :config
-  (require 'dap-java))
+(defun fenrir/jdtls--equinox-launcher ()
+  "Resolve the absolute path of org.eclipse.equinox.launcher_*.jar.
+The version suffix changes per jdtls release, so we wildcard-glob."
+  (car (file-expand-wildcards
+        (expand-file-name "plugins/org.eclipse.equinox.launcher_*.jar"
+                          fenrir/jdtls-bundle-dir))))
 
-;; Bulk-register every Maven / Gradle root reachable from a container
-;; directory as an lsp workspace folder.  Typical use: a "monorepo wrapper"
-;; directory (e.g. ~/code/hitok2/, or just ~/code/) that holds many unrelated
-;; Java repos at varying depths -- registering their Maven / Gradle parents
-;; in one shot is what makes cross-repo jdtls navigation work.
-;;
-;; Scan is recursive-with-prune: once a directory matches a marker, descent
-;; into it STOPS.  That's load-bearing -- it avoids double-registering Maven
-;; multi-module sub-modules (their pom.xml would otherwise be picked up
-;; separately and jdtls complains `project already exists').
-;;
-;; Detection markers (any one at the directory's top level counts):
-;;   * pom.xml                                   -- Maven.
-;;   * build.gradle / build.gradle.kts /
-;;     settings.gradle / settings.gradle.kts     -- Gradle (Groovy or Kotlin DSL).
-;;
-;; `lsp-workspace-folders-add' dedupes against the existing session list, so
-;; re-running is idempotent.  After this call you must `lsp-workspace-restart'
-;; for jdtls to actually re-index -- adding folders only mutates the session.
-(defvar fenrir/lsp-java-scan-skip-dirs
+(defun fenrir/jdtls--config-dir ()
+  "Resolve the platform-specific Equinox config directory."
+  (expand-file-name
+   (pcase system-type
+     ('gnu/linux  (if (string-match-p "aarch64" system-configuration)
+                      "config_linux_arm" "config_linux"))
+     ('darwin     (if (string-match-p "aarch64" system-configuration)
+                      "config_mac_arm" "config_mac"))
+     ('windows-nt "config_win")
+     (_ "config_linux"))
+   fenrir/jdtls-bundle-dir))
+
+(defun fenrir/jdtls--java-settings ()
+  "Build the jdtls `:java' settings plist for the connecting buffer.
+Starts from the global `:java' entry of `eglot-workspace-configuration',
+then -- when the buffer sits inside a fused container workspace (see
+`fenrir/java-workspace-marker') -- DISABLES the Gradle importer.
+
+Why: jdtls' `import.exclusions' does NOT stop Buildship (its Gradle
+importer) from descending into excluded subtrees.  A container like
+~/code/hitok2/ holds a React Native app (im-pay) whose `android/' Gradle
+build references an absent `@react-native/gradle-plugin'; Buildship's
+sync of it fails and stalls jdtls' whole init.  The container's real
+Java projects are all Maven, so turning Gradle off there loses nothing.
+Standalone Gradle projects (no container marker -> their own server)
+keep Gradle enabled."
+  (let ((base (alist-get :java eglot-workspace-configuration)))
+    (if (locate-dominating-file default-directory fenrir/java-workspace-marker)
+        (let ((s (copy-tree base)))
+          (setf (plist-get s :import)
+                (plist-put (plist-get s :import) :gradle '(:enabled :json-false)))
+          s)
+      base)))
+
+(defun fenrir/jdtls-launch-command (&optional _interactive)
+  "Return the argv list to launch jdtls.
+Used as the function-form value of an `eglot-server-programs' entry.
+JVM args mirror the lsp-java preset: ParallelGC + GCTimeRatio +
+AdaptiveSizePolicyWeight (throughput-oriented, beats G1 for index
+build), 3G heap (jdtls' 1G default stalls hover/references on any
+non-trivial Maven project).
+
+The trailing `:initializationOptions' is Eglot's documented mechanism
+for feeding a server its config at the `initialize' request (vs the
+later `workspace/didChangeConfiguration').  jdtls reads
+`initializationOptions.settings.java' DURING its initial project scan,
+so `import.exclusions' there actually keeps Buildship from descending
+into excluded subtrees -- pushing the same keys only via
+didChangeConfiguration is too late (the Gradle/Maven scan already
+started).  `classFileContentsSupport' enables the `jdt://' URI flow the
+handler below relies on.  eglot-booster prepends its wrapper to the
+PROGRAM part only; the trailing keyword survives untouched."
+  (let* ((launcher (fenrir/jdtls--equinox-launcher))
+         (config (fenrir/jdtls--config-dir))
+         (workspace fenrir/jdtls-workspace-dir)
+         (java-settings (fenrir/jdtls--java-settings)))
+    (unless launcher
+      (user-error
+       "jdtls equinox launcher not found under %s -- check `fenrir/jdtls-bundle-dir' or reinstall jdtls"
+       fenrir/jdtls-bundle-dir))
+    (make-directory workspace t)
+    `("java"
+      "-Declipse.application=org.eclipse.jdt.ls.core.id1"
+      "-Dosgi.bundles.defaultStartLevel=4"
+      "-Declipse.product=org.eclipse.jdt.ls.core.product"
+      "-Dlog.level=ALL"
+      "-Xmx3G" "-Xms200m"
+      "-XX:+UseParallelGC" "-XX:GCTimeRatio=4"
+      "-XX:AdaptiveSizePolicyWeight=90"
+      "-Dsun.zip.disableMemoryMapping=true"
+      "--add-modules=ALL-SYSTEM"
+      "--add-opens" "java.base/java.util=ALL-UNNAMED"
+      "--add-opens" "java.base/java.lang=ALL-UNNAMED"
+      "-jar" ,launcher
+      "-configuration" ,config
+      "-data" ,workspace
+      :initializationOptions
+      (:settings (:java ,java-settings)
+       :extendedClientCapabilities (:classFileContentsSupport t)))))
+
+;; Wire jdtls into Eglot.  The :hook entries that fire `eglot-ensure' for
+;; java-mode / java-ts-mode live in the main eglot use-package block above
+;; -- this block only adds the per-server launcher + workspace config.
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               `((java-mode java-ts-mode) . ,#'fenrir/jdtls-launch-command))
+  ;; Per-server settings (pushed via `workspace/didChangeConfiguration').
+  ;; Keys mirror VSCode's Red Hat Java extension `settings.json' schema.
+  ;; `:json-false' is Eglot's sentinel for JSON `false' -- bare `nil' would
+  ;; serialize to JSON `null'.  Mirror of the lsp-java tuning:
+  ;;   * references.includeDecompiledSources / includeAccessors -> false:
+  ;;     speeds up find-references on dep-heavy projects.
+  ;;   * referencesCodeLens / implementationsCodeLens -> false: removes
+  ;;     the overlay that triggers continuous background references queries.
+  ;;   * format.onType.enabled -> false: matches Eglot's general policy of
+  ;;     not formatting per keystroke (apheleia / format-on-save covers it).
+  ;;   * import.maven / import.gradle -> true: jdtls auto-detects which
+  ;;     applies per project root.
+  ;;   * configuration.maven.userSettings -> ~/.m2/settings-public.xml:
+  ;;     the corp ~/.m2/settings.xml has a `mirrorOf=!nexus' HTTP blocker plus
+  ;;     an active profile pointing at the internal Nexus at
+  ;;     nexus.mosainet.com:8081 / 192.168.130.170:8081 -- both unreachable
+  ;;     from the open net, and they make Maven import hang on TCP timeouts
+  ;;     (75s+ per missing dep) which then blocks every LSP request through
+  ;;     jdtls' main thread.  This points jdtls at a minimal settings.xml
+  ;;     that shares ~/.m2/repository but skips the corp profile; CLI `mvn'
+  ;;     still uses the default settings.xml unless explicitly given `-s'.
+  ;;   * import.exclusions: when a container marker fuses several reactors
+  ;;     under one root (see `fenrir/java-workspace-marker'), jdtls scans the
+  ;;     WHOLE container.  The defaults skip node_modules / .metadata / etc.;
+  ;;     `**/im-pay/**' is added because that subtree is a React Native app
+  ;;     whose `android/` Gradle build references an absent
+  ;;     `@react-native/gradle-plugin' and hangs/crashes the import.  Add more
+  ;;     globs here for any other non-Java subtree under a fused container.
+  (setf (alist-get :java eglot-workspace-configuration)
+        `(:references (:includeDecompiledSources :json-false
+                       :includeAccessors :json-false)
+          :referencesCodeLens (:enabled :json-false)
+          :implementationsCodeLens (:enabled :json-false)
+          :format (:onType (:enabled :json-false))
+          :import (:maven (:enabled t)
+                   :gradle (:enabled t)
+                   :exclusions ["**/node_modules/**"
+                                "**/.metadata/**"
+                                "**/archetype-resources/**"
+                                "**/META-INF/maven/**"
+                                "**/im-pay/**"])
+          :configuration (:maven (:userSettings ,(expand-file-name "~/.m2/settings-public.xml"))))))
+
+;; ----- jdt:// URI scheme handler --------------------------------------------
+;; When M-. lands on a JDK or third-party-jar class, jdtls returns a URI
+;; like `jdt://contents/java.base/java.lang/String.class?...'.  Eglot leaves
+;; non-`file://' schemes as-is; the returned "path" then routes through
+;; `file-name-handler-alist'.  Our handler intercepts `jdt://', finds the
+;; live jdtls server, requests source via `java/classFileContents', and
+;; inserts the result into the visiting buffer.
+
+(defun fenrir/eglot--find-jdtls-server ()
+  "Return any live Eglot server backing a jdtls process.
+Matches by checking the server process command line for our bundle path.
+Returns nil if no jdtls is currently running."
+  (cl-find-if
+   (lambda (server)
+     (let ((cmd (mapconcat #'identity
+                           (process-command (jsonrpc--process server))
+                           " ")))
+       (string-match-p (regexp-quote
+                        (directory-file-name fenrir/jdtls-bundle-dir))
+                       cmd)))
+   ;; `eglot--servers-by-project' is a hash-table (project-key -> server list);
+   ;; iterating it with `cl-loop for ... in' errors "Wrong type argument: sequencep".
+   (let ((all '()))
+     (maphash (lambda (_k v) (setq all (append v all)))
+              eglot--servers-by-project)
+     all)))
+
+(defun fenrir/eglot--jdt-uri-handler (operation &rest args)
+  "File-name handler for `jdt://' URIs -- relays to `java/classFileContents'."
+  (cond
+   ((eq operation 'expand-file-name) (car args))
+   ((memq operation '(file-exists-p file-readable-p)) t)
+   ((memq operation '(file-attributes file-symlink-p file-directory-p)) nil)
+   ((eq operation 'file-name-directory) "")
+   ((eq operation 'file-name-nondirectory) (car args))
+   ((eq operation 'insert-file-contents)
+    (let* ((uri (car args))
+           (visit (cadr args))
+           (server (fenrir/eglot--find-jdtls-server))
+           (content (if server
+                        (jsonrpc-request server :java/classFileContents
+                                         `(:uri ,uri))
+                      "// No jdtls Eglot session active. Open a project Java\n// file first so jdtls can serve this class.\n")))
+      (insert (or content ""))
+      (when visit
+        (setq buffer-file-name uri
+              buffer-read-only t))
+      (list uri (length (or content "")))))
+   (t
+    ;; Fall through for any operation we don't handle: temporarily disable
+    ;; ourselves and re-dispatch.
+    (let ((inhibit-file-name-handlers
+           (cons #'fenrir/eglot--jdt-uri-handler
+                 (and (eq inhibit-file-name-operation operation)
+                      inhibit-file-name-handlers)))
+          (inhibit-file-name-operation operation))
+      (apply operation args)))))
+
+(add-to-list 'file-name-handler-alist
+             '("\\`jdt://" . fenrir/eglot--jdt-uri-handler))
+
+;; Route jdt:// "files" into java-ts-mode (or java-mode if the tree-sitter
+;; grammar isn't available) so eldoc / xref / breadcrumb work in the
+;; synthesized buffer.
+(add-to-list 'auto-mode-alist
+             `("\\`jdt://" . ,(if (treesit-language-available-p 'java)
+                                  'java-ts-mode
+                                'java-mode)))
+
+;; ----- Workspace folder bulk-add (Maven / Gradle scan) ----------------------
+;; Mirror of the old `fenrir/lsp-java-add-roots-under'.  For a single
+;; monorepo, project.el's root detection is usually enough -- drop a
+;; `.project' marker at the monorepo root and jdtls auto-imports every
+;; pom.xml / build.gradle underneath.  This helper is for the rarer case
+;; where one container dir holds multiple unrelated Java projects
+;; (e.g. ~/code/ with sibling repos at varying depths).
+
+(defvar fenrir/eglot-java-scan-skip-dirs
   '("target" "build" "node_modules" "out" "dist" "vendor"
     ".gradle" ".idea" ".mvn" ".m2")
-  "Directory basenames never descended into by `fenrir/lsp-java-add-roots-under'.
-Dotfile prefixes are already skipped by the directory-walk regex; this list
-exists for non-dotfile noise (`target', `build', `node_modules', etc.).")
+  "Directory basenames never descended into during the Maven / Gradle scan.")
 
-(defun fenrir/lsp-java--scan-roots (dir markers)
+(defun fenrir/eglot-java--scan-roots (dir markers)
   "Return absolute paths of Java build roots reachable from DIR (inclusive).
 A directory counts as a root if any of MARKERS exists at its top level;
 once matched, descent into that directory stops."
@@ -498,69 +717,40 @@ once matched, descent into that directory stops."
               (when (and (file-directory-p child)
                          (not (file-symlink-p child))
                          (not (member (file-name-nondirectory child)
-                                      fenrir/lsp-java-scan-skip-dirs)))
+                                      fenrir/eglot-java-scan-skip-dirs)))
                 (push child queue)))))))
     (nreverse results)))
 
-(defun fenrir/lsp-java-add-roots-under (dir)
-  "Register every Maven / Gradle root reachable from DIR as an lsp workspace folder.
-Recursive with prune-on-match (see commentary above).  Interactive call
-prompts for DIR (default ~/code/)."
+(defun fenrir/eglot-java-add-roots-under (dir)
+  "Register every Maven / Gradle root under DIR as a jdtls workspace folder.
+Sends `workspace/didChangeWorkspaceFolders' to the live jdtls Eglot
+session.  Interactive call prompts for DIR (default ~/code/)."
   (interactive (list (read-directory-name "Container dir: " "~/code/")))
-  (require 'lsp-mode)
+  (require 'eglot)
   (let* ((markers '("pom.xml"
                     "build.gradle" "build.gradle.kts"
                     "settings.gradle" "settings.gradle.kts"))
-         (roots (fenrir/lsp-java--scan-roots dir markers)))
-    (dolist (r roots)
-      (lsp-workspace-folders-add r))
-    (message "lsp-java: scanned %s, %d root(s): %s -- run `lsp-workspace-restart' to re-index"
+         (roots (fenrir/eglot-java--scan-roots dir markers))
+         (server (fenrir/eglot--find-jdtls-server)))
+    (unless server
+      (user-error "No jdtls Eglot session active; open a Java file first"))
+    (when roots
+      (jsonrpc-notify
+       server :workspace/didChangeWorkspaceFolders
+       `(:event (:added
+                 ,(apply #'vector
+                         (mapcar (lambda (r)
+                                   `(:uri ,(eglot-path-to-uri r)
+                                     :name ,(file-name-nondirectory
+                                             (directory-file-name r))))
+                                 roots))
+                 :removed []))))
+    (message "eglot-java: registered %d root(s) under %s: %s"
+             (length roots)
              (abbreviate-file-name (expand-file-name dir))
-             (length roots) roots)))
+             roots)))
 
-;; emacs-lsp-booster integration (mirror of the eglot-booster setup above).
-;; The booster binary is the same Rust executable (~/.cargo/bin/emacs-lsp-
-;; booster, installed via `cargo install --locked --version 0.2.1
-;; emacs-lsp-booster').  Two advice forms are needed:
-;;   1. Parse bytecode responses the booster emits (skipped if response is
-;;      regular JSON, falling back to the original `json-parse-buffer').
-;;   2. Prepend `emacs-lsp-booster' to the LSP server's argv, so the booster
-;;      sits between Emacs and the server's stdio.
-;; Gated on `lsp-use-plists' -- whose canonical source is the
-;; `LSP_USE_PLISTS=true' env var set in `early-init.el'.  The booster
-;; emits plist bytecode; if `lsp-use-plists' is nil (env var unset, or
-;; lsp-mode's .elc was compiled without it), the handler chokes with
-;; `wrong-type-argument hash-table-p' on every progress notification.
-(with-eval-after-load 'lsp-mode
-  (when (executable-find "emacs-lsp-booster")
-    (defun fenrir/lsp-booster--advice-json-parse (old-fn &rest args)
-      "Try to parse bytecode (emitted by emacs-lsp-booster) instead of JSON."
-      (or (when (equal (following-char) ?#)
-            (let ((bytecode (read (current-buffer))))
-              (when (byte-code-function-p bytecode)
-                (funcall bytecode))))
-          (apply old-fn args)))
-    (advice-add (if (progn (require 'json) (fboundp 'json-parse-buffer))
-                    'json-parse-buffer
-                  'json-read)
-                :around #'fenrir/lsp-booster--advice-json-parse)
-    (defun fenrir/lsp-booster--advice-final-command (old-fn cmd &optional test?)
-      "Prepend `emacs-lsp-booster' to the resolved LSP server command."
-      (let ((orig-result (funcall old-fn cmd test?)))
-        (if (and (not test?)
-                 (not (file-remote-p default-directory))
-                 lsp-use-plists
-                 (not (functionp 'json-rpc-connection))
-                 (executable-find "emacs-lsp-booster"))
-            (progn
-              (when-let ((cmd-from-exec-path (executable-find (car orig-result))))
-                (setcar orig-result cmd-from-exec-path))
-              (cons "emacs-lsp-booster" orig-result))
-          orig-result)))
-    (advice-add 'lsp-resolve-final-command :around
-                #'fenrir/lsp-booster--advice-final-command)))
-
-;; ----- end Java / lsp-mode exception ------------------------------------
+;; ----- end Java / Eglot block -----------------------------------------------
 
 ;; xref backend tuning -- affects M-. (find-definitions) and M-? (find-
 ;; references) across both LSP and non-LSP buffers.
@@ -698,17 +888,23 @@ prompts for DIR (default ~/code/)."
 ;;
 ;; Eglot, when active, prepends itself to `xref-backend-functions' and
 ;; wins -- so this hook list only matters in buffers without a running
-;; language server (e.g. Java, which isn't in the eglot hook above).
+;; language server.  Java was previously listed here as a fallback while
+;; it ran on lsp-mode (separate xref machinery); after the Eglot
+;; migration Eglot owns Java's xref end-to-end, so Java is no longer in
+;; the hook below.  If you ever need ggtags on a Java buffer (e.g.
+;; jdtls is down), run `M-x ggtags-mode' by hand.
 ;;
 ;; First-run note: as with all use-package blocks here, the archive isn't
 ;; refreshed at startup.  If ggtags isn't installed yet, `M-x my/package-refresh'
 ;; then restart Emacs once.  Also requires the `gtags' / `global' CLIs
 ;; (apt: `global'); run `gtags' at a repo root to generate the index.
+;; Don't run `gtags' at a monorepo top-level dir that has no source
+;; files of its own -- it writes empty 0-byte GTAGS / GRTAGS / GPATH
+;; files that subsequently make `global' report "seems corrupted".
 (use-package ggtags
   :commands ggtags-mode
   :hook ((c-mode      c-ts-mode
           c++-mode    c++-ts-mode
-          java-mode   java-ts-mode
           python-mode python-ts-mode) . ggtags-mode))
 
 ;; Defensive: keep the etags fallback's globals empty so a stray
