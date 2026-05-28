@@ -186,8 +186,22 @@ Returns nil if neither applies, deferring to other `project-find-functions'."
 ;; TSX / JSX note: `.tsx' files open in `tsx-ts-mode' (not `typescript-ts-mode'),
 ;; courtesy of `treesit-auto'.  `.jsx' likewise reuses the TSX parser.  Both
 ;; are covered by the `tsx-ts-mode' hook below.
+;; Eglot is UPGRADED from the copy bundled with Emacs 30.1 to the GNU ELPA
+;; release (`:ensure t', not `:ensure nil').  Why: native call hierarchy and
+;; type hierarchy (`eglot-show-call-hierarchy' / `eglot-show-type-hierarchy',
+;; bound below) only landed in Eglot 1.19 (2025-10); the bundled 30.1 copy has
+;; no client code for `callHierarchy/*' at all, so jdtls / gopls / rust-analyzer
+;; advertising those server-side was unreachable -- "server answers, client
+;; never asks".  Gotcha: `:ensure t' ALONE cannot upgrade a built-in package --
+;; use-package's ensure gates on `package-installed-p', which is already t for a
+;; bundled package, so it never reaches `package-install'.  The real upgrade
+;; needs `package-install-upgrade-built-in' (set in init.el) plus a ONE-TIME
+;; `M-x package-install RET eglot' on a fresh clone (elpa/ is gitignored) -- see
+;; CLAUDE.md "Eglot upgraded to the GNU ELPA release".  eglot-booster's
+;; `eglot--connect' / `jsonrpc--json-read' advice was verified to still apply
+;; against 1.23, so the booster keeps working across the bump.
 (use-package eglot
-  :ensure nil
+  :ensure t
   :hook ((python-ts-mode . eglot-ensure)
          (go-ts-mode      . eglot-ensure)
          (rust-ts-mode    . eglot-ensure)
@@ -339,8 +353,16 @@ Returns nil if neither applies, deferring to other `project-find-functions'."
   ;; -- are intentionally NOT bound: the unified `eglot-code-actions'
   ;; transient already lists them, and adding separate keys clutters the map
   ;; without saving keystrokes.
+  ;; Call / type hierarchy (native, Eglot 1.19+ -- see the `:ensure t' note at
+  ;; the top of this block).  `C-c h c' = call hierarchy (callers / callees as an
+  ;; interactive tree), `C-c h t' = type hierarchy (super- / sub-types).  jdtls,
+  ;; gopls and rust-analyzer all implement these server-side.  Kept under the
+  ;; `C-c h' ("hierarchy") prefix, scoped to `eglot-mode-map' so the keys do
+  ;; nothing in non-LSP buffers.
   :bind (:map eglot-mode-map
-              ("C-c ." . eglot-code-actions)))
+              ("C-c ." . eglot-code-actions)
+              ("C-c h c" . eglot-show-call-hierarchy)
+              ("C-c h t" . eglot-show-type-hierarchy)))
 
 ;; Events-buffer debug toggle.  `eglot-events-buffer-config' is set to
 ;; `:size 0' above (no logging) -- when a server hangs, returns nonsense,

@@ -197,12 +197,15 @@ lists the follow-up keys — no need to memorise prefixes.
   [`init.el`](init.el)'s bootstrap (one-shot global harvest at daemon launch) — neither replaces the other.
   Per-project setup: drop an `.envrc`, then `direnv allow` once. Needs the `direnv`
   binary (`apt install direnv`); without it the mode silently no-ops.
-- **Eglot** **(built-in)**: a zero-config LSP client. Auto-starts when you open a file in
-  a hooked mode **and** the language server binary is on `PATH`. Hooked modes:
+- **Eglot** **(GNU ELPA — upgraded from the bundled copy)**: a zero-config LSP client.
+  Upgraded off the version bundled with Emacs 30.1 to the ELPA release (≥1.19) so that
+  **native call / type hierarchy** is available (`C-c h c` / `C-c h t`, below) — the
+  bundled copy had no client code for `callHierarchy/*`. Auto-starts when you open a file
+  in a hooked mode **and** the language server binary is on `PATH`. Hooked modes:
   `python-ts-mode`, `go-ts-mode`, `rust-ts-mode`, `js-ts-mode`, `typescript-ts-mode`,
-  `c-ts-mode`, `c++-ts-mode` (so: pyright/pylsp, gopls, rust-analyzer,
-  typescript-language-server, clangd). `eglot-autoshutdown t` kills the server when its
-  last buffer closes; the JSON-RPC events log is disabled.
+  `c-ts-mode`, `c++-ts-mode`, `java-ts-mode` (so: pyright/pylsp, gopls, rust-analyzer,
+  typescript-language-server, clangd, jdtls). `eglot-autoshutdown t` kills the server when
+  its last buffer closes; the JSON-RPC events log is disabled.
 - **consult-eglot**: `M-g s` → `consult-eglot-symbols` (bound only in
   `eglot-mode-map`). Asks the language server's `workspace/symbol` index for **every**
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
@@ -255,6 +258,15 @@ lists the follow-up keys — no need to memorise prefixes.
   to `eglot-mode-map` so it doesn't shadow `C-c .` in non-LSP buffers. The unified
   transient already lists `eglot-code-action-organize-imports` /
   `eglot-code-action-quickfix` as entries, so no separate keys for those.
+- **Call / type hierarchy** — `C-c h c` (`eglot-show-call-hierarchy`) and `C-c h t`
+  (`eglot-show-type-hierarchy`), both in `eglot-mode-map`. Native to Eglot ≥1.19 (the
+  reason this config upgrades Eglot off the bundled 30.1 copy — see the Eglot bullet
+  above). `C-c h c` opens an interactive tree of **callers / callees** of the symbol at
+  point; `C-c h t` opens **super- / sub-types**. Especially useful in Java (jdtls): trace
+  who calls a method, or walk an interface's implementors. gopls and rust-analyzer serve
+  these too. The tree buffer is navigable — `RET` jumps to a node's definition (into a
+  decompiled `jdt://` jar class when the caller lives in a dependency, via the URI handler
+  in §7's Java notes).
 - **Inlay hints**: parameter names, inferred types, `&` reference markers etc.
   rendered inline by the LSP. Built-in in Emacs 30 — no external package. Enabled
   via `(eglot-managed-mode . eglot-inlay-hints-mode)` so it lights up on every

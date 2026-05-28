@@ -88,6 +88,16 @@ up new or changed files.  Progress and warnings land in the
 ;; Use `:ensure nil' for packages that are part of Emacs itself.
 (setq use-package-always-ensure t)
 
+;; Let `package-install' / `package-upgrade' REPLACE a package bundled with
+;; Emacs with its GNU ELPA release -- needed to upgrade the built-in Eglot to
+;; >=1.19 for native call/type hierarchy (see `init-languages.el').  Without
+;; this, package.el refuses to shadow a bundled package.  Caveat: this does NOT
+;; make use-package's `:ensure t' auto-upgrade built-ins -- ensure short-circuits
+;; on `package-installed-p' (always t for a bundled package) and never calls
+;; `package-install'.  So a fresh clone still needs a one-time explicit
+;; `M-x my/package-refresh' then `M-x package-install RET eglot' (see CLAUDE.md).
+(setq package-install-upgrade-built-in t)
+
 ;; no-littering: many packages drop a state file straight into ~/.emacs.d/
 ;; (recentf, savehist, transient history, tramp, autosaves, ...).  This
 ;; redirects them into two tidy subdirs -- `var/' (volatile runtime state) and
