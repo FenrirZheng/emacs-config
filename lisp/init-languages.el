@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)        ; cl-letf* (jdt:// consult-eglot guard), cl-remove-if-not
+
 ;; project.el (built-in): project-aware file/buffer/command commands under C-x p.
 ;; ~/ itself is a git repo (the dotfiles tree).  Two interacting problems:
 ;;   1. project.el would otherwise treat all of $HOME as one giant project and
@@ -797,6 +799,38 @@ then HOME, so it is never empty or nil."
               (not (and buffer-file-name
                         (string-prefix-p "jdt://" buffer-file-name))))
             '((name . fenrir/jdt-no-vc-refresh)))
+
+;; Make `consult-eglot-symbols' (M-g s) survive jdt:// results.  jdtls returns
+;; JDK / jar types as `jdt://contents/...' URIs.  consult-eglot's
+;; `consult-eglot--transformer' builds each candidate's display label with
+;; `(file-relative-name (eglot-uri-to-path uri))'; `eglot-uri-to-path' leaves a
+;; jdt:// URI unchanged (it is not a `file://' URI), and `file-relative-name'
+;; then signals "Wrong type argument: stringp, nil" on the non-absolute jdt://
+;; path -- the SAME class of bug guarded for diff-hl / breadcrumb / org-roam /
+;; vc-refresh above.  It bites harder here: the transformer runs per candidate
+;; inside `consult--async-map', and one throwing candidate aborts the WHOLE
+;; refresh, so any Java `workspace/symbol' search that returns a jar/JDK type
+;; (i.e. nearly every type search -- even `Event' pulls in java.util.* etc.)
+;; errors out before showing anything.  Scope a jdt://-safe `file-relative-name'
+;; to the transformer via `cl-letf' (no global override, no per-call overhead
+;; elsewhere): for a jdt:// URI return the URI minus its giant `?...' query
+;; string as the display label (e.g. "jdt://contents/rt.jar/java.awt.event/
+;; PaintEvent.java").  The JUMP path is untouched -- selecting a candidate goes
+;; through `consult-eglot--symbol-information-to-grep-params' ->
+;; `eglot-uri-to-path' -> `find-file' -> our jdt:// handler, none of which calls
+;; `file-relative-name'.  `with-eval-after-load' because consult-eglot loads
+;; lazily (`:after (consult eglot)').
+(with-eval-after-load 'consult-eglot
+  (advice-add 'consult-eglot--transformer :around
+              (lambda (orig sym)
+                (cl-letf* ((frn (symbol-function 'file-relative-name))
+                           ((symbol-function 'file-relative-name)
+                            (lambda (file &optional dir)
+                              (if (and (stringp file) (string-prefix-p "jdt://" file))
+                                  (car (split-string file "?"))
+                                (funcall frn file dir)))))
+                  (funcall orig sym)))
+              '((name . fenrir/jdt-consult-eglot-transformer))))
 
 ;; ----- Workspace folder bulk-add (Maven / Gradle scan) ----------------------
 ;; Mirror of the old `fenrir/lsp-java-add-roots-under'.  For a single

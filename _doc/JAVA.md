@@ -177,6 +177,75 @@ intercepts `jdt://`, finds the live jdtls server, requests source via the
 `extendedClientCapabilities.classFileContentsSupport` is sent in the launcher's
 `:initializationOptions`.
 
+## Code completion
+
+There is **no Java-specific completion code** anywhere in the config. jdtls
+completion rides the same generic Eglot capf path as gopls / pyright / rust-analyzer
+— swap `java-ts-mode` for `go-ts-mode` and the picture below is identical.
+
+### The flow
+
+```
+M-TAB / C-M-i  (completion-at-point)
+      │
+      ▼
+completion-at-point-functions          ← buffer-local capf list
+  ├─ eglot-completion-at-point          (Eglot prepends this when managing the buffer)
+  │      │ textDocument/completion (JSON-RPC over stdio)
+  │      ▼
+  │   eglot-booster ──► jdtls ──► CompletionItem[]
+  └─ cape-dabbrev / cape-file / cape-elisp-block   (global fallback capfs)
+      │
+      ▼
+completion-in-region-function = consult-completion-in-region
+      │
+      ▼
+Vertico minibuffer + orderless + marginalia   ← where candidates actually render
+```
+
+### The three environments
+
+1. **jdtls (server).** Advertises `completionProvider` (and lazy
+   `completionItem/resolve`) at the `initialize` handshake — LSP standard, on by
+   default. This config pushes **no** `java.completion.*` settings, so completion
+   runs on jdtls' factory defaults (see [What's NOT configured](#whats-not-in-this-config)).
+
+2. **Eglot (client).** Once `eglot-ensure` (the `java-mode` / `java-ts-mode` hook
+   in [`lisp/init-languages.el`](../lisp/init-languages.el)) attaches, Eglot adds
+   `eglot-completion-at-point` to the buffer-local
+   `completion-at-point-functions`. It sends `textDocument/completion`, turns the
+   `CompletionItem[]` into Emacs candidates, and resolves documentation/detail
+   lazily (only for the candidate you land on). Because `yas-global-mode` is on
+   ([`lisp/init-snippets.el`](../lisp/init-snippets.el)), Eglot advertises
+   `snippetSupport`, so completing a method expands its parameters into
+   Tab-navigable placeholders. None of this is Java-specific.
+
+3. **Frontend — Vertico minibuffer, not a Corfu popup.** The one non-default
+   decision. `completion-in-region-function` is bound to
+   `consult-completion-in-region` in
+   [`lisp/init-completion.el`](../lisp/init-completion.el) (`:init`, so it wins
+   before the first completion call), so candidates render **in the minibuffer**
+   with the same Vertico + orderless + marginalia stack as `M-x` / `C-x C-f` —
+   not in an at-point popup. `global-corfu-mode` is **deliberately off**
+   ([`lisp/init-corfu.el`](../lisp/init-corfu.el)): enabling it would set its own
+   buffer-local `completion-in-region-function` and silently override the consult
+   routing. Corfu stays installed (`:defer t`) so flipping back is a one-line edit.
+
+### Manual trigger — no type-as-you-go popup
+
+`corfu-auto` is nil and `global-corfu-mode` is off, so there is **no auto-popup**.
+Completion is manual: press `M-TAB` or `C-M-i` (`completion-at-point`). In a Java
+buffer you will not see IntelliJ-style suggestions appearing as you type — you ask
+for them.
+
+### eglot-booster caveat
+
+`eglot-booster` wraps the jdtls stdio (threaded I/O + JSON→bytecode pre-parse).
+Its header note in [`lisp/init-languages.el`](../lisp/init-languages.el) flags that
+tiny *per-keystroke* completion deltas may go marginally **slower** under the
+bytecode trick. That's a non-issue here: completion is manual and routed through
+the minibuffer, so there is no per-keystroke completion request to slow down.
+
 ## Troubleshooting
 
 ### `M-?` says "Visit tags table" / falls back to gtags
@@ -221,6 +290,63 @@ If you want the whole container fused, run
 reactor, make sure no stray `.eglot-java-workspace` marker sits in a deeper dir.
 Run `M-x fenrir/project-reset-cache` after any marker change.
 
+### `M-g s` (type search) errors with "stringp, nil" / shows nothing
+
+`consult-eglot-symbols` (`M-g s`) drives **type search** via `workspace/symbol`.
+On Java it used to crash with `Wrong type argument: stringp, nil` for almost any
+query. Cause: jdtls returns JDK / jar types as `jdt://contents/…` URIs, and
+consult-eglot's `consult-eglot--transformer` builds each candidate's display
+label with `(file-relative-name (eglot-uri-to-path uri))` — `eglot-uri-to-path`
+leaves a `jdt://` URI unchanged (it is not a `file://` URI), so
+`file-relative-name` signals on the non-absolute path. The **same class of bug**
+guarded for diff-hl / breadcrumb / org-roam / vc-refresh (see the `jdt://` block
+in [`lisp/init-languages.el`](../lisp/init-languages.el)), but worse: the
+transformer runs per candidate inside `consult--async-map`, so **one** throwing
+candidate aborts the whole async refresh — and nearly every type search returns
+at least one library type (even `Event` pulls in `java.util.EventListener`),
+so the command errored before showing anything.
+
+Fixed by a `:around` advice on `consult-eglot--transformer` (symbol
+`fenrir/jdt-consult-eglot-transformer`) that scopes a `jdt://`-safe
+`file-relative-name` to the transformer via `cl-letf` (for `jdt://` it returns
+the URI minus its giant `?…` query string as the label). The jump path is
+untouched — selecting a candidate goes through `eglot-uri-to-path` → `find-file`
+→ the `jdt://` handler, which never calls `file-relative-name`. If `M-g s`
+regresses to this error after a package upgrade, check the advice is still
+attached: `M-: (advice-member-p 'fenrir/jdt-consult-eglot-transformer 'consult-eglot--transformer)`.
+
+**Querying for types** (once the crash is fixed). The text you type after the
+auto-inserted `#` is sent to jdtls as the `workspace/symbol` query; jdtls /
+Eclipse matches it with **prefix + CamelCase + `*`/`?` wildcards**, case
+-insensitive — **not** orderless (space-separated any-order tokens do *not* work
+in that part). Measured semantics:
+
+| Type after the `#` | Matches |
+|---|---|
+| `Event` / `Event*` | **starts** with `Event` (`EventListener`, `EventType`) |
+| `*Event` | closest to "**ends** with `Event`" (`PaintEvent`, `OrderCreatedEvent`) — plus some CamelCase/package noise, and JDK/jar types |
+| `*Event*` | **contains** `Event` |
+
+jdtls has no clean "ends-with" mode, so `*Event` is the closest and carries some
+noise. The text after a **second** `#` is an orderless filter applied
+client-side to the candidate label (which includes the full path) — it does
+**not** re-query jdtls. Use it to drop the JDK/jar noise and home in on your
+project (measured against a real `*Event` search — 1140 hits, 25 of them project
+types):
+
+| Full minibuffer input | → jdtls query | → client filter | Result |
+|---|---|---|---|
+| `#*Event#src` | `*Event` | `src` | 25 — **only your project's types**; library `jdt://` URIs have no `src` in their path (`#main` / `#<repo-name>` isolate the same way) |
+| `#*Event#src gcash` | `*Event` | `src gcash` | 7 — orderless tokens are **space-separated, any order, AND, case-insensitive** |
+| `#*Event#src gcash success` | `*Event` | `src gcash success` | 1 — `GCashPaySuccessCallbackEvent` |
+| `#*Event#src#gcash` | `*Event` | `src#gcash` | **0** — a *third* `#` is a literal char orderless can't match |
+
+So: at most **two** `#` are structural — the 1st is the auto-inserted separator,
+the 2nd is the jdtls-query ↔ filter boundary. Everything after the 2nd `#` is
+the orderless filter; add further conditions with **spaces, not more `#`**. You
+can also narrow by symbol kind with the consult narrow key (`< c` Class, `< i`
+Interface, `< e` Enum).
+
 ## Configuration map
 
 | What | Symbol / file |
@@ -244,6 +370,13 @@ Run `M-x fenrir/project-reset-cache` after any marker change.
   work (Go, Python, etc.).
 - **Build/test runner UI.** `M-x compile RET mvn test RET` from the project
   root; no integrated runner.
+- **Completion tuning.** No `java.completion.*` keys are pushed to jdtls
+  (`guessMethodArguments`, `maxResults`, `importOrder`, `favoriteStaticMembers`,
+  …) — jdtls runs its factory completion defaults. To change that, add a
+  `:completion (…)` entry to the `:java` plist in `eglot-workspace-configuration`
+  (the `(setf (alist-get :java …))` block in
+  [`lisp/init-languages.el`](../lisp/init-languages.el)). See
+  [Code completion](#code-completion) for the path that those settings would feed.
 
 ## References
 
