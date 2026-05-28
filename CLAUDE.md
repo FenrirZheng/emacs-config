@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Personal Emacs 30.1 config. Tracked: hand-authored Elisp ([`init.el`](init.el), [`early-init.el`](early-init.el), [`custom.el`](custom.el), [`lisp/`](lisp/)), bootstrap scripts ([`shell/`](shell/)), the [pre-commit hook](.githooks/pre-commit), and docs (`CLAUDE.md` itself, [`README.md`](README.md), [`FEATURES.md`](FEATURES.md), [`_doc/GO.md`](_doc/GO.md)). Everything reproducible or stateful is gitignored — `elpa/`, `eln-cache/`, the no-littering `var/` + `etc/`, the vendored `eca/` binary, and `tree-sitter/` grammars.
+Personal Emacs 30.1 config. Tracked: hand-authored Elisp ([`init.el`](init.el), [`early-init.el`](early-init.el), [`custom.el`](custom.el), [`lisp/`](lisp/)), bootstrap scripts ([`shell/`](shell/)), the [pre-commit hook](.githooks/pre-commit), and docs (`CLAUDE.md` itself, [`README.md`](README.md), [`FEATURES.md`](FEATURES.md), [`_doc/GO.md`](_doc/GO.md), [`_doc/JAVA.md`](_doc/JAVA.md)). Everything reproducible or stateful is gitignored — `elpa/`, `eln-cache/`, the no-littering `var/` + `etc/`, the vendored `eca/` binary, and `tree-sitter/` grammars.
 
 The companion to this file is [`FEATURES.md`](FEATURES.md) (the "what keys do I press" cheat sheet) — keep them in sync when bindings or workflow change.
 
@@ -76,4 +76,8 @@ If the hook blocks a commit, fix the underlying secret; do not reach for `--no-v
 
 ## Language-specific docs
 
-[`_doc/GO.md`](_doc/GO.md) — Go workflow (go-ts-mode + Eglot + gopls + Vertico-driven symbol search). Future per-language guides land in [`_doc/`](_doc/).
+[`_doc/GO.md`](_doc/GO.md) — Go workflow (go-ts-mode + Eglot + gopls + Vertico-driven symbol search).
+
+[`_doc/JAVA.md`](_doc/JAVA.md) — Java workflow (java-ts-mode + Eglot + jdtls): two-tier project-root resolution, the `.eglot-java-workspace` container marker for fusing multiple Maven reactors into one workspace, the `~/.m2/settings-public.xml` Nexus workaround, and the Gradle-importer caveat.
+
+Future per-language guides land in [`_doc/`](_doc/).

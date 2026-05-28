@@ -1,0 +1,252 @@
+# Java development
+
+How Java editing works in this Emacs configuration: which packages drive what,
+where they're configured, what to do when it breaks. Companion to the
+keybinding cheat sheet in [FEATURES.md](../FEATURES.md), and to the
+architecture notes in [CLAUDE.md](../CLAUDE.md) (the "Java on Eglot + jdtls"
+and "Java project roots" bullets).
+
+Java migrated from `lsp-mode` + `lsp-java` to **Eglot + jdtls** on the
+`try/java-on-eglot` branch. The whole stack lives in
+[`lisp/init-languages.el`](../lisp/init-languages.el).
+
+## Stack
+
+| Layer | Component | Where it lives |
+|---|---|---|
+| JDK | `java` (Corretto 21 here) | `~/.sdkman/candidates/java/current/bin/java` — any JDK 17+ on PATH works |
+| LSP server | `eclipse.jdt.ls` (jdtls) | [`var/lsp-java/eclipse.jdt.ls/server/`](../var/lsp-java/) — ~150 MB bundle inherited from the old lsp-java install, kept to avoid a re-download |
+| Server launcher | `fenrir/jdtls-launch-command` | [`lisp/init-languages.el`](../lisp/init-languages.el) — builds the `java -jar org.eclipse.equinox.launcher_*.jar …` argv |
+| Major mode | `java-ts-mode` (falls back to `java-mode`) | Built-in; `treesit-auto` remaps `.java` when the grammar is installed |
+| LSP client | `eglot` | Built-in; `eglot-ensure` hooked on `java-mode` / `java-ts-mode` like every other language |
+| Client speedup | `emacs-lsp-booster` | `~/.cargo/bin/emacs-lsp-booster` — `eglot-booster` wraps the jdtls connection automatically |
+| Workspace metadata | Eclipse `-data` dir | [`var/lsp-java/workspace/`](../var/lsp-java/) — delete out-of-band to force a full re-import |
+| Diagnostics / hover / xref | `flymake` / `eldoc` / `xref` ← eglot ← jdtls | Built-in; `M-.` / `M-?` / `C-c d` |
+| Maven settings | [`~/.m2/settings-public.xml`](file:///home/fenrir/.m2/settings-public.xml) | Pointed at via `java.configuration.maven.userSettings` — see [Maven dependency resolution](#maven-dependency-resolution) |
+
+The launcher's JVM args mirror the old lsp-java preset (`-Xmx3G`, ParallelGC),
+and the `:java` workspace config turns off decompiled-source/accessor matches
+and code-lens for faster references. Both are pushed two ways: at the
+`initialize` request (via the launcher's trailing `:initializationOptions`)
+**and** via `workspace/didChangeConfiguration`. The init-time copy is
+load-bearing for anything jdtls reads during its first project scan.
+
+## Prerequisites
+
+```bash
+# A JDK 17+ on PATH (jdtls 1.57 needs 17+; this machine uses Corretto 21).
+java -version
+
+# The jdtls bundle is already vendored under var/lsp-java/ (not in git).
+# To reinstall from scratch, download a jdtls release and unpack so that
+# var/lsp-java/eclipse.jdt.ls/server/plugins/org.eclipse.equinox.launcher_*.jar
+# exists; fenrir/jdtls-bundle-dir points there.
+
+# emacs-lsp-booster (shared with the Eglot side for every language):
+cargo install emacs-lsp-booster        # or grab a release binary onto PATH
+
+# Tree-sitter Java grammar — installed automatically on first .java open by
+# treesit-auto; lands in ~/.emacs.d/tree-sitter/.
+```
+
+## Project resolution — the crux
+
+jdtls does cross-project find-references at the **Eclipse workspace** level:
+every Maven/Gradle project imported into the single `-data` workspace is
+searchable from any other. The hard part is making Eglot — which is
+single-root per server — put the right set of projects into one workspace.
+
+Root resolution is `fenrir/project-find-java-build-root`, prepended to
+`project-find-functions` ahead of the built-in `project-try-vc`. It works in
+two tiers:
+
+### Tier 1 — container marker (fuse many reactors)
+
+If any ancestor of the file holds a `.eglot-java-workspace` marker (filename
+in `fenrir/java-workspace-marker`), **that ancestor is the project root for
+every Java file beneath it**. Use this when one directory holds several
+*independent* Maven/Gradle reactors that you want to navigate as a unit —
+e.g. `~/code/hitok2/` containing `im-combined-api`, `im-combined-hitok`,
+`hitok-java-backend`. All of them resolve to `~/code/hitok2/`, so they share
+**one Eglot server → one jdtls workspace**, and opening a file in a sibling
+repo never spawns a second jdtls fighting over the shared `-data` dir.
+
+### Tier 2 — topmost-pom (standalone reactor)
+
+Otherwise the root is the **highest consecutive ancestor** that has
+`pom.xml` / `build.gradle` / `settings.gradle` (or the `.kts` variants). For a
+normal multi-module Maven project this is the aggregator/parent-pom dir, and
+jdtls auto-imports every module under it. No configuration needed.
+
+`.project` files are deliberately **ignored** for root detection: Eclipse m2e
+regenerates them inside every module on import, and the built-in
+deepest-marker-wins logic would then pin jdtls to a too-deep sub-module
+(symptom: `M-?` only returns hits inside that one sub-module).
+
+## Setting up a new Java project
+
+### Case A — a single reactor (one aggregator pom, nested modules)
+
+Nothing to do. Open any `.java` file; Tier 2 finds the topmost pom and jdtls
+imports the whole reactor. Cross-module references work immediately.
+
+### Case B — a container of multiple independent reactors
+
+```
+M-x fenrir/eglot-java-set-workspace-root RET <container-dir> RET
+```
+
+This drops the `.eglot-java-workspace` marker, resets the project cache, and
+offers to restart any running jdtls session. Then open a `.java` file under
+the container — one server now covers every reactor beneath it.
+
+To undo: `M-x fenrir/eglot-java-unset-workspace-root` (falls back to Tier 2).
+
+There is also `M-x fenrir/eglot-java-add-roots-under RET <dir> RET`, which adds
+Maven/Gradle roots to a *running* session via
+`workspace/didChangeWorkspaceFolders` — handy for a one-off, but it does **not**
+survive a restart and a sibling-repo buffer can still spawn a second server.
+The marker is the durable mechanism; prefer it.
+
+### Verify
+
+```elisp
+M-: (project-current) RET        ; should report the intended root
+M-: (eglot-current-server) RET   ; non-nil once connected
+M-x eglot-events-buffer          ; live JSON-RPC, or "No current Eglot" if unconnected
+```
+
+For a fused workspace, opening a file in each sub-repo should keep
+`eglot--servers-by-project` at a single key (one server). A cross-project
+`M-?` should list hits whose paths span more than one sub-repo.
+
+## Maven dependency resolution
+
+jdtls is pointed at [`~/.m2/settings-public.xml`](file:///home/fenrir/.m2/settings-public.xml)
+through `java.configuration.maven.userSettings`. The default `~/.m2/settings.xml`
+mirrors to an internal corporate Nexus (`nexus.mosainet.com:8081` /
+`192.168.130.170:8081`) that is unreachable off the corp network — Maven then
+hangs on TCP connect timeouts (75 s+ per uncached dependency), and because
+jdtls' import job blocks its main thread, **every** LSP request times out
+(even lightweight `workspace/symbol`). The public settings file shares the
+`~/.m2/repository` cache but skips the corp profile and mirror, so dependencies
+resolve from each pom's declared repositories + Maven Central, and anything
+genuinely unavailable simply fails to resolve instead of hanging.
+
+CLI `mvn` is unaffected — it still uses the default `~/.m2/settings.xml` unless
+invoked with `-s ~/.m2/settings-public.xml`.
+
+If a project needs deps that only live on a repo reachable from elsewhere
+(corp Nexus, etc.), either connect to that network (VPN) or pre-cache the
+deps into `~/.m2/repository` while you have access.
+
+## The Gradle importer in container workspaces
+
+`fenrir/jdtls--java-settings` sets `java.import.gradle.enabled = false` whenever
+the connecting buffer is inside a container-marker workspace. Reason:
+Buildship (jdtls' Gradle importer) **ignores `java.import.exclusions`**, so a
+non-Java Gradle subtree under the container — e.g. a React Native app's
+`android/` build referencing an absent `@react-native/gradle-plugin` — stalls
+or crashes the import. Container Java here is all Maven, so disabling Gradle
+costs nothing.
+
+**Limitation:** this is keyed on the container marker, not per-subdirectory. If
+you build a container that legitimately mixes Maven and Gradle *Java* projects,
+the current helper turns Gradle off for the whole workspace. To support that,
+edit `fenrir/jdtls--java-settings` to keep Gradle on and instead exclude the
+specific offending subtree (note that, per the above, `import.exclusions` alone
+won't stop Buildship — you'd need a sharper mechanism). Standalone Gradle
+projects (no marker → their own server) keep Gradle enabled and need no change.
+
+## Navigation
+
+| Key | Command | Notes |
+|---|---|---|
+| `M-.` | `xref-find-definitions` | Into project source, or into JDK / jar classes via the `jdt://` handler (below) |
+| `M-,` | `xref-go-back` | Pop the marker stack |
+| `M-?` | `xref-find-references` | Cross-project across the whole fused workspace; results render in the consult minibuffer UI |
+| `M-g s` | `consult-eglot-symbols` | Workspace-symbol search across all imported projects |
+| `C-c .` | `eglot-code-actions` | Quick-fix / organize-imports / refactors |
+| `C-c d` | `eldoc-doc-buffer` | Full hover doc in a side window |
+
+`M-.` into a JDK class (`java.lang.String`) or a third-party-jar class returns a
+`jdt://contents/…` URI, which Eglot has no native handler for. The handler
+registered in `file-name-handler-alist` (see `fenrir/eglot--jdt-uri-handler`)
+intercepts `jdt://`, finds the live jdtls server, requests source via the
+`java/classFileContents` LSP extension, and shows it read-only. The matching
+`extendedClientCapabilities.classFileContentsSupport` is sent in the launcher's
+`:initializationOptions`.
+
+## Troubleshooting
+
+### `M-?` says "Visit tags table" / falls back to gtags
+
+Eglot isn't attached to the buffer, so xref drops to the etags/ggtags
+fallback. Check `M-: (eglot-current-server)` — if nil, the most common causes
+are (1) no project root resolved (`M-: (project-current)` is nil — drop a
+marker or check there's a pom above), or (2) jdtls failed to start (see below).
+
+### Every request times out ("jsonrpc-error … Timed out")
+
+jdtls' import is blocked. Almost always the unreachable-Nexus hang — confirm
+with `ss -tnp | grep java` showing a `SYN-SENT` to a `:8081` host. The
+`settings-public.xml` wiring should prevent this; if it regressed, verify
+`M-: (fenrir/jdtls--java-settings)` includes the `userSettings` path. Otherwise
+the import is just slow on a cold cache — wait and retry.
+
+### jdtls crashes on restart (`DeltaDataTree` / workspace restore errors)
+
+The on-disk workspace got into a half-imported state. Reset it:
+
+```bash
+pkill -9 -f eclipse.jdt.ls.core.product
+rm -rf ~/.emacs.d/var/lsp-java/workspace
+```
+```elisp
+M-x fenrir/project-reset-cache
+;; then reopen a .java file
+```
+
+### `M-?` shows duplicate hits / "project already exists"
+
+The same Maven artifact is checked out twice under one container (e.g. a
+standalone `im-combined-hitok` plus a nested `im-combined-api/im-combined-hitok`).
+jdtls imports both as duplicate JDT projects. Keep one copy under the container.
+
+### Root resolved too deep (only one sub-module's references show)
+
+Project detection landed on a sub-module. Confirm with `M-: (project-current)`.
+If you want the whole container fused, run
+`fenrir/eglot-java-set-workspace-root` at the container; if you want a single
+reactor, make sure no stray `.eglot-java-workspace` marker sits in a deeper dir.
+Run `M-x fenrir/project-reset-cache` after any marker change.
+
+## Configuration map
+
+| What | Symbol / file |
+|---|---|
+| `eglot-ensure` hooks | `eglot` `use-package` `:hook` in [`init-languages.el`](../lisp/init-languages.el) |
+| jdtls launcher + JVM args + init options | `fenrir/jdtls-launch-command`, `fenrir/jdtls--java-settings` |
+| Bundle / workspace paths | `fenrir/jdtls-bundle-dir`, `fenrir/jdtls-workspace-dir` |
+| Project root resolution | `fenrir/project-find-java-build-root` (on `project-find-functions`) |
+| Container marker filename | `fenrir/java-workspace-marker` (`.eglot-java-workspace`) |
+| Set / unset container root | `fenrir/eglot-java-set-workspace-root`, `…-unset-workspace-root` |
+| Ad-hoc workspace folders | `fenrir/eglot-java-add-roots-under` |
+| `jdt://` source handler | `fenrir/eglot--jdt-uri-handler`, `fenrir/eglot--find-jdtls-server` |
+| Per-server `:java` settings | `:java` entry of `eglot-workspace-configuration` |
+| Maven settings | [`~/.m2/settings-public.xml`](file:///home/fenrir/.m2/settings-public.xml) |
+
+## What's NOT in this config
+
+- **Debugging.** `dap-java` went away with lsp-mode, and `dape` has no Java
+  adapter. Use IntelliJ / VSCode for real Java debugging until either changes.
+  See [FEATURES.md §7](../FEATURES.md) for the dape-based debugging that does
+  work (Go, Python, etc.).
+- **Build/test runner UI.** `M-x compile RET mvn test RET` from the project
+  root; no integrated runner.
+
+## References
+
+- [CLAUDE.md](../CLAUDE.md) — the "Java on Eglot + jdtls" and "Java project
+  roots" architecture bullets.
+- [_doc/GO.md](GO.md) — the sibling Go guide; same Eglot/xref/consult plumbing.
