@@ -46,9 +46,22 @@
 (defvar fenrir/file-name-handler-alist file-name-handler-alist)
 (setq file-name-handler-alist nil)
 
+;; Restore by APPENDING the saved originals to whatever is current -- NOT a
+;; plain overwrite.  A plain `(setq file-name-handler-alist saved)' would wipe
+;; any handler a module registered DURING init (the list is nil while init
+;; runs, so an `add-to-list' lands in an otherwise-empty list).  The jdt://
+;; URI handler in `init-languages.el' is exactly such an addition; an overwrite
+;; here silently un-registers it, so jdt:// URIs fall through to the default
+;; handler, `expand-file-name' mangles them into `<cwd>/jdt:/contents/...', and
+;; navigating into a jar class errors with "make-directory" / "stringp, nil".
+;; `copy-sequence' so `delete-dups' (which splices via `setcdr') can't mutate
+;; the shared tail of the saved list.
 (add-hook 'emacs-startup-hook
           (lambda ()
-            (setq file-name-handler-alist fenrir/file-name-handler-alist)))
+            (setq file-name-handler-alist
+                  (delete-dups
+                   (append file-name-handler-alist
+                           (copy-sequence fenrir/file-name-handler-alist))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Package system: defer activation to init.el

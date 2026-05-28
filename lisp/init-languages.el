@@ -650,13 +650,35 @@ Matches by checking each server's process command line for our bundle path."
   "Return any one live Eglot server backing a jdtls process, or nil."
   (car (fenrir/eglot--jdtls-servers)))
 
+(defun fenrir/eglot--jdt-uri-directory ()
+  "Return a REAL existing directory to stand in for a `jdt://' URI's dir part.
+A `jdt://' URI has no real directory; returning the empty string (the
+naive choice) makes `find-file-noselect' set the visiting buffer's
+`default-directory' to \"\", which then poisons every path helper that
+runs on display / idle -- project.el, breadcrumb, doom-modeline -- with
+`(file-name-directory nil)' / `(file-relative-name nil ...)' crashes
+(\"Wrong type argument: stringp, nil\"), and only on the FIRST visit
+before their caches populate.  Returning the originating jdtls server's
+project root instead keeps those helpers on real directories AND lets
+`eglot-ensure' in the jdt:// buffer attach to the SAME server (rather
+than guessing a transient project).  Falls back to the jdtls bundle dir,
+then HOME, so it is never empty or nil."
+  (file-name-as-directory
+   (expand-file-name
+    (or (ignore-errors
+          (when-let* ((server (fenrir/eglot--find-jdtls-server)))
+            (project-root (eglot--project server))))
+        (and (file-directory-p fenrir/jdtls-bundle-dir) fenrir/jdtls-bundle-dir)
+        "~/"))))
+
 (defun fenrir/eglot--jdt-uri-handler (operation &rest args)
   "File-name handler for `jdt://' URIs -- relays to `java/classFileContents'."
   (cond
    ((eq operation 'expand-file-name) (car args))
    ((memq operation '(file-exists-p file-readable-p)) t)
    ((memq operation '(file-attributes file-symlink-p file-directory-p)) nil)
-   ((eq operation 'file-name-directory) "")
+   ;; A real directory, NOT "" -- see `fenrir/eglot--jdt-uri-directory'.
+   ((eq operation 'file-name-directory) (fenrir/eglot--jdt-uri-directory))
    ((eq operation 'file-name-nondirectory) (car args))
    ((eq operation 'insert-file-contents)
     (let* ((uri (car args))
@@ -667,9 +689,15 @@ Matches by checking each server's process command line for our bundle path."
                                          `(:uri ,uri))
                       "// No jdtls Eglot session active. Open a project Java\n// file first so jdtls can serve this class.\n")))
       (insert (or content ""))
-      (when visit
-        (setq buffer-file-name uri
-              buffer-read-only t))
+      ;; Record the URI as the buffer's file name (re-navigation + eglot need
+      ;; it), but do NOT set `buffer-read-only' here.  `insert-file-contents'
+      ;; runs BEFORE find-file's `normal-mode'; a read-only buffer makes
+      ;; `java-ts-mode' setup (and its hooks) signal "Buffer is read-only",
+      ;; which `normal-mode' catches and then leaves the buffer in
+      ;; `fundamental-mode' -- the classic "first visit errors, second visit
+      ;; (buffer already exists, no re-setup) works".  Read-only is applied
+      ;; afterwards by `fenrir/jdt--make-buffer-read-only' on `find-file-hook'.
+      (when visit (setq buffer-file-name uri))
       (list uri (length (or content "")))))
    (t
     ;; Fall through for any operation we don't handle: temporarily disable
@@ -691,6 +719,84 @@ Matches by checking each server's process command line for our bundle path."
              `("\\`jdt://" . ,(if (treesit-language-available-p 'java)
                                   'java-ts-mode
                                 'java-mode)))
+
+;; Make jdt:// buffers read-only AFTER find-file has fully set them up (major
+;; mode + mode hooks).  Setting read-only earlier (in the `insert-file-contents'
+;; handler) breaks `normal-mode'; see the note there.  Appended (`t') so it runs
+;; last on `find-file-hook', after any other hook that might still modify the
+;; freshly-loaded buffer.
+(defun fenrir/jdt--make-buffer-read-only ()
+  "Mark the current buffer read-only if it visits a `jdt://' URI."
+  (when (and buffer-file-name (string-prefix-p "jdt://" buffer-file-name))
+    (setq buffer-read-only t)))
+(add-hook 'find-file-hook #'fenrir/jdt--make-buffer-read-only t)
+
+;; Keep diff-hl OUT of jdt:// buffers.  `global-diff-hl-mode' (init-git.el)
+;; turns `diff-hl-mode' on in every buffer that merely HAS a `buffer-file-name'
+;; -- and our jdt:// buffers do (the URI).  diff-hl then runs its flydiff timer,
+;; whose only "skip" guard is `(file-exists-p buffer-file-name)' -- which our
+;; handler answers `t' to.  So flydiff proceeds into `diff-hl-update', calls
+;; `vc-backend' on the synthetic URI (-> nil), and the timer dies with
+;; "Wrong type argument: stringp, nil" (intermittently, since it is a timer,
+;; only on the FIRST visit before the buffer is reused).  A decompiled
+;; read-only class has nothing to diff against VCS, so just don't activate.
+;; `:before-while' so a nil return skips the real `turn-on-diff-hl-mode';
+;; order-independent vs whenever global-diff-hl-mode's find-file-hook fires.
+(advice-add 'turn-on-diff-hl-mode :before-while
+            (lambda ()
+              (not (and buffer-file-name
+                        (string-prefix-p "jdt://" buffer-file-name))))
+            '((name . fenrir/jdt-no-diff-hl)))
+
+;; Keep org-roam OUT of jdt:// buffers.  `org-roam-db-autosync-mode'
+;; (init-org-roam.el) puts `org-roam-db-autosync--setup-file-h' on
+;; `find-file-hook'; it runs `org-roam-file-p' on EVERY opened file, which does
+;; `(file-relative-name path org-roam-directory)'.  On a jdt:// URI that
+;; signals "Wrong type argument: stringp, nil", and because it runs on
+;; find-file-hook the error aborts the visit -> the buffer is left in
+;; `fundamental-mode' and the user sees `file-relative-name: ... nil'
+;; ("first visit errors, second reuses the buffer and works").  A decompiled
+;; jar class is never an Org-roam note, so short-circuit `org-roam-file-p' to
+;; nil for jdt:// buffers.  `with-eval-after-load' because org-roam loads after
+;; this module; `:before-while' returning nil skips org-roam-file-p's body.
+(with-eval-after-load 'org-roam
+  (advice-add 'org-roam-file-p :before-while
+              (lambda (&optional file)
+                (let ((f (or file (buffer-file-name (buffer-base-buffer)))))
+                  (not (and f (string-prefix-p "jdt://" f)))))
+              '((name . fenrir/jdt-no-org-roam))))
+
+;; Skip breadcrumb's PROJECT crumbs in jdt:// buffers.  `breadcrumb-mode'
+;; (global) enables in the jdt:// buffer during `normal-mode' and immediately
+;; builds its header line; `breadcrumb-project-crumbs' -> `file-relative-name'
+;; chokes on the synthetic URI.  Root cause shared by the diff-hl and org-roam
+;; cases: our `expand-file-name' handler returns the jdt:// URI verbatim (it
+;; must, to keep the URI navigable), but it is NOT an absolute path, so
+;; `file-relative-name's internal path split feeds `string-prefix-p' a nil ->
+;; "Wrong type argument: stringp, nil".  Because this fires during normal-mode
+;; the visit aborts (fundamental-mode + the error the user sees).  Returning nil
+;; for jdt:// skips only the project crumbs; the imenu/symbol crumbs (the useful
+;; part inside a decompiled class) still render.  `with-eval-after-load' for
+;; load order; `:before-while' nil-return skips the crumbs body.
+(with-eval-after-load 'breadcrumb
+  (advice-add 'breadcrumb-project-crumbs :before-while
+              (lambda (&rest _)
+                (not (and buffer-file-name
+                          (string-prefix-p "jdt://" buffer-file-name))))
+              '((name . fenrir/jdt-no-breadcrumb-project))))
+
+;; Skip `vc-refresh-state' in jdt:// buffers.  It runs on `find-file-hook' and
+;; calls `(vc-backend buffer-file-name)', which on the non-absolute jdt:// URI
+;; hits the same `string-prefix-p' nil (see the breadcrumb note above).  Here
+;; the error is non-fatal -- vc-refresh-state wraps it in `with-demoted-errors
+;; "VC refresh error: %S"' so the visit still succeeds -- but it spams that
+;; message on every first visit.  A decompiled jar class is never under VC, so
+;; short-circuit.  vc-hooks is preloaded, so a plain `advice-add' is fine.
+(advice-add 'vc-refresh-state :before-while
+            (lambda ()
+              (not (and buffer-file-name
+                        (string-prefix-p "jdt://" buffer-file-name))))
+            '((name . fenrir/jdt-no-vc-refresh)))
 
 ;; ----- Workspace folder bulk-add (Maven / Gradle scan) ----------------------
 ;; Mirror of the old `fenrir/lsp-java-add-roots-under'.  For a single
