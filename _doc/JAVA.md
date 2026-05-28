@@ -347,6 +347,30 @@ the orderless filter; add further conditions with **spaces, not more `#`**. You
 can also narrow by symbol kind with the consult narrow key (`< c` Class, `< i`
 Interface, `< e` Enum).
 
+**Where this syntax comes from** — `#*Event#src token token` is not one tool's
+language; it is three independent conventions stacked in one input box:
+
+1. **The `#…#` split → Consult.** This is consult's *async split*
+   (`consult-async-split-style`, default `perl`). The `#async#filter` form — and
+   the rule that the first punctuation char chooses the separator, so
+   `/async/filter` works too — is named after Perl's swappable regex delimiter
+   (`m#…#`). It shows up **only in consult's async commands**
+   (`consult-ripgrep`, `consult-eglot-symbols`, …); plain `M-x` / `C-x C-f` /
+   `C-s` (`consult-line`) have no `#` split, which is why this looks unfamiliar —
+   there the whole input is orderless.
+2. **The `*` / CamelCase in the query part → jdtls / Eclipse `SearchPattern`.**
+   Consult passes that part verbatim to the backend; for `M-g s` the backend is
+   jdtls' `workspace/symbol`. Nothing to do with consult or orderless — a
+   different backend (ripgrep, gopls) would parse that part in its own language.
+3. **The space-separated tokens in the filter part → orderless.** The filter is
+   matched client-side by `completion-styles` (`'(orderless basic)` in
+   [`lisp/init-completion.el`](../lisp/init-completion.el)); orderless splits on
+   spaces (`orderless-component-separator`) → any-order, AND, case-insensitive.
+
+Knobs: `(setq consult-async-split-style nil)` removes the `#` (whole input goes
+to the backend, no client-side filter); `'comma` switches the separator to `,`
+and stops auto-inserting it.
+
 ## Configuration map
 
 | What | Symbol / file |

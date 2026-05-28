@@ -398,6 +398,23 @@ Returns nil if neither applies, deferring to other `project-find-functions'."
   (define-widget 'tree-widget-leaf-icon  'tree-widget-icon "" :tag "·" :glyph-name "leaf")
   (define-widget 'tree-widget-empty-icon 'tree-widget-icon "" :tag "·" :glyph-name "empty"))
 
+;; Diagnostic-tag faces (TTY visibility).  LSP servers tag certain diagnostics
+;; semantically instead of erroring: tag 1 = `Unnecessary' (unused import /
+;; local / unreachable branch), tag 2 = `Deprecated' (@Deprecated API).  Eglot
+;; renders them with the two faces below (eglot.el `eglot--tag-faces'), both
+;; defaulting to `:inherit shadow' -- which on a low-contrast TTY theme can be
+;; invisible, making the feature look dead.  Keep the theme-relative dimming
+;; (inherit shadow tracks the active theme) but add a SECOND visual channel --
+;; italic for unused, strike-through for deprecated -- so the signal survives
+;; even when `shadow' barely differs from the background.  These are eglot-wide
+;; faces (every language, not just Java).  `with-eval-after-load' so the faces
+;; exist (defined by eglot's defface) before we override them.
+(with-eval-after-load 'eglot
+  (set-face-attribute 'eglot-diagnostic-tag-unnecessary-face nil
+                      :inherit 'shadow :slant 'italic)
+  (set-face-attribute 'eglot-diagnostic-tag-deprecated-face nil
+                      :inherit 'shadow :strike-through t))
+
 ;; Events-buffer debug toggle.  `eglot-events-buffer-config' is set to
 ;; `:size 0' above (no logging) -- when a server hangs, returns nonsense,
 ;; or you want to inspect a specific JSON-RPC message, flip these on, repro
