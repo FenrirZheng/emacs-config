@@ -8,7 +8,8 @@
 ;; In-buffer completion frontend: Vertico minibuffer, NOT Corfu popup.
 ;;
 ;; `completion-in-region-function' is the single switch that decides which UI
-;; handles in-buffer completion (`M-TAB' / `C-M-i' / `completion-at-point').
+;; handles in-buffer completion (`C-<tab>' / `C-M-i' / `completion-at-point';
+;; see the `keymap-global-set' at the bottom of this file for the C-<tab> bind).
 ;; Below we route it to `consult-completion-in-region' (set on the consult
 ;; block in init-completion.el), which renders the candidates in the
 ;; minibuffer with the same Vertico + orderless + marginalia stack used by
@@ -62,6 +63,13 @@
   (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
+
+;; In-buffer completion trigger.  Emacs' defaults are `M-TAB' and `C-M-i';
+;; `M-TAB' never reaches Emacs under GNOME (the WM grabs Alt+Tab), so bind a
+;; conflict-free `C-<tab>' to `completion-at-point' too.  This is the key that
+;; fires TempEl `tempel-expand', Eglot, and the cape backends -- all rendered
+;; through `consult-completion-in-region' (Vertico).  `C-M-i' still works.
+(keymap-global-set "C-<tab>" #'completion-at-point)
 
 (provide 'init-corfu)
 ;;; init-corfu.el ends here

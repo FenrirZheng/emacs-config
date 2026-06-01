@@ -1,0 +1,326 @@
+;;; -*- mode: lisp-data; -*-
+;;
+;; TempEl templates -- the `tempel-path' file for this config.
+;; Syntax (tempo/tempel, NOT yasnippet): "lit" string | p field | (p "PROMPT")
+;; | (p "DEFAULT" name) named field | (s name) mirror | r / r> region-or-field
+;; | n newline | > indent | n> newline+indent | q final cursor | & bol-newline.
+;; Any other Lisp form is evaluated and its string result inserted.
+;;
+;; A bare symbol line sets the major-mode(s) the following templates apply to;
+;; `fundamental-mode' templates are GLOBAL (available in every buffer).
+;; Companion config: lisp/init-snippets.el.  Cheat sheet: FEATURES.md.
+
+fundamental-mode
+
+;; Global, mode-agnostic helpers -- date/time stamps, dividers, plain tags.
+(today (format-time-string "%Y-%m-%d"))
+(now (format-time-string "%Y-%m-%d %H:%M"))
+(nowtz (format-time-string "%Y-%m-%d %H:%M %z"))
+(time (format-time-string "%H:%M:%S"))
+(iso (format-time-string "%Y-%m-%dT%H:%M:%S%z"))
+(stamp (format-time-string "%Y-%m-%d %H:%M") " " p)
+(date (format-time-string "%Y%m%d"))
+(div (or comment-start "") "----------------------------------------" n)
+(box (or comment-start "") " " (make-string 60 ?=) n (or comment-start "") " " (p "title") n (or comment-start "") " " (make-string 60 ?=) n)
+(sep (make-string 72 ?-))
+(todo (or comment-start "") " TODO: " p)
+(fixme (or comment-start "") " FIXME: " p)
+
+prog-mode
+
+;; Comment-tag templates -- adapt to the buffer's language via comment-start.
+;; (todo/fixme/sep live in fundamental-mode above, available here globally.)
+(note (if (> (length comment-start) 0) comment-start "# ") "NOTE: " p)
+(hack (if (> (length comment-start) 0) comment-start "# ") "HACK: " p)
+(xxx (if (> (length comment-start) 0) comment-start "# ") "XXX: " p)
+(bug (if (> (length comment-start) 0) comment-start "# ") "BUG: " p)
+(optimize (if (> (length comment-start) 0) comment-start "# ") "OPTIMIZE: " p)
+(noteauthor (if (> (length comment-start) 0) comment-start "# ") "NOTE(" (user-login-name) "): " p)
+(todoauthor (if (> (length comment-start) 0) comment-start "# ") "TODO(" (user-login-name) "): " p)
+(datedtodo (if (> (length comment-start) 0) comment-start "# ") "TODO(" (format-time-string "%Y-%m-%d") "): " p)
+(banner (if (> (length comment-start) 0) comment-start "# ") (make-string 60 ?=) n (if (> (length comment-start) 0) comment-start "# ") " " (p "Section") n (if (> (length comment-start) 0) comment-start "# ") (make-string 60 ?=) q)
+
+emacs-lisp-mode
+
+(header ";;; " (file-name-base (or (buffer-file-name) (buffer-name))) ".el --- " (p "summary") " -*- lexical-binding: t; -*-" n n ";;; Commentary:" n ";; " p n n ";;; Code:" n n q)
+(provide "(provide '" (file-name-base (or (buffer-file-name) (buffer-name))) ")" n ";;; " (file-name-base (or (buffer-file-name) (buffer-name))) ".el ends here" n)
+(defun "(defun " (p "name") " (" p ")" n> "\"" p "\"" n> r> ")")
+(cmd "(defun " (p "name") " (" p ")" n> "\"" p "\"" n> "(interactive)" n> r> ")")
+(defvar "(defvar " (p "name") " " (p "value") n> "\"" p "\")")
+(defcustom "(defcustom " (p "name") " " (p "value") n> "\"" p "\"" n> ":type 'boolean" n> ":group '" p ")")
+(let "(let ((" (p "var") " " (p "val") "))" n> r> ")")
+(lets "(let* ((" (p "var") " " (p "val") "))" n> r> ")")
+(use "(use-package " (p "pkg") n> ":ensure " (p "t") n> r> ")")
+(weval "(with-eval-after-load '" (p "feature") n> r> ")")
+(hook "(add-hook '" (p "mode") "-hook #'" p ")")
+(dolist "(dolist (" (p "x") " " (p "list") ")" n> r> ")")
+(when "(when " (p "cond") n> r> ")")
+(setf "(setf (alist-get " (p ":key") " " (p "alist") ") " p ")")
+
+go-ts-mode
+
+(func "func " (p "name") "(" p ") " p " {" n> r> n "}" n)
+(meth "func (" (p "r") " " (p "Type") ") " (p "name") "(" p ") " p " {" n> r> n "}" n)
+(struct "type " (p "Name" name) " struct {" n> p n "}" n n "func New" (s name) "(" p ") *" (s name) " {" n> "return &" (s name) "{" p "}" n "}" n)
+(iface "type " (p "Name") " interface {" n> p n "}" n)
+(iferr "if err != nil {" n> "return " p n "}" q)
+(wraperr "return fmt.Errorf(\"" (p "context") ": %w\", err)" q)
+(test "func Test" (p "Name" name) "(t *testing.T) {" n> "tests := []struct {" n> "name string" n> p n "}{" n> p n "}" n> "for _, tt := range tests {" n> "t.Run(tt.name, func(t *testing.T) {" n> p n "})" n> "}" n "}" n)
+(main "func main() {" n> r> q n "}" n)
+(pkg "package " (p (file-name-base (or (buffer-file-name) "main"))) n n "import (" n> p n ")" n)
+(goroutine "go func() {" n> r> q n "}()" n)
+(chan (p "ch") " := make(chan " (p "T") ")" q)
+(defer "defer " p q)
+(println "fmt.Println(" r> ")" q)
+;; loops (Go has only `for' -- four idioms)
+(for "for " (p "i" i) " := 0; " (s i) " < " (p "n") "; " (s i) "++ {" n> r> n "}" q)
+(forr "for " (p "i") ", " (p "v") " := range " (p "coll") " {" n> r> n "}" q)
+(forc "for " (p "cond") " {" n> r> n "}" q)
+(forinf "for {" n> r> n "}" q)
+
+python-ts-mode python-mode
+
+;; functions / methods
+(def "def " (p "name") "(" p ")" (p " -> None") ":" n> "\"\"\"" p "\"\"\"" n> r> q)
+(adef "async def " (p "name") "(" p ")" (p " -> None") ":" n> r> q)
+(m "def " (p "name") "(self" (p ", ") ")" (p " -> None") ":" n> r> q)
+;; classes
+(class "class " (p "Name" cname) ":" n> "\"\"\"" p "\"\"\"" n n> "def __init__(self" (p ", ") ") -> None:" n> r> q)
+(dataclass "@dataclass" n "class " (p "Name") ":" n> (p "field") ": " (p "type") n> q)
+;; entrypoint
+(main "def main() -> None:" n> r> q n n "if __name__ == \"__main__\":" n> "main()")
+(ifmain "if __name__ == \"__main__\":" n> q)
+;; tests / fixtures
+(test "def test_" (p "name") "() -> None:" n> r> q)
+(fixture "@pytest.fixture" n "def " (p "name") "():" n> r> "return " p n> q)
+(param "@pytest.mark.parametrize(\"" (p "arg" a) "\", [" p "])" n "def test_" (p "name") "(" (s a) ") -> None:" n> r> q)
+;; control flow / error handling
+(try "try:" n> r> "except " (p "Exception") " as " (p "e") ":" n> q)
+(tryf "try:" n> r> "except " (p "Exception") " as " (p "e") ":" n> p n> "finally:" n> q)
+(with "with " (p "expr") " as " (p "f") ":" n> r> q)
+(forr "for " (p "item" it) " in " (p "iterable") ":" n> r> q)
+(whilet "while " (p "cond") ":" n> r> q)
+;; comprehensions
+(lc "[" (p "expr") " for " (p "x" x) " in " (p "iterable") "]" q)
+(dc "{" (p "k") ": " (p "v") " for " (p "x" x) " in " (p "iterable") "}" q)
+;; logging / strings
+(log (p "logger") "." (p "info") "(f\"" p "\")" q)
+(fstr "f\"" p "\"" q)
+;; docstrings (Google style)
+(doc "\"\"\"" (p "summary") "." n n "Args:" n> (p "name") ": " (p "desc") n n "Returns:" n> (p "desc") n n "Raises:" n> (p "Error") ": " (p "when") n "\"\"\"" q)
+;; imports
+(imp "import " (p "module") q)
+(from "from " (p "module") " import " (p "names") q)
+
+rust-ts-mode
+
+;; Functions / methods
+(fn "fn " (p "name") "(" p ") -> " (p "()") " {" n> r> n> "}")
+(pfn "pub fn " (p "name") "(" p ") -> " (p "()") " {" n> r> n> "}")
+;; Structs with a constructor (name mirrored into the impl)
+(struct "struct " (p "Name" name) " {" n> p ": " p "," n> "}" n n "impl " (s name) " {" n> "fn new(" p ") -> Self {" n> "Self {" n> p n> "}" n> "}" n> "}")
+(enum "enum " (p "Name") " {" n> p "," n> "}")
+;; impl blocks (inherent + trait)
+(impl "impl " (p "Type") " {" n> r> n> "}")
+(implt "impl " (p "Trait") " for " (p "Type") " {" n> r> n> "}")
+(trait "trait " (p "Name") " {" n> "fn " p "(&self)" p ";" n> "}")
+(der "#[derive(" (p "Debug, Clone") ")]")
+;; Control flow
+(match "match " (p "expr") " {" n> p " => " p "," n> "_ => " p "," n> "}")
+(iflet "if let Some(" (p "x") ") = " (p "opt") " {" n> r> n> "}")
+;; Result-returning fn + tests
+(tryret "fn " (p "name") "(" p ") -> Result<" (p "()") ", " (p "Box<dyn std::error::Error>") "> {" n> r> n> "Ok(())" n> "}")
+(test "#[test]" n> "fn " (p "name") "() {" n> r> n> "}")
+(ttest "#[tokio::test]" n> "async fn " (p "name") "() {" n> r> n> "}")
+;; Misc
+(doc "/// " p)
+(pln "println!(\"" p "\"" p ");")
+(dbg "dbg!(" r ");")
+(map "let mut " (p "map" name) " = std::collections::HashMap::new();" n> (s name) ".insert(" p ", " p ");")
+
+java-ts-mode java-mode
+
+;; package + class scaffolding
+(pkg "package " (p "com.example") ";" n n q)
+(class "public class " (p "Name" cls) " {" n> q n "}")
+(iclass "public final class " (p "Name" cls) " {" n n> "private " (s cls) "(" p ") {" n> q n> "}" n "}")
+(interface "public interface " (p "Name") " {" n> q n "}")
+(enum "public enum " (p "Name") " {" n> p ";" n> q n "}")
+(record "public record " (p "Name" rec) "(" p ") {" n> q n "}")
+;; members
+(ctor "public " (p "Name" cls) "(" p ") {" n> q n "}")
+(method "public " (p "void" ret) " " (p "name") "(" p ") {" n> q n "}")
+(sm "public static " (p "void" ret) " " (p "name") "(" p ") {" n> q n "}")
+(get "public " (p "Type" ty) " get" (p "Field" f) "() {" n> "return this." (s f) ";" n "}")
+(set "public void set" (p "Field" f) "(" (p "Type" ty) " " (p "value" v) ") {" n> "this." (s f) " = " (s v) ";" n "}")
+;; control flow + error handling
+(foreach "for (" (p "Type" ty) " " (p "item" it) " : " (p "items") ") {" n> q n "}")
+(fori "for (int " (p "i" i) " = 0; " (s i) " < " (p "n") "; " (s i) "++) {" n> q n "}")
+(try "try {" n> r> n "} catch (" (p "Exception" ex) " " (p "e" e) ") {" n> "throw new RuntimeException(" (s e) ");" n "}")
+(trf "try {" n> r> n "} catch (" (p "Exception") " " (p "e") ") {" n> q n "} finally {" n> p n "}")
+(sout "System.out.println(" r ");" q)
+;; Spring REST
+(controller "@RestController" n "@RequestMapping(\"" (p "/api") "\")" n "public class " (p "Name") "Controller {" n> q n "}")
+(getm "@GetMapping(\"" (p "/path") "\")" n "public " (p "ResponseEntity<?>" ret) " " (p "handle") "(" p ") {" n> "return " q ";" n "}")
+(postm "@PostMapping(\"" (p "/path") "\")" n "public " (p "ResponseEntity<?>" ret) " " (p "handle") "(@RequestBody " (p "Type") " " (p "body") ") {" n> "return " q ";" n "}")
+;; tests
+(test "@Test" n "void " (p "should") "() {" n> q n "}")
+(testt "@Test" n "@DisplayName(\"" (p "description") "\")" n "void " (p "name") "() {" n> p ";" n> "assertEquals(" (p "expected") ", " (p "actual") ");" n "}")
+(beforeeach "@BeforeEach" n "void setUp() {" n> q n "}")
+;; docs + entrypoint
+(doc "/**" n " * " r q n " */")
+(param "@param " (p "name") " " q)
+(main "public static void main(String[] args) {" n> q n "}")
+
+typescript-ts-mode tsx-ts-mode js-ts-mode
+
+;; imports / exports
+(im "import { " (p "names") " } from \"" (p "module") "\";")
+(imd "import " (p "default") " from \"" (p "module") "\";")
+(imp "import * as " (p "ns") " from \"" (p "module") "\";")
+(exp "export { " (p "names") " } from \"" (p "module") "\";")
+;; functions
+(fn "function " (p "name") "(" p ")" (p ": void") " {" n> r> n "}" >)
+(afn "async function " (p "name") "(" p "): Promise<" (p "void") "> {" n> r> n "}" >)
+(arrow "const " (p "name") " = (" p ") => {" n> r> n "};" >)
+(aarrow "const " (p "name") " = async (" p ") => {" n> r> n "};" >)
+;; types
+(int "interface " (p "Name") " {" n> (p "field") ": " (p "type") ";" n "}" >)
+(type "type " (p "Name") " = " p ";")
+(enum "enum " (p "Name") " {" n> (p "Member") "," n "}" >)
+;; class
+(cls "class " (p "Name") " {" n> "constructor(" p ") {" n> r> n> "}" n "}" >)
+;; React
+(comp "interface " (p "Name" name) "Props {" n> p n "}" n n "export function " (s name) "({ " p " }: " (s name) "Props) {" n> "return (" n> "<div>" p "</div>" n> ");" n "}" >)
+(rafc "interface " (p "Name" name) "Props {" n> p n "}" n n "const " (s name) ": React.FC<" (s name) "Props> = ({ " p " }) => {" n> "return <div>" p "</div>;" n "};" n n "export default " (s name) ";" >)
+(ust "const [" (p "state") ", set" (p "State") "] = useState<" (p "type") ">(" (p "initial") ");")
+(ue "useEffect(() => {" n> p n> "return () => {" n> p n> "};" n "}, [" p "]);" >)
+;; control flow / errors
+(tc "try {" n> r> n "} catch (" (p "err" e) ") {" n> "console.error(" (s e) ");" n "}" >)
+(tcf "try {" n> r> n "} catch (" (p "err") ") {" n> p n "} finally {" n> p n "}" >)
+;; tests
+(desc "describe(\"" (p "subject") "\", () => {" n> "it(\"" (p "should do something") "\", () => {" n> r> n> "});" n "});" >)
+(it "it(\"" (p "should do something") "\", () => {" n> r> n "});" >)
+;; misc
+(cl "console.log(" p ");")
+(cle "console.error(" p ");")
+
+c-ts-mode c++-ts-mode c-mode c++-mode
+
+;; --- includes ---
+(inc "#include <" (p "header") ">")
+(incl "#include \"" (p "header") "\"")
+;; --- preprocessor / header guard (macro name mirrored) ---
+(guard "#ifndef " (p (upcase (concat (file-name-base (or (buffer-file-name) (buffer-name))) "_h")) name t) "#define " (s name) n n r n n "#endif /* " (s name) " */")
+(def "#define " (p "MACRO") " " p)
+(pragma "#pragma once" n)
+;; --- functions ---
+(fun (p "void" ret) " " (p "name") "(" p ")" n "{" n> r> q n "}")
+(main "int main(int argc, char **argv)" n "{" n> r> q n> "return 0;" n "}")
+;; --- types ---
+(struct "struct " (p "Name" name) " {" n> p n "};" n "typedef struct " (s name) " " (s name) ";")
+(enum "enum " (p "Name") " {" n> p n "};")
+;; --- C++ class (name mirrored in ctor/dtor) ---
+(class "class " (p "Name" name) " {" n "public:" n> (s name) "(" p ");" n> "~" (s name) "();" n n "private:" n> q n "};")
+(ns "namespace " (p "name" name) " {" n n> r> q n n "}  // namespace " (s name))
+;; --- control flow ---
+(for "for (" (p "int i = 0") "; " (p "i < n") "; " (p "++i") ") {" n> r> q n "}")
+(forr "for (size_t " (p "i" i) " = 0; " (s i) " < " (p "n") "; ++" (s i) ") {" n> r> q n "}")
+(fore "for (const auto& " (p "x") " : " (p "container") ") {" n> r> q n "}")
+(while "while (" (p "cond") ") {" n> r> q n "}")
+(ifel "if (" (p "cond") ") {" n> p n "} else {" n> p n "}")
+(sw "switch (" (p "x") ") {" n "case " (p "v") ":" n> p n> "break;" n "default:" n> p n> "break;" n "}")
+;; --- output ---
+(pf "printf(\"" (p "%d") "\\n\", " p ");")
+(cout "std::cout << " (p "x") " << std::endl;")
+;; --- containers ---
+(vec "std::vector<" (p "int") "> " (p "v") ";")
+(iter "for (auto it = " (p "v" v) ".begin(); it != " (s v) ".end(); ++it) {" n> r> q n "}")
+;; --- doc comment block ---
+(doc "/**" n " * " (p "summary") n " *" n " * @param " p n " * @return " p n " */")
+
+lua-mode
+
+;; TempEl templates for Lua
+(fun "function " (p "name") "(" (p "args") ")" n> r> n "end" >)
+(lfun "local function " (p "name") "(" (p "args") ")" n> r> n "end" >)
+(mod "local " (p "M" mod) " = {}" n n "function " (s mod) "." (p "fn") "(" (p "args") ")" n> r> n "end" > n n "return " (s mod) q)
+(meth "function " (p "M" tbl) ":" (p "name") "(" (p "args") ")" n> r> n "end" >)
+(ipairs "for " (p "i") ", " (p "v") " in ipairs(" (p "t") ") do" n> r> n "end" >)
+(pairs "for " (p "k") ", " (p "v") " in pairs(" (p "t") ") do" n> r> n "end" >)
+(fornum "for " (p "i") " = " (p "1") ", " (p "n") " do" n> r> n "end" >)
+(if "if " (p "cond") " then" n> r> n "elseif " (p "cond2") " then" n> p n "else" n> p n "end" >)
+(while "while " (p "cond") " do" n> r> n "end" >)
+(req "local " (p "name") " = require(\"" (p "module") "\")" q)
+(pcall "local ok, " (p "err") " = pcall(" (p "fn") ", " (p "...") ")" n "if not ok then" n> p n "end" >)
+(meta "local " (p "Class" cls) " = {}" n (s cls) ".__index = " (s cls) n n "function " (s cls) ".new(" (p "args") ")" n> "local self = setmetatable({}, " (s cls) ")" n> r> n "return self" n "end" > q)
+
+markdown-mode gfm-mode
+
+;; fenced code block with language placeholder
+(code "```" (p "lang") n> r> n> "```" n q)
+;; inline link -- [label](path) per user convention
+(link "[" (p "label") "](" (p "path") ")" q)
+;; image
+(img "![" (p "alt") "](" (p "path") ")" q)
+;; table skeleton (2 columns)
+(table "| " (p "col1") " | " (p "col2") " |" n "| --- | --- |" n "| " p " | " p " |" n q)
+;; task list item
+(task "- [ ] " (p "task") q)
+;; details/summary collapsible (HTML)
+(details "<details>" n "<summary>" (p "summary") "</summary>" n n r> n n "</details>" n q)
+;; front-matter YAML block
+(fm "---" n "title: " (p "title") n "date: " (format-time-string "%Y-%m-%d") n "tags: [" p "]" n "---" n q)
+;; heading with explicit anchor id
+(ha "## " (p "Heading") " {#" (p "anchor") "}" n q)
+;; blockquote
+(bq "> " r q)
+;; footnote reference + definition
+(fn "[^" (p "id" id) "]" n "[^" (s id) "]: " (p "note") q)
+;; bold / italic wrappers around region
+(b "**" r "**" q)
+(i "*" r "*" q)
+
+org-mode
+
+;; Source code block -- language typed once at the begin line
+(src "#+begin_src " (p "emacs-lisp" lang) n> r> n "#+end_src" n q)
+(example "#+begin_example" n> r> n "#+end_example" n q)
+(quote "#+begin_quote" n> r> n "#+end_quote" n q)
+;; TODO heading with CREATED property drawer
+(todo "* TODO " (p "task") n ":PROPERTIES:" n ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") n ":END:" n q)
+(head "* " (p "heading") n ":PROPERTIES:" n ":ID: " p n ":END:" n q)
+(props ":PROPERTIES:" n ":" (p "KEY") ": " p n ":END:" n q)
+(sched "SCHEDULED: <" (p (format-time-string "%Y-%m-%d %a")) ">" q)
+(dead "DEADLINE: <" (p (format-time-string "%Y-%m-%d %a")) ">" q)
+(clock "* " (p "task") n "CLOCK: " (format-time-string "[%Y-%m-%d %a %H:%M]") q)
+(table "| " (p "col1") " | " (p "col2") " |" n "|---+---|" n "| " p " | " p " |" n q)
+(link "[[" (p "target") "][" (p "description") "]]" q)
+(fn "[fn:" (p "label" name) "] " p n n "[fn:" (s name) "]" q)
+(header "#+title: " (p "Title") n "#+author: " (p "fenrir" author) n "#+date: " (format-time-string "%Y-%m-%d") n n q)
+
+css-mode html-mode mhtml-mode
+
+;; -- CSS --
+(rule (p "selector") " {" n> p n "}" >)
+(cls "." (p "class") " {" n> p n "}" >)
+(id "#" (p "id") " {" n> p n "}" >)
+(flex (p "selector") " {" n> "display: flex;" n> "flex-direction: " (p "row") ";" n> "justify-content: " (p "center") ";" n> "align-items: " (p "center") ";" n> "gap: " (p "8px") ";" n "}" >)
+(grid (p "selector") " {" n> "display: grid;" n> "grid-template-columns: " (p "repeat(3, 1fr)") ";" n> "gap: " (p "16px") ";" n "}" >)
+(media "@media (" (p "max-width: 768px") ") {" n> (p "selector") " {" n> p n> "}" n "}" >)
+(var ":root {" n> "--" (p "name" name) ": " (p "value") ";" n "}" >)
+(varu "var(--" (s name) ")")
+(kf "@keyframes " (p "name") " {" n> "from { " p " }" n> "to { " p " }" n "}" >)
+(trans "transition: " (p "all") " " (p "0.2s") " " (p "ease") ";")
+;; -- HTML --
+(html5 "<!DOCTYPE html>" n "<html lang=\"" (p "en") "\">" n "<head>" n> "<meta charset=\"UTF-8\">" n> "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" n> "<title>" (p "Title") "</title>" n "</head>" n "<body>" n> q n "</body>" n "</html>")
+(div "<div class=\"" (p "class") "\">" n> r> n "</div>" >)
+(span "<span class=\"" (p "class") "\">" r "</span>")
+(a "<a href=\"" (p "#" url) "\">" (r "text") "</a>")
+(img "<img src=\"" (p "path") "\" alt=\"" (p "alt") "\">")
+(ul "<ul>" n> "<li>" r "</li>" n "</ul>" >)
+(input "<label for=\"" (p "id" id) "\">" (p "Label") "</label>" n "<input type=\"" (p "text") "\" id=\"" (s id) "\" name=\"" (s id) "\">")
+(form "<form action=\"" (p "#" action) "\" method=\"" (p "post") "\">" n> p n> "<button type=\"submit\">" (p "Submit") "</button>" n "</form>" >)
+(script "<script src=\"" (p "script.js") "\"></script>")
+(link "<link rel=\"stylesheet\" href=\"" (p "style.css") "\">")
+(tag "<" (p "tag" tag) ">" r "</" (s tag) ">")
