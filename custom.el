@@ -8,19 +8,19 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-link ace-window aidermacs apheleia avy-zap
-              bash-completion breadcrumb cape combobulate consult-dir
-              consult-eglot copilot corfu-terminal dape diff-hl
-              difftastic dired-collapse dired-narrow dired-subtree
-              diredfl dirvish doom-modeline doom-themes eglot-booster
+   '(ace-link ace-window aidermacs apheleia avy-zap bash-completion
+              breadcrumb cape combobulate consult-dir consult-eglot
+              copilot corfu-terminal dape diff-hl difftastic
+              dired-collapse dired-narrow dired-subtree diredfl
+              dirvish doom-modeline doom-themes eglot-booster
               eldoc-box embark-consult envrc exec-path-from-shell
               expand-region flymake-eslint forge gcmh ggtags gptel
               helpful jinx lua-mode magit-delta magit-todos marginalia
               multiple-cursors nerd-icons-dired no-littering obsidian
               orderless org-appear org-modern org-roam-ui popper
               pulsar rainbow-delimiters sideline-flymake
-              system-packages treesit-auto treesit-fold vertico vterm
-              vue-mode vundo web-server wgrep yasnippet-snippets))
+              system-packages tempel treesit-auto treesit-fold vertico
+              vterm vue-mode vundo web-server wgrep yasnippet-snippets))
  '(package-vc-selected-packages
    '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate"))))

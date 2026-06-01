@@ -425,11 +425,29 @@ use `M-x eshell`.)
 
 ---
 
-## 10. Snippets — YASnippet ([`init-snippets.el`](lisp/init-snippets.el))
+## 10. Snippets / templates — TempEl + YASnippet ([`init-snippets.el`](lisp/init-snippets.el))
 
-`yas-global-mode` is on; `yasnippet-snippets` ships a large ready-made collection for many
-major modes. Type a snippet's abbreviation and press `TAB` to expand it; `TAB` again jumps
-between fields. Personal snippets live in [`snippets/`](snippets/).
+Two engines, split by job (decided 2026-06-01 — TempEl is GNU-ELPA, actively maintained by
+minad, and reuses the built-in `tempo.el` syntax; YASnippet's upkeep has slowed but Eglot
+still needs it for LSP snippet expansion):
+
+- **TempEl** — your hand-written templates. Definitions live in the [`templates`](templates)
+  file at the repo root (one section per major mode; `fundamental-mode` templates are global).
+  Ways to use them:
+  - Type a trigger name (e.g. `iferr`, `def`, `func`) then `C-<tab>` / `C-M-i` — `tempel-expand`
+    completes and expands it inline (rides the same Vertico in-region UI as all completion).
+    (`C-<tab>` replaces the Emacs default `M-TAB`, which GNOME swallows as Alt+Tab.)
+  - `M-+` (`tempel-complete`) — list every template for the current mode and expand the pick.
+  - `M-*` (`tempel-insert`) — browse/insert a template by name via the minibuffer.
+  - While a template is active: `TAB` / `S-TAB` jump to the next / previous field; `C-g` exits.
+  - [`tempel-collection`](https://github.com/Crandel/tempel-collection) (a large community
+    template library) is available but **off by default** — opt in by uncommenting its block
+    in [`init-snippets.el`](lisp/init-snippets.el).
+- **YASnippet** — enabled only on `eglot-managed-mode` as Eglot's LSP snippet backend (so a
+  language server's parameter-placeholder completions expand). Not used for hand-written
+  snippets; no `yas-global-mode`, no `yasnippet-snippets`.
+
+First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart once.
 
 ---
 
