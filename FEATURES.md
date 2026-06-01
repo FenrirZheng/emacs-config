@@ -232,6 +232,21 @@ lists the follow-up keys — no need to memorise prefixes.
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
   (this file) and `consult-imenu-multi` (open buffers of the same major mode). Same
   vertico + orderless + marginalia UI as the rest of §1.
+- **ggtags / GNU Global — the non-LSP xref fallback** (`init-languages.el`): when a buffer
+  has **no** live language server (a mode without an LSP hook, or one that failed to
+  attach), `M-.` / `M-?` fall through to GNU Global's `GTAGS` index instead of cryptically
+  prompting `Visit tags table (default TAGS): …`. **`C-c g g`** (`fenrir/gtags-create-or-update`)
+  builds or refreshes the index for the current project (`C-u` forces a full rebuild), and
+  the etags fallback now *offers* to build one (`Build a GNU Global (GTAGS) index now?`) when
+  none exists. **Eglot-safe by construction** — the offer can only fire after xref already
+  chose etags, i.e. no LSP was attached. The index is built with `GTAGSLABEL=pygments`
+  (`fenrir/gtags-label`; covers Go/Python/TS — switch to `new-ctags` for speed at the cost
+  of TypeScript), the result is **validated** (a failed / 0-byte build is deleted, never
+  left as a corrupt stub), and an existing corrupt / 0-byte index is recovered with a
+  wipe-and-rebuild offer instead of the raw `gtags: … seems corrupted` error. For a
+  Go-dominant repo with `gopls` on `PATH` it first steers you to gopls — the real fix is
+  usually a missing `go.mod` at the project root. Needs `global` + `universal-ctags` +
+  `python3-pygments` (installed by [`shell/install-root.sh`](shell/install-root.sh)).
 - **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
   for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
   Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls
@@ -508,11 +523,31 @@ First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart 
 
 ## 11. Appearance ([`init-appearance.el`](lisp/init-appearance.el))
 
-- **doom-themes** — `doom-one` loaded by default (swap for any `doom-*`); bold + italic
-  enabled; `doom-themes-org-config` tweaks Org faces to match.
-- **doom-modeline** — `doom-modeline-mode`, height 25.
+- **doom-themes** — `doom-tokyo-night` loaded by default (swap for any `doom-*`); bold +
+  italic enabled; `doom-themes-org-config` tweaks Org faces to match.
+- **doom-modeline** — `doom-modeline-mode`, height 25. Tuned for narrow tmux panes so the
+  right-side segments don't silently truncate: compact checker counter
+  (`doom-modeline-check 'simple`), no buffer-encoding segment, `truncate-upto-project` file
+  names, `vcs-max-length 18`. The **LSP/Eglot segment** is on (`doom-modeline-lsp`) — it
+  renders only once an Eglot server manages the buffer, making it the load-bearing "did the
+  server connect?" signal (e.g. when jdtls silently fails to start because the corp Nexus
+  mirror times out on import, the missing segment is the tell).
 - **nerd-icons** — glyph set used by doom-modeline, `nerd-icons-dired` (§12) and Corfu.
-  Run `M-x nerd-icons-install-fonts` **once** after install to fetch the font.
+  Run `M-x nerd-icons-install-fonts` **once** after install to fetch the font. On a TTY the
+  glyphs **display** only when the terminal emulator's own font is a Nerd Font (or has
+  "Symbols Nerd Font Mono" in its fallback chain) — a tofu modeline is a terminal-font
+  config issue, not an Emacs bug.
+- **nerd-icons-completion** — icons in the minibuffer / marginalia column (Vertico-driven
+  completion). `marginalia-mode` is already on at startup, so the mode is enabled explicitly
+  *and* hooked to `marginalia-mode-hook` for later re-wiring.
+- **nerd-icons-ibuffer** — a glyph per row in ibuffer (this config's `C-x b`).
+- **ef-themes** — opt-in alternative palette (doom-tokyo-night stays the default). `C-c e t`
+  = `ef-themes-toggle` (flips between `ef-day` / `ef-night`); `C-c e T` = `consult-theme`
+  (live-preview pick any installed theme, including a `doom-*` one).
+- **tab-bar** **(built-in)** — TTY-native text workspace row. `tab-bar-show 1` auto-hides the
+  row at a single tab (invisible until you open a second tab). Numeric hints on, mouse close
+  / new buttons off for a clean TTY row. Tab commands stay on the native `C-x t` map
+  (`C-x t 2` new, `C-x t 0` close, `C-x t o` next, `C-x t RET` switch, `C-x t r` rename).
 
 ---
 

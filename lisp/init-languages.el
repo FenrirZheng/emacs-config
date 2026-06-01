@@ -452,10 +452,31 @@ seems stuck on a stale answer."
 ;; First-run note: as with all use-package blocks here, the archive isn't
 ;; refreshed at startup.  If ggtags isn't installed yet, `M-x my/package-refresh'
 ;; then restart Emacs once.  Also requires the `gtags' / `global' CLIs
-;; (apt: `global'); run `gtags' at a repo root to generate the index.
-;; Don't run `gtags' at a monorepo top-level dir that has no source
-;; files of its own -- it writes empty 0-byte GTAGS / GRTAGS / GPATH
-;; files that subsequently make `global' report "seems corrupted".
+;; (apt: `global'; for Go/Python/TS coverage also `python3-pygments' and
+;; `universal-ctags').  Run `gtags' at a repo root to generate the index.
+;;
+;; The "seems corrupted" failure has TWO distinct 0-byte causes, neither of
+;; which is "indexing a source-less monorepo top dir" (the original guess):
+;;   1. An aborted/crashed gtags run -- gtags creates GTAGS/GRTAGS/GPATH on
+;;      disk, then the external parser helper FAILS at build time (missing
+;;      interpreter, crashed ctags, broken PATH in the subprocess) -> gtags
+;;      reads back empty parser output, dies with "unexpected EOF", and leaves
+;;      all three files at 0 bytes.  Every later `global -u' / `gtags -i' then
+;;      rejects that 0-byte stub with "<path>/GTAGS seems corrupted." (the
+;;      user's exact error in ~/code/coinsasia/backend/).
+;;   2. (Separate, NOT corrupt) A Go-BLIND label: gtags' built-in parser langmap
+;;      is only c/yacc/asm/java/cpp/php, and ggtags' own "Use `ctags' backend?"
+;;      prompt sets GTAGSLABEL=ctags -> exuberant-ctags, also Go-blind.  Both
+;;      produce a VALID 16 KB index with ZERO Go symbols -- structurally fine,
+;;      useless.  Go/Python/TS need GTAGSLABEL=pygments (this config's default,
+;;      see `fenrir/gtags-label'), or new-ctags (Universal Ctags, but it MISSES
+;;      TypeScript).
+;; The conf that DEFINES those labels ships at /etc/gtags/gtags.conf on Debian
+;; (the [sysconfdir] path, baked into the gtags binary's search order), so
+;; pygments/new-ctags resolve with NO env vars -- no ~/.globalrc or repo-local
+;; gtags.conf is generated.  The durable defenses are post-build validation +
+;; corrupt-index recovery + a Go-capable label, not the pre-build file count.
+;; gtags-on-Go is a FALLBACK: gopls is strictly better -- see `fenrir/gtags--go-dominant-p'.
 (use-package ggtags
   :commands ggtags-mode)
 
@@ -466,6 +487,492 @@ seems stuck on a stale answer."
 ;; auto-sets them on load.
 (setq-default tags-file-name nil
               tags-table-list nil)
+
+;; ---------------------------------------------------------------------------
+;; GTAGS-on-demand: guide M-. / M-? in a non-LSP, un-indexed project to build a
+;; GNU Global index instead of dumping the cryptic etags "Visit tags table"
+;; prompt.
+;;
+;; THE PROBLEM.  `xref-find-definitions' (M-.) and `xref-find-references' (M-?)
+;; dispatch over `xref-backend-functions'.  Three backends matter here:
+;;   * Eglot prepends `eglot-xref-backend' ONLY while a server is attached.
+;;   * ggtags adds `ggtags--xref-backend' while `ggtags-mode' is on -- BUT that
+;;     backend returns nil (declines) when `ggtags-find-project' finds no GTAGS
+;;     index, so an un-indexed buffer falls straight through it.
+;;   * `etags--xref-backend' is the always-present global fallback.  Its methods
+;;     call `visit-tags-table-buffer', which -- finding no `tags-file-name' /
+;;     `tags-table-list' (we nil them above) and no TAGS file -- reaches its last
+;;     resort: (read-file-name "Visit tags table (default TAGS): ...").  That
+;;     prompt is meaningless to anyone who isn't running a 1990s etags workflow.
+;;
+;; THE FIX.  Two pieces, both Eglot-safe by construction:
+;;   (a) `fenrir/gtags-create-or-update' (C-c g g) -- an explicit, project-aware
+;;       command that builds or incrementally refreshes the index.  Never touches
+;;       xref dispatch; safe to run anywhere.
+;;   (b) an :around advice on `visit-tags-table-buffer' that, INSTEAD of the
+;;       etags prompt, offers to run (a).  It can only ever fire AFTER the etags
+;;       backend was already chosen -- which already means no Eglot and no usable
+;;       GTAGS -- but we still re-check Eglot defensively so a future caller of
+;;       `visit-tags-table-buffer' from within a managed buffer can't be hijacked.
+;;
+;; Rejected alternative: globalizing `ggtags-mode' so its own create-offer
+;; (`ggtags-ensure-project', reached via `ggtags-find-tag-dwim') fires.  That
+;; rebinds M-. to `ggtags-find-tag-dwim' in EVERY buffer, shadowing Eglot's xref
+;; M-. wherever both modes are live -- a direct violation of "Eglot must keep
+;; winning".  Advising the etags fallback leaves Eglot's and ggtags' own xref
+;; paths completely untouched.
+
+(defun fenrir/gtags--global-available-p ()
+  "Return non-nil iff both GNU Global CLIs (`gtags' and `global') are on PATH.
+gtags BUILDS the index; global QUERIES it -- ggtags shells out to both, so a
+half-install (only one present) still leaves xref broken.  We check both up
+front to give one clear install hint instead of a later cryptic process error."
+  (and (executable-find "gtags") (executable-find "global")))
+
+(defun fenrir/gtags--guide-install ()
+  "Tell the user how to install GNU Global, then return nil.
+Returning nil lets callers treat \"no toolchain\" the same as \"declined\"."
+  (message
+   (substitute-command-keys
+    "GNU Global not found.  Install it (Debian: `sudo apt install global'), \
+then \\[fenrir/gtags-create-or-update] to build the index."))
+  nil)
+
+(defvar fenrir/gtags-forbidden-roots
+  (list (expand-file-name "~/")        ; the dotfiles repo -- ~1500 tracked files
+        "/"                            ; filesystem root
+        "/tmp/" "/usr/" "/etc/" "/var/" "/opt/")
+  "Directories `fenrir/gtags--project-root' must never return for indexing.
+project.el's `project-try-vc' can degenerate to the filesystem root (or to
+$HOME, the dotfiles repo) when no real VCS root is found -- indexing any of
+those would spawn a runaway `gtags' walk.  Each entry is compared as an
+`expand-file-name'd, slash-terminated absolute path.")
+
+(defun fenrir/gtags--project-root ()
+  "Resolve the current buffer's project root for indexing, or nil.
+Goes through project.el so the `my-project-ignore-home' advice applies -- we
+must NEVER index $HOME (the dotfiles repo has ~1500 tracked files; the gtags
+walk would be enormous).  Additionally rejects the filesystem root and other
+system dirs (see `fenrir/gtags-forbidden-roots'), because `project-try-vc'
+degenerates to `/' when a buffer under, e.g., /tmp has no VCS root above it.
+Returns an `expand-file-name'd, slash-terminated absolute directory, or nil."
+  (when-let* ((proj (project-current nil)))
+    (let ((root (file-name-as-directory (expand-file-name (project-root proj)))))
+      (unless (member root fenrir/gtags-forbidden-roots)
+        root))))
+
+(defun fenrir/gtags--existing-index-root ()
+  "Return the directory of the GTAGS index covering the current buffer, or nil.
+Delegates to ggtags' own resolver (`global -pr', then a GTAGS dominating-file
+walk) so detection matches exactly what the ggtags xref backend will later use
+to answer -- no second, divergent notion of \"is there an index\"."
+  (when (require 'ggtags nil t)
+    (ignore-errors (ggtags-current-project-root))))
+
+(defun fenrir/gtags--source-file-count (root)
+  "Count source files under ROOT that GNU Global would index, capped at 1.
+Returns 0 or 1 -- we only need \"is there ANY source here\".  This is a cheap
+pre-build sanity gate (don't run `gtags' in a dir with no code at all), NOT the
+corrupt-index defense: a source-less dir was only one of several 0-byte causes,
+and the user's real failure (~/code/coinsasia/backend, 1231 files) sailed past
+this guard.  The authoritative defense is `fenrir/gtags--index-corrupt-p'
+post-build validation; this only avoids a pointless empty build.  `global
+--explain'-style file selection is hard to mirror exactly, so we approximate
+with a cheap recursive scan for common extensions and stop at the first hit."
+  (let ((case-fold-search t)
+        ;; gtags' default parser covers C/C++/Java/PHP/Yacc plus, via the ctags
+        ;; backend, most everything else.  This list is a heuristic \"does real
+        ;; code live here\" probe, not a faithful gtags file filter.
+        (re (rx "." (or "c" "h" "cc" "cpp" "cxx" "hpp" "hh"
+                        "java" "py" "go" "rs" "js" "jsx" "ts" "tsx"
+                        "el" "lua" "php" "rb" "sh" "sql" "vue")
+                eos)))
+    (catch 'found
+      (dolist (f (ignore-errors
+                   (directory-files-recursively root re nil
+                                                ;; Skip the usual heavy / vendored
+                                                ;; trees so the probe stays fast.
+                                                (lambda (dir)
+                                                  (not (member (file-name-nondirectory dir)
+                                                               '(".git" "node_modules"
+                                                                 "vendor" "target"
+                                                                 ".venv" "venv"
+                                                                 "dist" "build")))))))
+        (when (file-regular-p f) (throw 'found 1)))
+      0)))
+
+(defcustom fenrir/gtags-label "pygments"
+  "GTAGSLABEL passed to `gtags' so it uses a non-built-in parser, or nil.
+
+WHY this exists and WHY \"pygments\".  GNU Global's BUILT-IN parser only knows
+c/yacc/asm/java/cpp/php; ggtags' own \"Use `ctags' backend?\" prompt sets
+GTAGSLABEL=ctags which maps to exuberant-ctags (NOT installed here -- only
+Universal Ctags) and is ALSO Go-blind.  Either way a Go/Python/TypeScript repo
+gets a structurally-valid 16 KB index with ZERO of its symbols.  To actually
+index those languages we must set GTAGSLABEL ourselves to a plugin label.
+
+Choices, measured on a Go+Python+TypeScript tree mirroring ~/code/coinsasia/backend:
+  * \"pygments\"     -- indexes Go + Python + TypeScript (ALL three).  DEFAULT.
+  * \"new-ctags\"    -- Universal Ctags; indexes Go + Python but MISSES TypeScript;
+                        ~4.5x faster and a self-contained binary (no interpreter).
+  * \"native-pygments\" -- built-in for C-likes + pygments for the rest (broad).
+backend/ has 59 TypeScript files, so pygments is the only label that covers it
+-- hence the default.  These labels are DEFINED by /etc/gtags/gtags.conf, which
+Debian ships at the [sysconfdir] path baked into the gtags binary, so they
+resolve with NO GTAGSCONF / ~/.globalrc / repo-local conf.
+
+FRAGILITY (why post-build validation is mandatory regardless): the pygments
+helper /usr/share/global/gtags/script/pygments_parser.py shebangs
+`#!/usr/bin/env python' (python, NOT python3).  If `python' is unreachable in
+the gtags build subprocess (Debian without `python-is-python3'), gtags creates
+the files then dies with \"unexpected EOF\" -> the 0-byte corrupt stub.  On THIS
+box `python-is-python3' is installed so pygments works; on a box where it isn't,
+flip this to \"new-ctags\" (no interpreter dependency) -- and either way the
+validation below catches the failure and removes the stub.
+
+nil => don't inject any label; let `ggtags-create-tags' run its native
+\"Use `ctags' backend?\" prompt (escape hatch for the rare project that wants
+the built-in parser or supplies its own .globalrc)."
+  :type '(choice (const :tag "pygments (Go+Python+TS)" "pygments")
+                 (const :tag "new-ctags (Go+Python, no TS; fast)" "new-ctags")
+                 (const :tag "native-pygments (builtin + pygments)" "native-pygments")
+                 (const :tag "none -- let ggtags prompt" nil)
+                 (string :tag "other label"))
+  :group 'fenrir)
+
+(defun fenrir/gtags--index-files (root)
+  "Return the absolute paths of the three GTAGS index files under ROOT.
+Used by both the validity probe and the wipe.  GTAGSDB/ID are deliberately not
+listed -- gtags' default plugin labels write only GTAGS/GRTAGS/GPATH, and those
+three are exactly what `global' reads to decide \"seems corrupted\"."
+  (mapcar (lambda (f) (expand-file-name f root))
+          '("GTAGS" "GRTAGS" "GPATH")))
+
+(defun fenrir/gtags--index-corrupt-p (root)
+  "Return non-nil iff the GTAGS index under ROOT is corrupt / 0-byte.
+
+Discriminates THREE states (all reproduced in /tmp):
+  * CORRUPT / 0-byte  -> returns t.  GTAGS missing or 0 bytes, OR `global -c'
+                         exits non-zero / prints \"seems corrupted\".
+  * VALID-but-EMPTY   -> returns nil.  `global -c' exits 0 with empty output
+                         (parser ran, found no symbols / wrong-parser-for-lang).
+                         This is a LEGIT state -- never wipe it as if corrupt.
+  * VALID-with-symbols-> returns nil.
+
+WHY `global -c' and not `global -p': `global -p' merely prints the DB directory
+and exits 0 even on a 0-byte stub -- it does NOT detect corruption.  `global -c'
+actually READS GTAGS and surfaces \"seems corrupted\" on stderr with a non-zero
+exit.  WHY process-file with the exit code: a bare shell `global -c | head'
+masks the non-zero exit (stderr-only) -- but through `process-file' the exit IS
+non-zero (verified =1 via the live daemon), so we trust process-file's return
+plus a stderr scan, never a shell idiom that swallows the code.  The 0-byte size
+check catches the \"gtags made stubs then aborted before writing\" case."
+  (let ((gtags (car (fenrir/gtags--index-files root))))
+    (cond
+     ;; No GTAGS at all -> not "corrupt", just "absent" (caller handles create).
+     ((not (file-exists-p gtags)) nil)
+     ;; 0-byte stub -> the aborted-build corpse.  Corrupt.
+     ((zerop (file-attribute-size (file-attributes gtags))) t)
+     ;; Non-empty: run the authoritative `global -c' probe with stderr captured
+     ;; SEPARATELY (DESTINATION (list stdout-buf stderr-file)), default-directory
+     ;; pinned to ROOT.  No source file is opened -> no eglot-ensure -> daemon-safe.
+     (t
+      (let ((errf (make-temp-file "fenrir-gtags-probe-stderr"))
+            (default-directory (file-name-as-directory root)))
+        (unwind-protect
+            (with-temp-buffer
+              (let ((rc (process-file "global" nil (list t errf) nil "-c" ""))
+                    (err (with-temp-buffer
+                           (ignore-errors (insert-file-contents errf))
+                           (buffer-string))))
+                (or (not (eq rc 0))
+                    (string-match-p "seems corrupted" err))))
+          (ignore-errors (delete-file errf))))))))
+
+(defun fenrir/gtags--index-empty-p (root)
+  "Return non-nil iff ROOT's index is VALID but contains no symbols.
+Run only on a non-corrupt index.  `global -c' exits 0 but emits nothing => the
+parser didn't index any symbols (wrong/Go-blind parser, or genuinely no code).
+Used to warn the user their index is useless even though it's not corrupt."
+  (let ((default-directory (file-name-as-directory root)))
+    (with-temp-buffer
+      ;; stderr discarded here -- we already know it's not corrupt; we only care
+      ;; whether stdout is empty.
+      (let ((rc (process-file "global" nil (list t nil) nil "-c" "")))
+        (and (eq rc 0)
+             (zerop (buffer-size)))))))
+
+(defun fenrir/gtags--wipe-index (root)
+  "Delete ROOT's GTAGS/GRTAGS/GPATH and drop ggtags' cached project struct.
+NEVER leave a corrupt index behind.  We delete the files DIRECTLY rather than
+call interactive `ggtags-delete-tags' -- that one prompts, opens a *GTags File
+List* buffer, and needs a resolvable `ggtags-current-project-root', which a
+corrupt 0-byte GTAGS breaks (`ggtags-make-project' stats GTAGS and poisons its
+struct).  After wiping we replicate ggtags-delete-tags' bookkeeping: remhash the
+stale entry from `ggtags-projects' and invalidate the buffer-local root, so the
+next xref call re-resolves cleanly instead of answering from a cached corpse."
+  (dolist (f (fenrir/gtags--index-files root))
+    (when (file-exists-p f) (ignore-errors (delete-file f))))
+  (when (require 'ggtags nil t)
+    (when (boundp 'ggtags-projects)
+      (remhash (file-name-as-directory root) ggtags-projects))
+    (when (fboundp 'ggtags-invalidate-buffer-project-root)
+      (ignore-errors
+        (ggtags-invalidate-buffer-project-root (file-truename root))))))
+
+(defun fenrir/gtags--create-with-label (root)
+  "Run `ggtags-create-tags' in ROOT with `fenrir/gtags-label' injected.
+WHY the let-bound `process-environment': ggtags.el line ~701 does
+  (unless (or conf (getenv \"GTAGSLABEL\") (not (yes-or-no-p \"Use `ctags' ...\")))
+    (setenv \"GTAGSLABEL\" \"ctags\"))
+so pre-setting GTAGSLABEL makes its (getenv \"GTAGSLABEL\") truthy -- the whole
+`unless' is SKIPPED: no \"Use `ctags' backend?\" prompt fires (which would set
+the Go-blind ctags label) AND our pygments value is honored.  Verified via the
+live daemon that a let-bound process-environment entry is exactly what that
+getenv reads.  A project-local .globalrc / gtags.conf still WINS (ggtags binds
+`conf' first and passes --gtagsconf), which is intended -- we never clobber a
+project's own parser choice."
+  (let ((process-environment
+         (if fenrir/gtags-label
+             (cons (concat "GTAGSLABEL=" fenrir/gtags-label) process-environment)
+           process-environment)))
+    (ggtags-create-tags root)))
+
+(defun fenrir/gtags--go-dominant-p (root)
+  "Return non-nil iff ROOT looks like a Go project (cheap, bounded scan).
+True when a go.mod exists anywhere reasonably shallow under ROOT, or when the
+first source file the cheap probe finds is a .go file.  Used to STEER the user
+to gopls (semantic, cross-package, no stale index) before building a GTAGS
+fallback -- gtags-on-Go is the explicit opt-in fallback, not the silent default."
+  (or (file-exists-p (expand-file-name "go.mod" root))
+      ;; A bounded recursive look for go.mod / a .go file (skip heavy trees).
+      (catch 'go
+        (dolist (f (ignore-errors
+                     (directory-files-recursively
+                      root (rx (or "go.mod" (seq "." "go")) eos) nil
+                      (lambda (dir)
+                        (not (member (file-name-nondirectory dir)
+                                     '(".git" "node_modules" "vendor"
+                                       "target" ".venv" "venv" "dist" "build")))))))
+          (when (file-regular-p f) (throw 'go t)))
+        nil)))
+
+(defun fenrir/gtags--fresh-build (build-root)
+  "Create a GTAGS index in BUILD-ROOT with the working label, then VALIDATE it.
+Shared by the no-index create path and the corrupt-index recovery path (both in
+`fenrir/gtags-create-or-update').  Steps, in order:
+  1. Steer Go-dominant repos to gopls (`fenrir/gtags--maybe-steer-to-gopls' --
+     signals `user-error' and unwinds if the user picks gopls).
+  2. Refuse a source-less dir (the cheap empty-build gate).
+  3. Build with `fenrir/gtags-label' injected (suppresses ggtags' Go-blind
+     ctags prompt).
+  4. POST-BUILD VALIDATION (FIX 1): if the result is corrupt / 0-byte, DELETE the
+     stub files and `user-error' with the real reason -- never leave a corpse.
+  5. Re-resolve ggtags' cached project so xref answers immediately; warn if the
+     index is valid-but-symbol-less (wrong parser for the repo's languages).
+TTY-safe (only minibuffer y-or-n-p / messages) and daemon-safe (opens no source
+file -> no `eglot-ensure' to block the single-threaded daemon)."
+  (fenrir/gtags--maybe-steer-to-gopls build-root)
+  (when (zerop (fenrir/gtags--source-file-count build-root))
+    (user-error
+     "No source files under %s -- indexing here would write an empty, corrupt \
+GTAGS.  Pick a directory that contains code"
+     (abbreviate-file-name build-root)))
+  ;; `fenrir/gtags--create-with-label' runs `gtags' synchronously in BUILD-ROOT
+  ;; with GTAGSLABEL=`fenrir/gtags-label' injected, suppressing ggtags' Go-blind
+  ;; \"Use `ctags' backend?\" prompt.
+  (fenrir/gtags--create-with-label build-root)
+  ;; POST-BUILD VALIDATION (FIX 1).  A 0-byte / corrupt index (parser helper
+  ;; crashed -> \"unexpected EOF\") gets DELETED, with the real reason reported --
+  ;; never leave a corpse that a later `global -u' chokes on.
+  (when (fenrir/gtags--index-corrupt-p build-root)
+    (fenrir/gtags--wipe-index build-root)
+    (user-error
+     "gtags produced a corrupt/empty index in %s (parser '%s' failed -- likely \
+the helper interpreter was unreachable or the build was interrupted); removed \
+the stub files.  For Go prefer gopls, or set `fenrir/gtags-label' to \
+\"new-ctags\""
+     (abbreviate-file-name build-root)
+     (or fenrir/gtags-label "builtin")))
+  ;; Re-resolve THIS buffer (and siblings) against the new index.
+  (ggtags-invalidate-buffer-project-root (file-truename build-root))
+  ;; A VALID but symbol-less index isn't corrupt, but it IS useless -- warn
+  ;; instead of pretending success (builtin parser on a Go repo, new-ctags on TS).
+  (if (fenrir/gtags--index-empty-p build-root)
+      (message
+       "GTAGS built in %s but indexed NO symbols -- the parser ('%s') doesn't \
+cover this repo's languages.  Set `fenrir/gtags-label' to \"pygments\" \
+(Go/Python/TS) or use gopls for Go"
+       (abbreviate-file-name build-root)
+       (or fenrir/gtags-label "builtin"))
+    (message "GTAGS created in %s -- M-. / M-? now use GNU Global"
+             (abbreviate-file-name build-root))))
+
+(defun fenrir/gtags--maybe-steer-to-gopls (root)
+  "If ROOT is Go-dominant and gopls is installed, offer to abort in favor of gopls.
+Returns nil if the user wants to proceed with GTAGS; signals `user-error' (which
+unwinds the build) if they choose gopls.  WHY: gopls is strictly better for Go,
+and the user only fell to gtags because gopls didn't ATTACH -- most often because
+there is no go.mod at the project root (the buffer's repo is a subdir of a larger
+git repo, e.g. ~/code/coinsasia/backend under ~/code/coinsasia).  We name that
+likely cause and the fix instead of silently building a slow, inferior index."
+  (when (and (executable-find "gopls")
+             (fenrir/gtags--go-dominant-p root))
+    (unless (y-or-n-p
+             (format
+              "%s looks like a Go project and gopls is installed -- gopls gives \
+far better Go navigation than GTAGS.  gopls likely didn't attach because there's \
+no go.mod at the project root.  Build a GTAGS index anyway? "
+              (abbreviate-file-name root)))
+      (user-error
+       "Aborted -- prefer gopls for Go (run `go mod init' at the project root, \
+or open the file from a directory that has go.mod; inspect with \
+`M-x eglot-events-buffer')"))))
+
+;;;###autoload
+(defun fenrir/gtags-create-or-update (&optional force-create)
+  "Build or refresh the GNU Global (GTAGS) index for the current project.
+With prefix arg FORCE-CREATE, rebuild from scratch even if an index exists.
+
+Resolves the project root via project.el (honoring `my-project-ignore-home', so
+$HOME is never indexed), verifies the `gtags' / `global' CLIs are installed, and
+refuses to index a root that contains no source files (the empty-GTAGS gotcha).
+After (re)building, invalidates ggtags' cached project so its xref backend
+answers M-. / M-? immediately -- no buffer revisit needed.
+
+Three durable safeguards beyond the old behavior:
+  * Go-DOMINANT repos with gopls installed get a steer toward gopls first
+    (`fenrir/gtags--maybe-steer-to-gopls') -- gtags-on-Go is the opt-in fallback.
+  * CREATE is followed by POST-BUILD VALIDATION (`fenrir/gtags--index-corrupt-p'):
+    if gtags produced a 0-byte / corrupt index, the stub files are DELETED and
+    the real reason is reported -- never leaving a corpse for the next `global -u'.
+  * UPDATE first checks the existing index; a corrupt / 0-byte one (the
+    \"seems corrupted\" dead-end) triggers an offer to WIPE + rebuild from scratch
+    with the working parser label instead of erroring out.
+
+This is the durable entry point; the `visit-tags-table-buffer' advice below
+routes the cryptic etags prompt here."
+  (interactive "P")
+  (unless (fenrir/gtags--global-available-p)
+    (fenrir/gtags--guide-install)
+    (user-error "GNU Global not installed"))
+  (require 'ggtags)
+  (let* ((existing (and (not force-create) (fenrir/gtags--existing-index-root)))
+         (root (or existing
+                   (fenrir/gtags--project-root)
+                   ;; No project and no existing index: fall back to the buffer's
+                   ;; directory rather than guessing -- but make the user confirm,
+                   ;; since indexing the wrong dir is the whole gotcha.
+                   (let ((d (expand-file-name default-directory)))
+                     (and (not (string= d (expand-file-name "~/")))
+                          (y-or-n-p (format "No project found.  Index %s? " d))
+                          d)))))
+    (unless root
+      (user-error "No indexable project root (refusing to index $HOME)"))
+    (cond
+     ;; Existing index -> normally an incremental update (`global -u', via
+     ;; ggtags), far cheaper than a full rebuild and keeps the index warm.  But
+     ;; FIRST check it isn't the 0-byte / corrupt stub that makes `global -u'
+     ;; dead-end with \"seems corrupted\" (FIX 2).
+     (existing
+      (cond
+       ;; Corrupt / 0-byte existing index -> offer wipe + rebuild instead of the
+       ;; cryptic error.  Direct cure for the user's `global -u ... seems
+       ;; corrupted' failure.
+       ((fenrir/gtags--index-corrupt-p existing)
+        (if (yes-or-no-p
+             (format
+              "GTAGS index in %s is corrupt / 0-byte (would error with \"seems \
+corrupted\").  Wipe the 3 index files and rebuild from scratch? "
+              (abbreviate-file-name existing)))
+            (progn
+              (fenrir/gtags--wipe-index existing)
+              (fenrir/gtags--fresh-build existing))
+          (user-error
+           "GTAGS index in %s is corrupt; leaving it in place (rebuild with \
+\\[universal-argument] \\[fenrir/gtags-create-or-update], or delete \
+GTAGS/GRTAGS/GPATH by hand)"
+           (abbreviate-file-name existing))))
+       ;; Healthy index -> incremental update, but belt-and-suspenders: ggtags'
+       ;; `global -u' can itself surface \"seems corrupted\" (a race, or
+       ;; corruption between our probe and the update).  Catch THAT exact error
+       ;; and fall into the same wipe + rebuild offer rather than propagating it.
+       (t
+        (let ((default-directory existing))
+          (condition-case err
+              (progn
+                (ggtags-update-tags 'force)
+                (message "GTAGS updated in %s" (abbreviate-file-name existing)))
+            (error
+             (if (and (string-match-p "seems corrupted"
+                                      (error-message-string err))
+                      (yes-or-no-p
+                       (format
+                        "`global -u' reports the GTAGS index in %s is corrupted. \
+ Wipe and rebuild from scratch? "
+                        (abbreviate-file-name existing))))
+                 (progn
+                   (fenrir/gtags--wipe-index existing)
+                   (fenrir/gtags--fresh-build existing))
+               ;; Not a corruption error (or user declined) -> re-raise.
+               (signal (car err) (cdr err)))))))))
+     ;; No index yet -> fresh build (gopls steer + validation inside the helper).
+     (t
+      (fenrir/gtags--fresh-build root)))))
+
+(defun fenrir/visit-tags-table-buffer--guide-to-gtags (orig &rest args)
+  "Intercept the etags \"Visit tags table\" prompt and offer GTAGS instead.
+Around-advice on `visit-tags-table-buffer'.  When etags is about to fall back to
+its file-picker prompt -- meaning no `tags-file-name', no `tags-table-list', no
+TAGS file -- and we're in a real project with no live Eglot server and no GTAGS
+index, ask the user (TTY-safe `y-or-n-p') whether to build a GTAGS index and run
+`fenrir/gtags-create-or-update' if they say yes.
+
+Falls through to the original prompt (ORIG) in every case it does NOT handle:
+already have a tags table, no project, GNU Global missing, an Eglot server is
+attached (paranoia -- the etags backend shouldn't run then), or the user
+declines.  So legitimate etags users keep their prompt; we only catch the
+\"there's nothing to fall back to\" case this config actually hits."
+  (let ((cont (car args)))
+    (if (or
+         ;; CONT is 'same / t / a string -> the caller already knows which table
+         ;; it wants; not the unguided fall-through prompt we mean to replace.
+         (and cont (not (eq cont nil)))
+         ;; A tags table is already in play -- let etags use it.
+         tags-file-name tags-table-list
+         ;; Eglot owns this buffer -> its xref backend should have handled M-.;
+         ;; never divert.  `fboundp' guard because Eglot loads lazily.
+         (and (fboundp 'eglot-managed-p) (eglot-managed-p))
+         ;; Toolchain missing -> we can't offer anything useful; guide + fall
+         ;; through so the user at least learns what to install.
+         (not (fenrir/gtags--global-available-p))
+         ;; Already have an index covering this buffer -> ggtags will answer;
+         ;; no reason to prompt.  (Shouldn't reach here, but cheap to check.)
+         (fenrir/gtags--existing-index-root)
+         ;; No project -> nothing sane to index; don't hijack the prompt.
+         (not (fenrir/gtags--project-root)))
+        (apply orig args)
+      ;; The interceptable case: project, no Eglot, no index, gtags available.
+      (if (y-or-n-p
+           (format "No tags index for %s.  Build a GNU Global (GTAGS) index now? "
+                   (abbreviate-file-name (fenrir/gtags--project-root))))
+          (progn
+            (fenrir/gtags-create-or-update)
+            ;; Returning nil signals `visit-tags-table-buffer' "no table" so the
+            ;; etags machinery aborts cleanly; the user re-runs M-. / M-? and the
+            ;; freshly-built GTAGS now answers via ggtags' xref backend.
+            nil)
+        ;; Declined -> honor the original etags behavior (the prompt).
+        (apply orig args)))))
+
+(with-eval-after-load 'etags
+  (advice-add 'visit-tags-table-buffer :around
+              #'fenrir/visit-tags-table-buffer--guide-to-gtags))
+
+;; Project-scoped keybinding for the explicit command.  `C-c g' is free (the
+;; Eglot refactor keys live under `C-c .' / `C-c h' in `eglot-mode-map'; `C-c g'
+;; is unused globally).  `g g' = "gtags generate".
+(global-set-key (kbd "C-c g g") #'fenrir/gtags-create-or-update)
 
 ;; tree-sitter (built-in in 30): faster, more accurate syntax via *-ts-mode.
 ;; `treesit-auto' installs grammars on demand and remaps classic modes to their

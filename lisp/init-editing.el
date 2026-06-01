@@ -74,10 +74,21 @@
 ;; have no specialised function so fall back to `ace-link-addr', which
 ;; scans the visible buffer for URLs / email / file references.
 (use-package ace-link
-  :bind ((:map org-mode-map      ("C-c o" . ace-link-org))
-         (:map markdown-mode-map ("C-c o" . ace-link-addr))
-         (:map magit-mode-map    ("C-c o" . ace-link-addr)))
-  :init (ace-link-setup-default))
+  :init (ace-link-setup-default)
+  :config
+  ;; org / markdown / magit keymaps belong to packages that load AFTER this
+  ;; module (init-editing loads before init-org / init-git, and markdown-mode
+  ;; is deferred).  Binding them eagerly via `:bind (:map org-mode-map ...)'
+  ;; therefore errors on a cold-daemon load -- "void variable org-mode-map",
+  ;; because the map doesn't exist yet -- and use-package's :catch aborts the
+  ;; rest of the block, so ALL three `C-c o' bindings silently fail to apply.
+  ;; Defer each binding to its owning package's load instead.
+  (with-eval-after-load 'org
+    (keymap-set org-mode-map "C-c o" #'ace-link-org))
+  (with-eval-after-load 'markdown-mode
+    (keymap-set markdown-mode-map "C-c o" #'ace-link-addr))
+  (with-eval-after-load 'magit
+    (keymap-set magit-mode-map "C-c o" #'ace-link-addr)))
 
 ;; avy-zap: replace `M-z' with `avy-zap-to-char-dwim'.  Native
 ;; `zap-to-char' is forward-only + first-occurrence; avy-zap labels every

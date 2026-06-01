@@ -11,18 +11,19 @@
  '(package-selected-packages
    '(ace-link ace-window aidermacs apheleia avy-zap bash-completion
               breadcrumb cape combobulate consult-dir consult-eglot
-              corfu-terminal dape diff-hl difftastic
-              dired-collapse dired-narrow dired-subtree diredfl
-              doom-modeline doom-themes eglot-booster
+              corfu-terminal dape diff-hl difftastic dired-collapse
+              dired-narrow dired-subtree diredfl doom-modeline
+              doom-themes ef-themes eglot-booster
               eglot-inactive-regions embark-consult envrc
               exec-path-from-shell expand-region expreg flymake-eslint
-              forge gcmh ggtags gptel
-              helpful jinx lua-mode magit-delta magit-todos marginalia
-              multiple-cursors nerd-icons-dired no-littering
-              orderless org-appear org-modern org-roam-ui popper
-              pulsar rainbow-delimiters sideline-flymake
-              system-packages tempel treesit-auto treesit-fold vertico
-              vterm vue-mode vundo web-server wgrep yasnippet-snippets))
+              forge gcmh ggtags gptel helpful jinx lua-mode
+              magit-delta magit-todos marginalia multiple-cursors
+              nerd-icons-completion nerd-icons-dired
+              nerd-icons-ibuffer no-littering orderless org-appear
+              org-modern org-roam-ui popper pulsar rainbow-delimiters
+              sideline-flymake system-packages tempel treesit-auto
+              treesit-fold vertico vterm vue-mode vundo web-server
+              wgrep yasnippet-snippets))
  '(package-vc-selected-packages
    '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate"))))
