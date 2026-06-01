@@ -12,7 +12,7 @@ keybinding cheat sheet in [FEATURES.md](../FEATURES.md).
 | LSP server | `gopls` v0.21.1 | `~/go/bin/gopls` — install via `go install golang.org/x/tools/gopls@latest` |
 | Major mode | `go-ts-mode` | Built-in (Emacs 30+); auto-selected by `treesit-auto` |
 | Tree-sitter grammar | `libtree-sitter-go.so` | `~/.emacs.d/tree-sitter/` (`treesit-install-language-grammar` populates this) |
-| LSP client | `eglot` | Built-in; auto-starts on Go buffers — see [section 8 of init.el](../init.el) |
+| LSP client | `eglot` | Built-in; auto-starts on Go buffers via the hook in [`lisp/languages/init-go.el`](../lisp/languages/init-go.el) (Eglot core itself in [`lisp/init-languages.el`](../lisp/init-languages.el)) |
 | Diagnostics | `flymake` ← eglot ← gopls | Built-in; eglot pipes LSP diagnostics into it |
 | Hover / signatures | `eldoc` ← eglot ← gopls | Echo area by default; `C-c d` summons full doc buffer as a 60-col side window |
 | Symbol navigation | `xref` ← eglot ← gopls | `M-.` / `M-,` / `M-?` |
@@ -113,6 +113,13 @@ LSP-driven via xref. Eglot's xref backend prepends itself to `xref-backend-funct
 | `M-g i` | `consult-imenu` | Jump to a definition **in this file** via Vertico (gopls feeds the symbol list) |
 | `M-g I` | `consult-imenu-multi` | Same, but across every open buffer that shares the major mode — useful for jumping between files in the same package |
 | `M-s r` | `consult-ripgrep` | Project-wide text search — orthogonal to LSP, useful when gopls doesn't know |
+| `C-c .` | `eglot-code-actions` | Quick-fix / refactor transient |
+| `C-c r` | `eglot-rename` | Project-wide rename via gopls |
+| `C-c i` | `eglot-code-action-organize-imports` | One-shot organize imports — pairs with gopls `completeUnimported` (auto-import section above) to add the missing `import` and drop unused ones |
+| `C-c f` | `eglot-format` | On-demand gopls format (apheleia still owns format-on-save) |
+| `C-c h i` | `eglot-inlay-hints-mode` | Toggle inlay hints (gopls parameter names / inferred types) |
+
+(Full key list, including `C-c x` extract and `C-c h s` semantic tokens, is in [FEATURES.md §7](../FEATURES.md).)
 
 `ggtags` is in the config (see [init.el's ggtags block](../init.el)) but only takes over in buffers without an active LSP session — for Go, eglot always wins. Useful as a fallback in modes without an LSP server hooked.
 
@@ -164,17 +171,20 @@ Create `.dir-locals.el` in the module root:
 
 Reopen the file; Eglot picks up the config and re-initialises gopls.
 
-### 2. Global default in init.el
+### 2. Global default in [`lisp/languages/init-go.el`](../lisp/languages/init-go.el)
 
-Add to the eglot use-package block:
+The repo's global gopls defaults are registered there by appending the `:gopls`
+key onto the shared `eglot-workspace-configuration` alist once Eglot loads:
 
 ```elisp
-:custom
-(eglot-workspace-configuration
- '((:gopls . (:staticcheck t :gofumpt t))))
+(with-eval-after-load 'eglot
+  (setf (alist-get :gopls eglot-workspace-configuration)
+        '(:staticcheck t :gofumpt t)))   ; … plus the analyses / hints already there
 ```
 
-Per-directory wins over global — useful when one repo wants strict `staticcheck` and another doesn't.
+Edit that `setf` block to change the defaults for every Go project. Per-directory
+`.dir-locals.el` (route 1) wins over this global — useful when one repo wants
+strict `staticcheck` and another doesn't.
 
 Reference: [gopls settings docs](https://github.com/golang/tools/blob/master/gopls/doc/settings.md).
 
@@ -182,17 +192,17 @@ Reference: [gopls settings docs](https://github.com/golang/tools/blob/master/gop
 
 Where each piece lives:
 
-| Concern | File | Section / line |
-|---|---|---|
-| Tree-sitter auto-install + grammar load path | [init.el](../init.el) | Section 8 (treesit) |
-| Eglot hook for `go-ts-mode` | [init.el](../init.el) | Section 8 (`eglot` use-package, around line 417) |
-| Eglot sync-connect, autoshutdown, xref extension | [init.el](../init.el) | Section 8 (`eglot-*` custom vars) |
-| Flymake hook + nav keys | [init.el](../init.el) | Section 8 (`flymake` use-package) |
-| Eldoc side-window display rule | [init.el](../init.el) | Section 8 (`display-buffer-alist` near line 421) |
-| `gopls`/`go` on `exec-path` for daemon | [init.el](../init.el) | Section 1 (`exec-path-from-shell`) |
-| Vertico minibuffer + orderless + marginalia | [init.el](../init.el) | Section 4 |
-| `completion-in-region-function` → consult | [init.el](../init.el) | Section 4 (`consult` use-package `:init`) |
-| Keybinding cheat sheet | [FEATURES.md](../FEATURES.md) | — |
+| Concern | File |
+|---|---|
+| Eglot hook for `go-ts-mode` + global `gopls` `eglot-workspace-configuration` | [`lisp/languages/init-go.el`](../lisp/languages/init-go.el) |
+| Tree-sitter auto-install + grammar load path | [`lisp/init-languages.el`](../lisp/init-languages.el) (`treesit-auto`) |
+| Eglot sync-connect, autoshutdown, xref extension, inlay-hints hook | [`lisp/init-languages.el`](../lisp/init-languages.el) (`eglot` use-package) |
+| Flymake hook + nav keys | [`lisp/init-languages.el`](../lisp/init-languages.el) (`flymake` use-package) |
+| Eldoc side-window display rule | [`lisp/init-languages.el`](../lisp/init-languages.el) (`display-buffer-alist`) |
+| `gopls`/`go` on `exec-path` for daemon | [init.el](../init.el) (`exec-path-from-shell`) |
+| Vertico minibuffer + orderless + marginalia | [`lisp/init-completion.el`](../lisp/init-completion.el) |
+| `completion-in-region-function` → consult | [`lisp/init-completion.el`](../lisp/init-completion.el) (`consult` use-package `:init`) |
+| Keybinding cheat sheet | [FEATURES.md](../FEATURES.md) |
 
 ## Troubleshooting
 

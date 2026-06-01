@@ -7,16 +7,18 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(eglot-confirm-server-edits nil nil nil "Customized with use-package eglot")
  '(package-selected-packages
    '(ace-link ace-window aidermacs apheleia avy-zap bash-completion
               breadcrumb cape combobulate consult-dir consult-eglot
-              copilot corfu-terminal dape diff-hl difftastic
+              corfu-terminal dape diff-hl difftastic
               dired-collapse dired-narrow dired-subtree diredfl
-              dirvish doom-modeline doom-themes eglot-booster
-              eldoc-box embark-consult envrc exec-path-from-shell
-              expand-region flymake-eslint forge gcmh ggtags gptel
+              doom-modeline doom-themes eglot-booster
+              eglot-inactive-regions embark-consult envrc
+              exec-path-from-shell expand-region expreg flymake-eslint
+              forge gcmh ggtags gptel
               helpful jinx lua-mode magit-delta magit-todos marginalia
-              multiple-cursors nerd-icons-dired no-littering obsidian
+              multiple-cursors nerd-icons-dired no-littering
               orderless org-appear org-modern org-roam-ui popper
               pulsar rainbow-delimiters sideline-flymake
               system-packages tempel treesit-auto treesit-fold vertico

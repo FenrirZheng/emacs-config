@@ -98,10 +98,31 @@
 (use-package avy-zap
   :bind ("M-z" . avy-zap-to-char-dwim))
 
-;; expand-region: C-= grows the region semantically (word -> sexp -> string ->
-;; defun -> ...); shift-C-= shrinks it again.
+;; expreg: grow the region along the tree-sitter PARSE TREE (word -> string ->
+;; node -> enclosing node -> ...).  Where `expand-region' (next block) grows by
+;; Lisp sexps -- accurate in Lisp, only approximate elsewhere -- expreg climbs
+;; the real treesit tree, so if-statement / parameter-list / JSX-element
+;; boundaries come out exact in every grammar-backed language (Go, Python, TS,
+;; Java, ...).  GNU ELPA, maintained.  Orthogonal to combobulate (`C-c o',
+;; init-languages.el): combobulate transforms / navigates nodes, expreg only
+;; grows the region.
+;;
+;; `C-=' expand / `C-+' contract (`C-+' = shift-`C-=', the same chord
+;; expand-region used for shrink, so muscle memory carries over).
+;;
+;; First-run note: not in elpa/ on a fresh clone -- `M-x my/package-refresh'
+;; then restart once so it installs.
+(use-package expreg
+  :bind (("C-=" . expreg-expand)
+         ("C-+" . expreg-contract)))
+
+;; expand-region: kept as the NO-GRAMMAR fallback for expreg above, moved off
+;; `C-=' onto `C-M-='.  css / json / lua have no tree-sitter parser (excluded
+;; from `treesit-auto-langs', init-languages.el), so expreg has nothing to climb
+;; there; expand-region's sexp/heuristic growth still works.  Grows the region
+;; semantically (word -> sexp -> string -> defun -> ...).
 (use-package expand-region
-  :bind ("C-=" . er/expand-region))
+  :bind ("C-M-=" . er/expand-region))
 
 ;; multiple-cursors: edit many places at once.
 (use-package multiple-cursors

@@ -12,7 +12,11 @@
 ;;   init-corfu           -- In-buffer code completion (Corfu + Cape)
 ;;   init-snippets        -- YASnippet
 ;;   init-editing        -- Editing enhancements (avy, pulsar, popper, jinx, ...)
-;;   init-languages      -- Project, LSP (Eglot), tree-sitter, per-language
+;;   init-languages      -- Project, LSP (Eglot) & shared language infra; the
+;;                          per-language modules under lisp/languages/ load after
+;;                          it (init-java, init-go, init-python, init-rust,
+;;                          init-typescript, init-c-cpp, init-lua, init-vue,
+;;                          init-web, init-markdown)
 ;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
 ;;   init-terminal       -- vterm
 ;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
@@ -132,8 +136,11 @@ up new or changed files.  Progress and warnings land in the
 ;; Local-lisp dir for hand-written packages (claude-jobs-view, future siblings)
 ;; and for the per-section `init-<area>.el' modules.  Added to `load-path' here,
 ;; ONCE, so every later `(require 'init-<area>)' / `use-package <local> :ensure
-;; nil' resolves without touching MELPA.
+;; nil' resolves without touching MELPA.  `lisp/languages/' holds the
+;; per-language modules (`init-java', `init-go', ...) split out of the former
+;; monolithic `init-languages.el'.
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(add-to-list 'load-path (expand-file-name "lisp/languages" user-emacs-directory))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-section modules.  Loaded in the original section order; cross-section
@@ -148,7 +155,20 @@ up new or changed files.  Progress and warnings land in the
         init-corfu
         init-snippets
         init-editing
-        init-languages
+        init-languages          ; shared LSP / tree-sitter / editing infra
+        ;; Per-language modules (lisp/languages/), loaded AFTER init-languages:
+        ;; each attaches its own eglot-ensure hook + eglot-workspace-configuration
+        ;; entry onto the shared eglot setup declared above.
+        init-java
+        init-go
+        init-python
+        init-rust
+        init-typescript
+        init-c-cpp
+        init-lua
+        init-vue
+        init-web
+        init-markdown
         init-git
         init-terminal
         init-appearance

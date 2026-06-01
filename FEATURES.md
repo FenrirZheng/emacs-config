@@ -112,7 +112,8 @@ and previews entries at point.
 | `C-:` | `avy-goto-char-timer` | Type a few chars → every match gets a letter label → press it to jump there (the Emacs analogue of ace-jump / tmux-jump) |
 | `M-g w` | `avy-goto-word-1` | Jump to a word |
 | `M-g l` | `avy-goto-line` | Jump to a line |
-| `C-=` | `er/expand-region` | Grow the region semantically: word → sexp → string → defun → … (`C-S-=` shrinks it back) |
+| `C-=` | `expreg-expand` | Grow the region along the **tree-sitter parse tree**: word → string → node → enclosing node → … `C-+` (= `C-S-=`) shrinks it. Exact if-statement / parameter-list / JSX-element boundaries in every grammar-backed language |
+| `C-M-=` | `er/expand-region` | The **no-grammar fallback** for `C-=` — grows by Lisp sexps (word → sexp → string → defun → …). For css / json / lua, which have no tree-sitter parser (excluded from `treesit-auto`), where expreg has nothing to climb |
 | `C->` | `mc/mark-next-like-this` | Multiple cursors: mark the next occurrence of the region/word |
 | `C-<` | `mc/mark-previous-like-this` | …the previous occurrence |
 | `C-c C-<` | `mc/mark-all-like-this` | Mark *all* occurrences |
@@ -169,6 +170,24 @@ repeatedly. `which-key` still routes you in: press `C-c`, pause, and the panel s
 hideshow folds by sexp / braces — strong for C-like, Lisp and JSON, weaker for
 indentation-structured languages like Python.
 
+**Code folding (tree-sitter)** — `treesit-fold` complements HideShow above by folding on
+the **parse tree** instead of braces / indentation, so it folds Python (and every other
+grammar-backed language) accurately exactly where hideshow is weak. `global-treesit-fold-mode`
+is on; in a buffer with no tree-sitter parser (css / json / lua) it no-ops and hideshow
+stays in charge — the two coexist. Folds render as an overlay ellipsis (no fringe — TTY-safe).
+Its own `C-c z` prefix is kept off hideshow's `C-c @` and combobulate's `C-c o` (§7) so all
+three can be live in one buffer. Config lives with the tree-sitter stack in
+[`init-languages.el`](lisp/init-languages.el), not this section's `init-editing.el`.
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c z t` | `treesit-fold-toggle` | Fold / unfold the node at point |
+| `C-c z h` | `treesit-fold-close` | Fold the node at point |
+| `C-c z s` | `treesit-fold-open` | Unfold the node at point |
+| `C-c z H` | `treesit-fold-close-all` | Fold every foldable node in the buffer |
+| `C-c z S` | `treesit-fold-open-all` | Unfold everything |
+| `C-c z r` | `treesit-fold-open-recursively` | Unfold the node at point and all its descendants |
+
 ---
 
 ## 6. Help system, upgraded (`which-key` in [`init-defaults.el`](lisp/init-defaults.el), `helpful` in [`init-editing.el`](lisp/init-editing.el))
@@ -186,7 +205,9 @@ lists the follow-up keys — no need to memorise prefixes.
 
 ---
 
-## 7. Project, LSP & languages ([`init-languages.el`](lisp/init-languages.el))
+## 7. Project, LSP & languages ([`init-languages.el`](lisp/init-languages.el) + per-language [`lisp/languages/`](lisp/languages/))
+
+> Shared Eglot / tree-sitter / project / debugger infra lives in [`init-languages.el`](lisp/init-languages.el); each language's hooks + server config live in [`lisp/languages/init-<lang>.el`](lisp/languages/) (`init-java`, `init-go`, `init-python`, `init-rust`, `init-typescript`, `init-c-cpp`, `init-lua`, `init-vue`, `init-web`, `init-markdown`).
 
 - `project.el` **(built-in)**: project-aware file/buffer/command commands under `C-x p`.
 - **envrc**: direnv integration. When you visit a file under a directory with an
@@ -227,8 +248,8 @@ lists the follow-up keys — no need to memorise prefixes.
   first); classic modes are remapped to their tree-sitter equivalents.
 - **combobulate**: structural editing driven by the tree-sitter parse tree. Active in
   `python-ts-mode`, `go-ts-mode`, `js-ts-mode`, `typescript-ts-mode`, `tsx-ts-mode`.
-  Where `expand-region` (`C-=`, §5) grows by lisp sexps and gets non-Lisp wrong,
-  combobulate operates on real syntactic nodes — if-statement, parameter list, JSX
+  Where `expreg` (`C-=`, §5) only *grows the region* along the parse tree, combobulate
+  *navigates and transforms* the nodes themselves — if-statement, parameter list, JSX
   element. Key motions: `M-a` / `M-e` jump between siblings (cases of a switch, list
   items, JSX children); `M-<` / `M->` swap siblings (reorder args / list items / JSX
   attributes); `M-h` mark current node (repeat to climb to the enclosing node, composes
@@ -242,7 +263,12 @@ lists the follow-up keys — no need to memorise prefixes.
   Globally enabled; toggle off per buffer with `M-x breadcrumb-local-mode`. From GNU
   ELPA (same author as eglot-booster and `indent-bars`).
 - **flymake** **(built-in)**: on-the-fly diagnostics, fed by Eglot from the LSP. `M-n` /
-  `M-p` jump to the next / previous error.
+  `M-p` jump to the next / previous error; the `C-c !` cluster opens the list views —
+  `C-c ! l` this buffer's diagnostics (`flymake-show-buffer-diagnostics`), `C-c ! p` the
+  **project-wide** list (`flymake-show-project-diagnostics` — the cross-file error surface,
+  pairs with Eglot's workspace `diagnosticMode`), `C-c ! c` the full diagnostic at point
+  (`flymake-show-diagnostic`). (`M-g f` in §1 lists this buffer's diagnostics through
+  consult with preview; `C-u M-g f` goes project-wide.)
 - **sideline** + **sideline-flymake**: VSCode "Error Lens"-style inline diagnostics.
   The diagnostic for the line containing point is rendered to the **right of that
   line** via overlay `after-string` — works identically in TTY and GUI, no fringe /
@@ -255,9 +281,20 @@ lists the follow-up keys — no need to memorise prefixes.
   Opens Eglot's `eglot-code-actions` transient — the LSP-driven quick-fix list
   ("Add missing import", "Organize imports", "Quickfix this diagnostic", …). The
   user-prefix variant is used because `C-.` is already `embark-act` (§3); scoped
-  to `eglot-mode-map` so it doesn't shadow `C-c .` in non-LSP buffers. The unified
-  transient already lists `eglot-code-action-organize-imports` /
-  `eglot-code-action-quickfix` as entries, so no separate keys for those.
+  to `eglot-mode-map` so it doesn't shadow `C-c .` in non-LSP buffers.
+- **Refactor / format keys** — the most-used code actions are lifted out of the
+  `C-c .` transient onto dedicated keys (all in `eglot-mode-map`, all avoiding
+  the combobulate `C-c o` prefix — see §3):
+  - `C-c r` — `eglot-rename`: project-wide rename (VSCode F2 / IntelliJ Shift-F6),
+    multi-file (`eglot-confirm-server-initiated-edits` is `nil`, so it applies in
+    one go; review the aggregate in `git diff`).
+  - `C-c i` — `eglot-code-action-organize-imports` (VSCode Shift-Alt-O).
+  - `C-c x` — `eglot-code-action-extract`: extract method / variable (server-dependent —
+    rich in jdtls / rust-analyzer, sparse in gopls).
+  - `C-c f` — `eglot-format`: format region (if active) else buffer, **on demand only**.
+    apheleia owns format-on-save (§7's formatting notes); this is the manual escape
+    hatch for buffers with no apheleia formatter and is deliberately never added to
+    `before-save-hook` (would double-format).
 - **Call / type hierarchy** — `C-c h c` (`eglot-show-call-hierarchy`) and `C-c h t`
   (`eglot-show-type-hierarchy`), both in `eglot-mode-map`. Native to Eglot ≥1.19 (the
   reason this config upgrades Eglot off the bundled 30.1 copy — see the Eglot bullet
@@ -271,10 +308,26 @@ lists the follow-up keys — no need to memorise prefixes.
   rendered inline by the LSP. Built-in in Emacs 30 — no external package. Enabled
   via `(eglot-managed-mode . eglot-inlay-hints-mode)` so it lights up on every
   Eglot-attached buffer (Go parameter names before each arg, Rust `: Vec<i32>`
-  after `let x = vec![…]`, …). Toggle per-buffer at runtime with
-  `M-x eglot-inlay-hints-mode`; disable for a noisy language by removing its
-  hook in [`init-languages.el`](lisp/init-languages.el) rather than touching the
-  global setting.
+  after `let x = vec![…]`, …). Toggle per-buffer at runtime with `C-c h i`
+  (`eglot-inlay-hints-mode`); disable for a noisy language by removing its
+  hook in that language's [`lisp/languages/init-<lang>.el`](lisp/languages/) module
+  rather than touching the global setting. Java (jdtls) shows parameter-name hints
+  for **all** arguments, not just literals — `java.inlayHints.parameterNames` is set
+  to `"all"` in [`init-java.el`](lisp/languages/init-java.el) (jdtls defaults to
+  `"literals"`); C/C++ (clangd) emit hints by default.
+- **Semantic-tokens highlighting** — `C-c h s` (`eglot-semantic-tokens-mode`, native
+  Eglot ≥1.20). Server-driven highlighting that knows local vs. captured variable,
+  type vs. value, etc., beyond what tree-sitter font-lock infers. **Per-buffer opt-in,
+  not a global hook** — it can fight tree-sitter font-lock and, on an 8/16-colour TTY,
+  the extra face distinctions collapse into the same colour, so the payoff is real only
+  on a truecolour terminal.
+- **eglot-inactive-regions** (C / C++): dims the `#if` / `#ifdef` branches clangd (≥17)
+  reports as inactive via its `inactiveRegions` extension, so code the preprocessor
+  discards reads as dimmed rather than live. Style is `'shadow-face` (theme-relative
+  dimming, the same channel as the diagnostic-tag faces) so it survives an 8 / 16-colour
+  TTY where the truecolour styles (`darken-foreground` / `shade-background`) collapse.
+  No keybinding — automatic in eglot-managed buffers; config in
+  [`init-c-cpp.el`](lisp/languages/init-c-cpp.el).
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
   `markdown-command` is `pandoc`.
 - **jinx**: fast spell checker for every text-mode buffer (org, markdown, gfm, ...).
@@ -299,7 +352,9 @@ lists the follow-up keys — no need to memorise prefixes.
   (a `B` glyph) so they stay visible on TTY frames (this config runs daemon +
   `emacsclient -nw`). `M-x dape` starts a session and prompts for a built-in
   config (`dlv`, `debugpy`, `codelldb`, `gdb`, `js-debug`, …) — you install the
-  adapter **binary**, not write configs; only Go's `dlv` is on `PATH` today.
+  adapter **binary**, not write configs; only Go's `dlv` is on `PATH` today. A `go-test`
+  config is registered ([`init-go.el`](lisp/languages/init-go.el)) so `M-x dape` offers a
+  one-pick "debug the current Go test" (delve `--mode test`).
   Per-project overrides live in `.dir-locals.el`. Breakpoints persist across
   Emacs sessions (`dape-breakpoint-save` on quit, `dape-breakpoint-load` on
   startup). Modified buffers are saved before each run. Keymap below.

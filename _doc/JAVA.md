@@ -7,7 +7,10 @@ architecture notes in [CLAUDE.md](../CLAUDE.md) (the "Java on Eglot + jdtls"
 and "Java project roots" bullets).
 
 Java migrated from `lsp-mode` + `lsp-java` to **Eglot + jdtls** on the
-`try/java-on-eglot` branch. The whole stack lives in
+`try/java-on-eglot` branch. All Java-specific code lives in
+[`lisp/languages/init-java.el`](../lisp/languages/init-java.el); the
+language-agnostic Eglot core it builds on (the `eglot` block, `eglot-booster`,
+`consult-eglot`, `dape`, …) lives in
 [`lisp/init-languages.el`](../lisp/init-languages.el).
 
 ## Stack
@@ -16,7 +19,7 @@ Java migrated from `lsp-mode` + `lsp-java` to **Eglot + jdtls** on the
 |---|---|---|
 | JDK | `java` (Corretto 21 here) | `~/.sdkman/candidates/java/current/bin/java` — any JDK 17+ on PATH works |
 | LSP server | `eclipse.jdt.ls` (jdtls) | [`var/lsp-java/eclipse.jdt.ls/server/`](../var/lsp-java/) — ~150 MB bundle inherited from the old lsp-java install, kept to avoid a re-download |
-| Server launcher | `fenrir/jdtls-launch-command` | [`lisp/init-languages.el`](../lisp/init-languages.el) — builds the `java -jar org.eclipse.equinox.launcher_*.jar …` argv |
+| Server launcher | `fenrir/jdtls-launch-command` | [`lisp/languages/init-java.el`](../lisp/languages/init-java.el) — builds the `java -jar org.eclipse.equinox.launcher_*.jar …` argv |
 | Major mode | `java-ts-mode` (falls back to `java-mode`) | Built-in; `treesit-auto` remaps `.java` when the grammar is installed |
 | LSP client | `eglot` | Built-in; `eglot-ensure` hooked on `java-mode` / `java-ts-mode` like every other language |
 | Client speedup | `emacs-lsp-booster` | `~/.cargo/bin/emacs-lsp-booster` — `eglot-booster` wraps the jdtls connection automatically |
@@ -166,8 +169,19 @@ projects (no marker → their own server) keep Gradle enabled and need no change
 | `M-,` | `xref-go-back` | Pop the marker stack |
 | `M-?` | `xref-find-references` | Cross-project across the whole fused workspace; results render in the consult minibuffer UI |
 | `M-g s` | `consult-eglot-symbols` | Workspace-symbol search across all imported projects |
-| `C-c .` | `eglot-code-actions` | Quick-fix / organize-imports / refactors |
+| `C-c .` | `eglot-code-actions` | Quick-fix / organize-imports / refactors transient |
+| `C-c r` | `eglot-rename` | Project-wide rename (jdtls); applies multi-file in one go |
+| `C-c i` | `eglot-code-action-organize-imports` | One-shot organize imports |
+| `C-c x` | `eglot-code-action-extract` | Extract method / variable (jdtls has rich support) |
+| `C-c h c` / `C-c h t` | call / type hierarchy | Callers/callees · super/sub-types |
+| `C-c h i` | `eglot-inlay-hints-mode` | Toggle inlay hints in this buffer |
 | `C-c d` | `eldoc-doc-buffer` | Full hover doc in a side window |
+
+**Inlay hints**: globally on (`eglot-managed-mode` → `eglot-inlay-hints-mode`). jdtls
+defaults parameter-name hints to `"literals"` (only literal arguments); this config
+sets `java.inlayHints.parameterNames` to `"all"` (the `:inlayHints` entry in the
+`:java` `eglot-workspace-configuration` in [`init-java.el`](../lisp/languages/init-java.el)),
+so every argument is annotated. Toggle off per-buffer with `C-c h i`.
 
 `M-.` into a JDK class (`java.lang.String`) or a third-party-jar class returns a
 `jdt://contents/…` URI, which Eglot has no native handler for. The handler
@@ -211,7 +225,7 @@ Vertico minibuffer + orderless + marginalia   ← where candidates actually rend
    runs on jdtls' factory defaults (see [What's NOT configured](#whats-not-in-this-config)).
 
 2. **Eglot (client).** Once `eglot-ensure` (the `java-mode` / `java-ts-mode` hook
-   in [`lisp/init-languages.el`](../lisp/init-languages.el)) attaches, Eglot adds
+   in [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)) attaches, Eglot adds
    `eglot-completion-at-point` to the buffer-local
    `completion-at-point-functions`. It sends `textDocument/completion`, turns the
    `CompletionItem[]` into Emacs candidates, and resolves documentation/detail
@@ -300,7 +314,7 @@ label with `(file-relative-name (eglot-uri-to-path uri))` — `eglot-uri-to-path
 leaves a `jdt://` URI unchanged (it is not a `file://` URI), so
 `file-relative-name` signals on the non-absolute path. The **same class of bug**
 guarded for diff-hl / breadcrumb / org-roam / vc-refresh (see the `jdt://` block
-in [`lisp/init-languages.el`](../lisp/init-languages.el)), but worse: the
+in [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)), but worse: the
 transformer runs per candidate inside `consult--async-map`, so **one** throwing
 candidate aborts the whole async refresh — and nearly every type search returns
 at least one library type (even `Event` pulls in `java.util.EventListener`),
@@ -373,9 +387,12 @@ and stops auto-inserting it.
 
 ## Configuration map
 
+All symbols below live in [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)
+unless noted otherwise.
+
 | What | Symbol / file |
 |---|---|
-| `eglot-ensure` hooks | `eglot` `use-package` `:hook` in [`init-languages.el`](../lisp/init-languages.el) |
+| `eglot-ensure` hooks | `add-hook` on `java-mode` / `java-ts-mode` in [`init-java.el`](../lisp/languages/init-java.el) |
 | jdtls launcher + JVM args + init options | `fenrir/jdtls-launch-command`, `fenrir/jdtls--java-settings` |
 | Bundle / workspace paths | `fenrir/jdtls-bundle-dir`, `fenrir/jdtls-workspace-dir` |
 | Project root resolution | `fenrir/project-find-java-build-root` (on `project-find-functions`) |
@@ -399,7 +416,7 @@ and stops auto-inserting it.
   …) — jdtls runs its factory completion defaults. To change that, add a
   `:completion (…)` entry to the `:java` plist in `eglot-workspace-configuration`
   (the `(setf (alist-get :java …))` block in
-  [`lisp/init-languages.el`](../lisp/init-languages.el)). See
+  [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)). See
   [Code completion](#code-completion) for the path that those settings would feed.
 
 ## References

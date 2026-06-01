@@ -51,9 +51,12 @@ Gotchas on first launch:
 - `vterm` and jinx compile their C modules on first load (~2s each); `shell/install.sh`
   ensures `cmake` / `libvterm-dev` / `libenchant-2-dev` are present.
 - Tree-sitter css/json/lua grammars are ABI 15 and unusable on Emacs 30 (ABI 14);
-  [`lisp/init-languages.el`](lisp/init-languages.el) routes around this (built-in
-  `css-mode` / `js-json-mode`, MELPA `lua-mode`). Lua still gets LSP via
-  `lua-language-server` — installed by [`shell/install-user.sh`](shell/install-user.sh).
+  the `treesit-auto` exclusion in [`lisp/init-languages.el`](lisp/init-languages.el)
+  routes around this, with the fallback modes wired per language in
+  [`lisp/languages/init-web.el`](lisp/languages/init-web.el) (built-in `css-mode` /
+  `js-json-mode`) and [`lisp/languages/init-lua.el`](lisp/languages/init-lua.el)
+  (MELPA `lua-mode`). Lua still gets LSP via `lua-language-server` — installed by
+  [`shell/install-user.sh`](shell/install-user.sh).
 
 ## Conventions
 

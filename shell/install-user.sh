@@ -103,7 +103,7 @@ fi
 # self-contained tarball on upstream GitHub releases. Extract the WHOLE
 # archive into ~/.local/share/ (the bin/ launcher needs its sibling
 # script/ meta/ locale/ dirs), then symlink the launcher onto PATH. Eglot
-# attaches it to `lua-mode' — see lisp/init-languages.el. Idempotent: the
+# attaches it to `lua-mode' — see lisp/languages/init-lua.el. Idempotent: the
 # version probe skips the download when the pinned release is already in.
 section "lua-language-server"
 luals_version="3.18.2"
@@ -138,6 +138,7 @@ cat <<'EOF'
   • jinx compiles its C module on first load (~2s; needs libenchant-2-dev)
   • vterm compiles its C module on first launch (needs cmake + libvterm-dev)
   • Tree-sitter css/json/lua are ABI 15 and unusable on Emacs 30 (ABI 14);
-    lisp/init-languages.el already routes around this (lua → lua-mode font-lock
-    + lua-language-server LSP, installed in section 6 above)
+    the treesit-auto exclusion in lisp/init-languages.el routes around this,
+    with lua → lua-mode font-lock + lua-language-server LSP wired in
+    lisp/languages/init-lua.el (server installed in section 6 above)
 EOF

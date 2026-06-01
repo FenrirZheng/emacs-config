@@ -50,7 +50,7 @@
 ;; plain overwrite.  A plain `(setq file-name-handler-alist saved)' would wipe
 ;; any handler a module registered DURING init (the list is nil while init
 ;; runs, so an `add-to-list' lands in an otherwise-empty list).  The jdt://
-;; URI handler in `init-languages.el' is exactly such an addition; an overwrite
+;; URI handler in `lisp/languages/init-java.el' is exactly such an addition; an overwrite
 ;; here silently un-registers it, so jdt:// URIs fall through to the default
 ;; handler, `expand-file-name' mangles them into `<cwd>/jdt:/contents/...', and
 ;; navigating into a jar class errors with "make-directory" / "stringp, nil".
