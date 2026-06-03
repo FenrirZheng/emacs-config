@@ -26,7 +26,8 @@
               wgrep yasnippet-snippets))
  '(package-vc-selected-packages
    '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
-     (combobulate :url "https://github.com/mickeynp/combobulate"))))
+     (combobulate :url "https://github.com/mickeynp/combobulate")
+     (eglot-x :url "https://github.com/nemethf/eglot-x"))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

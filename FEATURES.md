@@ -352,6 +352,24 @@ lists the follow-up keys — no need to memorise prefixes.
   not a global hook** — it can fight tree-sitter font-lock and, on an 8/16-colour TTY,
   the extra face distinctions collapse into the same colour, so the payoff is real only
   on a truecolour terminal.
+- **eglot-x — rust-analyzer protocol extensions** (Rust only, prefix `C-c R`): plain
+  Eglot speaks standard LSP and ignores rust-analyzer's custom requests; `eglot-x`
+  ([`init-rust.el`](lisp/languages/init-rust.el), `:vc` from GitHub) wires them in via
+  `(eglot-x-setup)`. The cockpit is bound into `rust-ts-mode-map` so it never collides
+  with the core's `C-c r` (rename) / `C-c h …` / combobulate's `C-c o`. Capital `R`:
+  - `C-c R e` — `eglot-x-expand-macro`: expand the macro call at point.
+  - `C-c R r` — `eglot-x-ask-runnables`: pick a cargo run / test / bench target.
+  - `C-c R t` — `eglot-x-ask-related-tests`: tests touching the function at point.
+  - `C-c R d` — `eglot-x-open-external-documentation`: open the symbol's docs.rs page.
+  - `C-c R w` — `eglot-x-reload-workspace`: re-scan `Cargo.toml` after editing deps.
+  - `C-c R p` — `eglot-x-rebuild-proc-macros`.
+  - `C-c R s` — `eglot-x-structural-search-replace`: syntax-tree-aware search/replace.
+  - `C-c R g` — `eglot-x-view-crate-graph` (needs graphviz `dot`).
+  - `C-c R m` — `eglot-x-view-recursive-memory-layout`: byte layout of the type at point.
+  - `C-c R a` — `eglot-x-analyzer-status`: rust-analyzer server status / indexing state.
+  - `C-c R <up>` / `C-c R <down>` — `eglot-x-move-item-up/down`: move fn/struct/variant.
+  `eglot-x-setup` is global (its file-handling advice is live for every Eglot server);
+  it lives in the Rust module because that's where the payoff and every binding are.
 - **eglot-inactive-regions** (C / C++): dims the `#if` / `#ifdef` branches clangd (≥17)
   reports as inactive via its `inactiveRegions` extension, so code the preprocessor
   discards reads as dimmed rather than live. Style is `'shadow-face` (theme-relative

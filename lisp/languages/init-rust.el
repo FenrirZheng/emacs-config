@@ -29,5 +29,47 @@
                        :typeHints (:enable t)
                        :chainingHints (:enable t)))))
 
+;; eglot-x: rust-analyzer's LSP *protocol extensions* surfaced through Eglot.
+;; Plain Eglot speaks only standard LSP and silently drops ra's custom requests
+;; (macro expansion, cargo runnables, docs.rs, reload-workspace, SSR, move-item,
+;; crate graph, MIR/HIR/memory-layout views).  This is THE thing that closes the
+;; gap between Eglot-driven Rust and the rustic/lsp-mode experience.
+;;
+;; GitHub-only -- not on MELPA/ELPA -- so `:vc' like eglot-booster / combobulate
+;; (URL recorded in [`custom.el'](../../custom.el) `package-vc-selected-packages').
+;;
+;; `eglot-x-setup' binds NO keys; it only advises a few Eglot internals to
+;; advertise ra's extra client capabilities (negotiated per-server, so non-Rust
+;; servers ignore them).  All keys are ours, below.
+;;
+;; Server-agnostic caveat: `eglot-x-setup' is global, so its file-handling
+;; advice is live for every Eglot server (jdtls, gopls, ...), not just
+;; rust-analyzer.  Lives here (not the core) because its payoff and every
+;; binding are Rust; if Java navigation via the `jdt://' handler ever
+;; misbehaves, suspect an interaction and verify with `eglot-x--enabled'.
+(use-package eglot-x
+  :vc (:url "https://github.com/nemethf/eglot-x" :rev :newest)
+  :after eglot
+  :config
+  (eglot-x-setup)
+  ;; Rust-analyzer cockpit on `C-c R' (capital R -- distinct from the core's
+  ;; lowercase `C-c r' = eglot-rename).  Bound into `rust-ts-mode-map' so these
+  ;; ra-only commands never shadow anything in non-Rust Eglot buffers.
+  (define-prefix-command 'fenrir/rust-x-map)
+  (define-key rust-ts-mode-map (kbd "C-c R") 'fenrir/rust-x-map)
+  (let ((m 'fenrir/rust-x-map))
+    (define-key (symbol-value m) (kbd "e")      #'eglot-x-expand-macro)              ; expand macro at point
+    (define-key (symbol-value m) (kbd "r")      #'eglot-x-ask-runnables)             ; cargo run/test/bench, pick
+    (define-key (symbol-value m) (kbd "t")      #'eglot-x-ask-related-tests)         ; tests touching this fn
+    (define-key (symbol-value m) (kbd "d")      #'eglot-x-open-external-documentation) ; docs.rs for symbol
+    (define-key (symbol-value m) (kbd "w")      #'eglot-x-reload-workspace)          ; re-scan Cargo.toml
+    (define-key (symbol-value m) (kbd "p")      #'eglot-x-rebuild-proc-macros)       ; rebuild proc-macros
+    (define-key (symbol-value m) (kbd "s")      #'eglot-x-structural-search-replace) ; syntax-tree SSR
+    (define-key (symbol-value m) (kbd "g")      #'eglot-x-view-crate-graph)          ; dep graph (needs graphviz)
+    (define-key (symbol-value m) (kbd "m")      #'eglot-x-view-recursive-memory-layout) ; type memory layout
+    (define-key (symbol-value m) (kbd "a")      #'eglot-x-analyzer-status)           ; ra server status
+    (define-key (symbol-value m) (kbd "<up>")   #'eglot-x-move-item-up)              ; move fn/struct/variant up
+    (define-key (symbol-value m) (kbd "<down>") #'eglot-x-move-item-down)))          ; ... down
+
 (provide 'init-rust)
 ;;; init-rust.el ends here
