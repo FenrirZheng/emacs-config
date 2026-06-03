@@ -5,13 +5,17 @@
 
 ;;; Code:
 
+;; doom-themes stays INSTALLED but no longer provides the default theme -- it is
+;; kept for its extras (`doom-themes-org-config' below) and as an alternative
+;; palette family.  doom-snazzy is the cheerful runner-up to the current default;
+;; reach it live with `C-c e T' -> consult-theme.  The default theme is now the
+;; warm, sunlit `ef-melissa-dark', loaded in the ef-themes block below -- it
+;; replaced the cold, melancholic doom-tokyo-night.  These bold/italic toggles
+;; only take effect when a doom-* theme is actually selected.
 (use-package doom-themes
   :custom
   (doom-themes-enable-bold t)
-  (doom-themes-enable-italic t)
-  :config
-  (load-theme 'doom-tokyo-night t)       ; swap for any `doom-*' you like
-  (doom-themes-org-config))              ; tweak org-mode faces to match
+  (doom-themes-enable-italic t))
 
 ;; nerd-icons: glyph set used by doom-modeline and (optionally) Dired/Corfu.
 ;; Run `M-x nerd-icons-install-fonts' ONCE after install to fetch the font.
@@ -70,18 +74,27 @@
 (use-package nerd-icons-ibuffer
   :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
 
-;; ef-themes: an OPT-IN alternative palette family.  doom-tokyo-night stays the
-;; default loaded theme (see the doom-themes block above) -- ef is only a toggle.
-;; `ef-themes-to-toggle' picks the two themes `ef-themes-toggle' flips between.
-;;   C-c e t : ef-themes-toggle (flip between the two ef themes above)
-;;   C-c e T : consult-theme    (live-preview pick ANY installed theme, incl.
-;;                               jumping back to a doom-* one)
+;; ef-themes: now the home of the DEFAULT theme.  `ef-melissa-dark' is a warm,
+;; sunlit dark palette (toasted-brown canvas + marigold/amber + spring green),
+;; chosen to replace the cold, melancholic doom-tokyo-night -- picked via a
+;; multi-agent judge panel weighing cheer + warmth + long-session readability.
+;; `doom-themes-org-config' is re-run here, AFTER the ef theme is loaded, so org
+;; faces harmonize with the active palette (it needs doom-themes -- declared
+;; eagerly in the block above -- already loaded; load order in this file is fine).
+;; `ef-themes-to-toggle' flips between Melissa's designed dark/light siblings.
+;;   C-c e t : ef-themes-toggle (flip ef-melissa-dark <-> ef-melissa-light: night/day)
+;;   C-c e T : consult-theme    (live-preview pick ANY installed theme -- e.g. the
+;;                               punchier runner-up doom-snazzy, or jump back to
+;;                               doom-tokyo-night)
 ;; C-c e / C-c e t / C-c e T verified free.  Tab management deliberately stays on
 ;; the native `C-x t' prefix -- no C-c key is invented for it.
 (use-package ef-themes
-  :custom (ef-themes-to-toggle '(ef-day ef-night))
+  :custom (ef-themes-to-toggle '(ef-melissa-dark ef-melissa-light))
   :bind (("C-c e t" . ef-themes-toggle)
-         ("C-c e T" . consult-theme)))
+         ("C-c e T" . consult-theme))
+  :config
+  (load-theme 'ef-melissa-dark t)
+  (doom-themes-org-config))
 
 ;; tab-bar: a TTY-native text workspace row (built-in, hence :ensure nil).
 ;; `tab-bar-show' set to the INTEGER 1 (not t) auto-hides the row when only one
@@ -108,25 +121,32 @@
 ;; to run AGAIN for every new `emacsclient -c' frame, or it inherits the
 ;; daemon's pre-init defaults and shows up wrong on the first paint.
 ;;
-;; A transparent background is exactly such a per-frame thing:
-;;   - TTY : Emacs paints its own background over the terminal cells.
-;;           Setting the `default' face background to the magic value
-;;           "unspecified-bg" makes Emacs skip that paint, so the
-;;           terminal's (or compositor's) transparency shows through.
-;;           Only visible if the terminal emulator itself is transparent.
+;; The per-frame thing here is GUI background translucency:
 ;;   - GUI : `alpha-background' (Emacs 29+) makes ONLY the background
 ;;           translucent; text and faces stay fully opaque.  Contrast
 ;;           `alpha', which fades the whole frame including the text.
+;;   - TTY : we now do NOTHING -- the active theme paints its own (dark)
+;;           background.  We used to set the `default' face to the magic
+;;           "unspecified-bg" so the terminal's background showed through
+;;           (TTY transparency), but that washed a dark theme out to the
+;;           terminal's colour: with a light terminal background the theme's
+;;           dark canvas never painted and everything looked grey-white.
+;;           This is a GUI-primary, occasional-TTY workflow, so painting the
+;;           theme background is the robust default.  (To restore TTY
+;;           transparency, re-add `(set-face-background 'default
+;;           "unspecified-bg" frame)' in the else branch AND use a dark/
+;;           transparent terminal background.)
 (defvar fenrir/gui-alpha-background 90
   "Background opacity percentage (0-100) for GUI frames; 100 = opaque.")
 
 (defun fenrir/setup-frame (&optional frame)
   "Per-frame setup that must run for every new frame in daemon mode.
-Currently gives FRAME a transparent background on both TTY and GUI."
+On a GUI FRAME, give it a translucent background via `alpha-background'.
+On a TTY FRAME, do nothing -- let the active theme paint its own background
+\(see the comment above for why the old \"unspecified-bg\" trick was dropped)."
   (let ((frame (or frame (selected-frame))))
-    (if (display-graphic-p frame)
-        (set-frame-parameter frame 'alpha-background fenrir/gui-alpha-background)
-      (set-face-background 'default "unspecified-bg" frame))))
+    (when (display-graphic-p frame)
+      (set-frame-parameter frame 'alpha-background fenrir/gui-alpha-background))))
 
 (if (daemonp)
     (add-hook 'server-after-make-frame-hook #'fenrir/setup-frame)
