@@ -245,10 +245,10 @@ Likely a large module + analyses enabled. Disable `staticcheck` and the heavier 
 
 | Feature | Why not | Workaround |
 |---|---|---|
-| Debugging (DAP) | `dape` (the Eglot-aligned DAP client) is configured in [`lisp/init-languages.el`](../lisp/init-languages.el) — works for Go via `dlv`, see [FEATURES.md §7](../FEATURES.md) | `M-x dape` to launch, or `dlv` from a separate `vterm` if you prefer CLI |
+| Debugging (DAP) | `dape` (the Eglot-aligned DAP client) is configured in [`lisp/init-languages.el`](../lisp/init-languages.el) — works for Go via `dlv`, see [FEATURES.md §7](../FEATURES.md) | **`C-c t d`** debugs the single test the cursor is inside (IDE gutter-Debug equivalent, [`init-go.el`](../lisp/languages/init-go.el)); `M-x dape` for a manual menu pick; `dlv` from a separate `vterm` for CLI |
 | `gofmt` on save | Would require `eglot-format-buffer` hook + per-mode opt-in | `M-x eglot-format-buffer` manually, or run `gofmt -w .` from shell |
 | `goimports` on save | Same as above; gopls handles imports incrementally during completion | Auto-import via the completion flow handles 90% of cases |
-| Test runner UI | None | `M-x compile RET go test ./... RET` |
+| Test runner UI | None for whole-suite | **`C-c t t`** runs the single test at point in its package ([`init-go.el`](../lisp/languages/init-go.el)); `M-x compile RET go test ./... RET` for the whole tree |
 | Struct tag generation | None | The gomodifytags binary + `M-x compile`, or `go-impl`-style helpers |
 
 If any of these starts hurting, the small additions are documented inline in

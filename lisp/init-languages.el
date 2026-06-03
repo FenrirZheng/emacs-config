@@ -480,6 +480,27 @@ seems stuck on a stale answer."
 (use-package ggtags
   :commands ggtags-mode)
 
+;; Neutralize ggtags' own M-. / C-M-. so `ggtags-mode' contributes ONLY its xref
+;; backend, never a keymap takeover.  WHY this is load-bearing: `ggtags-mode' is
+;; a minor mode whose `ggtags-mode-map' binds M-. -> `ggtags-find-tag-dwim' and
+;; C-M-. -> `ggtags-find-tag-regexp'.  Those minor-mode bindings SHADOW the
+;; global M-. / C-M-. (`xref-find-definitions' / `xref-find-apropos'), and
+;; `ggtags-find-tag-dwim' shells out to `global' DIRECTLY -- it never consults
+;; `xref-backend-functions'.  So in any buffer where both Eglot and ggtags-mode
+;; are live (every C/C++/Python/Go/TS buffer with a server AND a GTAGS index),
+;; bare ggtags-mode would route M-. to gtags and silently bypass Eglot -- the
+;; "Eglot, when active, prepends itself and wins" invariant above only holds for
+;; xref DISPATCH, which M-. never reaches once ggtags grabs the key.  Unbinding
+;; both keys returns M-. / C-M-. to the global xref commands, which dispatch over
+;; `xref-backend-functions' where Eglot prepends (wins when attached) and
+;; `ggtags--xref-backend' answers as the fallback when no server is up.  M-? / M-,
+;; are left alone -- this ggtags version never bound them, so references already
+;; flow through xref.  (`ggtags-mode-map' also adds the gtags-only M-] and its
+;; C-c prefix map; those collide with nothing and stay.)
+(with-eval-after-load 'ggtags
+  (define-key ggtags-mode-map (kbd "M-.") nil)
+  (define-key ggtags-mode-map (kbd "C-M-.") nil))
+
 ;; Defensive: keep the etags fallback's globals empty so a stray
 ;; `visit-tags-table' can't seed them with a binary GTAGS file or a Java
 ;; source.  Both default to nil already; the explicit setq-default
@@ -601,10 +622,16 @@ with a cheap recursive scan for common extensions and stop at the first hit."
         (when (file-regular-p f) (throw 'found 1)))
       0)))
 
-(defcustom fenrir/gtags-label "pygments"
+(defcustom fenrir/gtags-label "native-pygments"
   "GTAGSLABEL passed to `gtags' so it uses a non-built-in parser, or nil.
 
-WHY this exists and WHY \"pygments\".  GNU Global's BUILT-IN parser only knows
+WHY \"native-pygments\" (mirroring the user's gtags.sh skill script): this label
+runs GNU Global's BUILT-IN parser FIRST for the languages it natively understands
+(c/c++/java/php/yacc/asm) -- faster, and the native parser is more accurate for
+those than pygments -- and falls back to pygments for EVERYTHING ELSE
+(Go/Python/TS/JS/Vue/Rust/...).  Best of both worlds, hence the default.
+
+WHY a non-built-in parser is needed at all.  GNU Global's BUILT-IN parser only knows
 c/yacc/asm/java/cpp/php; ggtags' own \"Use `ctags' backend?\" prompt sets
 GTAGSLABEL=ctags which maps to exuberant-ctags (NOT installed here -- only
 Universal Ctags) and is ALSO Go-blind.  Either way a Go/Python/TypeScript repo
@@ -612,12 +639,13 @@ gets a structurally-valid 16 KB index with ZERO of its symbols.  To actually
 index those languages we must set GTAGSLABEL ourselves to a plugin label.
 
 Choices, measured on a Go+Python+TypeScript tree mirroring ~/code/coinsasia/backend:
-  * \"pygments\"     -- indexes Go + Python + TypeScript (ALL three).  DEFAULT.
+  * \"native-pygments\" -- built-in parser for c/c++/java/php/yacc/asm, pygments
+                        for the rest (Go/Python/TS/JS/Vue/Rust/...).  DEFAULT --
+                        broadest coverage, native parser where it's better.
+  * \"pygments\"     -- pygments for everything; indexes Go + Python + TypeScript.
   * \"new-ctags\"    -- Universal Ctags; indexes Go + Python but MISSES TypeScript;
                         ~4.5x faster and a self-contained binary (no interpreter).
-  * \"native-pygments\" -- built-in for C-likes + pygments for the rest (broad).
-backend/ has 59 TypeScript files, so pygments is the only label that covers it
--- hence the default.  These labels are DEFINED by /etc/gtags/gtags.conf, which
+These labels are DEFINED by /etc/gtags/gtags.conf, which
 Debian ships at the [sysconfdir] path baked into the gtags binary, so they
 resolve with NO GTAGSCONF / ~/.globalrc / repo-local conf.
 
@@ -630,12 +658,14 @@ box `python-is-python3' is installed so pygments works; on a box where it isn't,
 flip this to \"new-ctags\" (no interpreter dependency) -- and either way the
 validation below catches the failure and removes the stub.
 
-nil => don't inject any label; let `ggtags-create-tags' run its native
-\"Use `ctags' backend?\" prompt (escape hatch for the rare project that wants
-the built-in parser or supplies its own .globalrc)."
-  :type '(choice (const :tag "pygments (Go+Python+TS)" "pygments")
+nil => don't inject GTAGSLABEL at all; the async build runs bare `gtags', which
+uses GNU Global's built-in parser (or a project-local .globalrc / gtags.conf it
+discovers on its own).  Escape hatch for the rare project that supplies its own
+config or only has built-in-parser languages (c/yacc/asm/java/cpp/php).  No
+backend prompt can appear -- the build runs in a `make-process' subprocess."
+  :type '(choice (const :tag "native-pygments (builtin C-likes + pygments rest; DEFAULT)" "native-pygments")
+                 (const :tag "pygments (Go+Python+TS)" "pygments")
                  (const :tag "new-ctags (Go+Python, no TS; fast)" "new-ctags")
-                 (const :tag "native-pygments (builtin + pygments)" "native-pygments")
                  (const :tag "none -- let ggtags prompt" nil)
                  (string :tag "other label"))
   :group 'fenrir)
@@ -720,23 +750,218 @@ next xref call re-resolves cleanly instead of answering from a cached corpse."
       (ignore-errors
         (ggtags-invalidate-buffer-project-root (file-truename root))))))
 
-(defun fenrir/gtags--create-with-label (root)
-  "Run `ggtags-create-tags' in ROOT with `fenrir/gtags-label' injected.
-WHY the let-bound `process-environment': ggtags.el line ~701 does
-  (unless (or conf (getenv \"GTAGSLABEL\") (not (yes-or-no-p \"Use `ctags' ...\")))
-    (setenv \"GTAGSLABEL\" \"ctags\"))
-so pre-setting GTAGSLABEL makes its (getenv \"GTAGSLABEL\") truthy -- the whole
-`unless' is SKIPPED: no \"Use `ctags' backend?\" prompt fires (which would set
-the Go-blind ctags label) AND our pygments value is honored.  Verified via the
-live daemon that a let-bound process-environment entry is exactly what that
-getenv reads.  A project-local .globalrc / gtags.conf still WINS (ggtags binds
-`conf' first and passes --gtagsconf), which is intended -- we never clobber a
-project's own parser choice."
-  (let ((process-environment
-         (if fenrir/gtags-label
-             (cons (concat "GTAGSLABEL=" fenrir/gtags-label) process-environment)
-           process-environment)))
-    (ggtags-create-tags root)))
+;; ===========================================================================
+;; ASYNC BUILD CORE.  `gtags' (create) on ~/code/coinsasia/backend (1108 Go
+;; files via pygments) runs for many seconds; `global -u' (update) likewise on a
+;; large dirty tree.  Run synchronously they BLOCK the single-threaded Emacs
+;; DAEMON -- the whole editor freezes.  So the RUN is moved off the main thread
+;; via `make-process': the kick-off returns immediately and a sentinel does the
+;; post-processing when the subprocess exits.
+;;
+;; We run the `gtags' / `global' CLI DIRECTLY here rather than through
+;; `ggtags-create-tags' / `ggtags-update-tags' (both synchronous) -- driving the
+;; CLI ourselves is what makes async possible AND lets us inject GTAGSLABEL
+;; without ggtags' "Use `ctags' backend?" prompt ever entering the picture (we
+;; never reach that code path).  WHY GTAGSLABEL still matters: GNU Global's
+;; built-in parser only knows c/yacc/asm/java/cpp/php; without a plugin label a
+;; Go/Python/TypeScript repo gets a structurally-valid but symbol-EMPTY index
+;; (see `fenrir/gtags-label').  Injected on CREATE only -- `gtags' records the
+;; label in GTAGS, so `global -u' re-reads it and needs no re-injection (verified
+;; in /tmp: an async `global -u' picked up a freshly-added C file with no
+;; GTAGSLABEL set).  A project-local .globalrc / gtags.conf still wins via the
+;; gtags binary's own --gtagsconf discovery, which is intended.
+
+(defvar fenrir/gtags--builds (make-hash-table :test 'equal)
+  "In-progress async GTAGS builds: normalized ROOT (slash-terminated) -> process.
+The RE-ENTRANCY GUARD: `fenrir/gtags--build-async' refuses to spawn a second
+`gtags' for a ROOT whose entry here is still `process-live-p'.  Without it a
+double C-c g g (or an update fired while a create is mid-flight) would race two
+writers over the same GTAGS/GRTAGS/GPATH and corrupt them.  The sentinel
+`remhash'es ROOT on exit, so the guard self-clears.")
+
+(defun fenrir/gtags--invalidate-ggtags-cache (root)
+  "Drop ggtags' cached project struct + buffer-local roots for ROOT.
+Safe to call from a process sentinel: never prompts, never signals (every step
+is guarded), operates only over `buffer-list' / the `ggtags-projects' hash.  Run
+after a successful build/update so the next M-. / M-? re-resolves against the
+fresh index instead of answering from a stale cached project.  Mirrors the
+bookkeeping `fenrir/gtags--wipe-index' does, minus the file deletion."
+  (when (require 'ggtags nil t)
+    (when (boundp 'ggtags-projects)
+      (remhash (file-name-as-directory root) ggtags-projects))
+    (when (fboundp 'ggtags-invalidate-buffer-project-root)
+      (ignore-errors
+        (ggtags-invalidate-buffer-project-root (file-truename root))))))
+
+(defun fenrir/gtags--last-output-line (buf)
+  "Return the last non-blank line of process-output BUF, or a placeholder.
+Used by the sentinel to surface the real failure reason (gtags/global write the
+useful diagnostic -- \"label '...' not found\", \"seems corrupted\" -- on the
+last line of stderr, which we merge into BUF)."
+  (if (buffer-live-p buf)
+      (with-current-buffer buf
+        (let ((s (string-trim (buffer-string))))
+          (if (string-empty-p s)
+              "(no output)"
+            (car (last (split-string s "\n" t))))))
+    "(no output)"))
+
+(defun fenrir/gtags--build-sentinel (root update buf shimdir)
+  "Build the process sentinel closure for an async GTAGS build of ROOT.
+UPDATE non-nil => this was `global -u' (incremental), else `gtags' (create).
+BUF is the merged stdout+stderr buffer.
+SHIMDIR is the throwaway temp dir holding the python->python3 PATH shim
+(`fenrir/gtags--build-async' creates it when the box lacks `python'), or nil
+when no shim was needed.  The sentinel deletes it after the process exits, in
+the same `unwind-protect' that reclaims BUF -- a nil SHIMDIR is a no-op.
+
+A sentinel MUST be non-interactive: it can fire at any time (including while the
+user is in the minibuffer), so it NEVER prompts (`y-or-n-p' / `yes-or-no-p') and
+NEVER lets an error escape -- post-processing runs inside `ignore-errors' and the
+buffer is always killed via `unwind-protect'.  It reuses the SAME validation
+helpers the old synchronous path used (`fenrir/gtags--index-corrupt-p',
+`fenrir/gtags--index-empty-p', `fenrir/gtags--wipe-index') -- those are already
+non-interactive (process-file probes + direct `delete-file'), so they drop into a
+sentinel unchanged; we only swapped the `user-error' the sync path raised on a
+corrupt result for a plain `message' (a sentinel can't signal to the user)."
+  (lambda (proc _event)
+    (when (memq (process-status proc) '(exit signal))
+      ;; Clear the re-entrancy guard FIRST, unconditionally, so a future build
+      ;; is never blocked by a finished one even if post-processing throws.
+      (remhash (file-name-as-directory root) fenrir/gtags--builds)
+      (let ((code (process-exit-status proc))
+            (disp (abbreviate-file-name root)))
+        (unwind-protect
+            (ignore-errors
+              (cond
+               ;; ---- success, UPDATE: index already existed; just refresh cache.
+               ((and (eq code 0) update)
+                (fenrir/gtags--invalidate-ggtags-cache root)
+                (message "✓ GTAGS updated in %s" disp))
+               ;; ---- success, CREATE: validate before declaring victory.  gtags
+               ;; can exit 0 yet leave a 0-byte / corrupt stub (parser helper
+               ;; crashed -- e.g. pygments' python shebang unreachable) or a valid
+               ;; but symbol-less index (wrong parser for the repo's languages).
+               ((eq code 0)
+                (cond
+                 ((fenrir/gtags--index-corrupt-p root)
+                  (fenrir/gtags--wipe-index root)   ; never leave a corpse
+                  (message
+                   "✗ gtags produced a corrupt/0-byte index in %s (parser \
+failure? try `fenrir/gtags-label'=new-ctags, or use gopls for Go)" disp))
+                 ((fenrir/gtags--index-empty-p root)
+                  (message
+                   "GTAGS built in %s but indexed NO symbols -- wrong parser for \
+this repo's languages (set `fenrir/gtags-label' to \"pygments\" for Go/Python/TS, \
+or use gopls for Go)" disp))
+                 (t
+                  (fenrir/gtags--invalidate-ggtags-cache root)
+                  (message "✓ GTAGS built in %s -- re-run M-. / M-?" disp))))
+               ;; ---- non-zero exit.  On CREATE, clean the half-written stub so a
+               ;; later `global -u' doesn't choke on it; on UPDATE leave the
+               ;; pre-existing index alone (don't destroy the user's index without
+               ;; consent -- route them to C-u C-c g g, which offers wipe+rebuild).
+               (t
+                (let ((line (fenrir/gtags--last-output-line buf)))
+                  (unless update
+                    (fenrir/gtags--wipe-index root))
+                  ;; NB: a literal "C-u C-c g g", NOT a `\\[...]' key escape --
+                  ;; `message' does not run `substitute-command-keys', so an
+                  ;; escape would print verbatim.  `C-c g g' is the fixed global
+                  ;; binding for `fenrir/gtags-create-or-update'.
+                  (if (string-match-p "seems corrupted" line)
+                      (message "✗ gtags/global exited %d in %s: %s -- rebuild \
+with C-u C-c g g"
+                               code disp line)
+                    (message "✗ gtags/global exited %d in %s: %s"
+                             code disp line))))))
+          ;; Always reclaim the output buffer AND the python-shim temp dir (if the
+          ;; build created one).  `delete-directory ... t' removes it recursively;
+          ;; `ignore-errors' so a vanished/already-cleaned dir can't break teardown.
+          (when (buffer-live-p buf) (kill-buffer buf))
+          (when shimdir (ignore-errors (delete-directory shimdir t))))))))
+
+(defun fenrir/gtags--build-async (root &optional update)
+  "Run the GTAGS build for ROOT in the background via `make-process'; return now.
+With UPDATE non-nil run `global -u' (incremental refresh of an existing index);
+otherwise run `gtags' (full create) with GTAGSLABEL injected.  Output (stdout +
+stderr merged) goes to a fresh \" *fenrir-gtags*\" buffer the sentinel reads for
+the failure reason and then kills.
+
+RE-ENTRANCY GUARD: keyed on the normalized ROOT in `fenrir/gtags--builds'.  If a
+live build already owns ROOT, message \"already building\" and return nil WITHOUT
+spawning a second writer (concurrent writers would corrupt the index files).
+
+Returns the process (or nil if rejected by the guard) -- the caller does NOT wait
+on it; all post-processing/validation happens in the sentinel.  Daemon-safe:
+opens no source file (no `eglot-ensure'), and the heavy CLI runs off the main
+thread so the daemon stays responsive."
+  (let* ((root (file-name-as-directory (expand-file-name root)))
+         (live (gethash root fenrir/gtags--builds)))
+    (if (and live (process-live-p live))
+        (progn
+          (message "Already building GTAGS in %s -- ignoring this request"
+                   (abbreviate-file-name root))
+          nil)
+      (let* ((default-directory root)
+             ;; Build the subprocess environment in layers, mirroring the user's
+             ;; gtags.sh skill script (GTAGSLABEL + GTAGSCONF + a python->python3
+             ;; PATH shim).  `shimdir' captures the throwaway temp dir created for
+             ;; the shim (or nil if none was needed) so the sentinel can clean it up
+             ;; after the process exits.
+             (shimdir nil)
+             ;; (1) GTAGSLABEL -- inject on CREATE only (see the ASYNC BUILD CORE
+             ;; comment): `gtags' stores the label in GTAGS, so `global -u'
+             ;; re-reads it -- re-injecting on update is unnecessary and a no-op.
+             (process-environment
+              (if (and (not update) fenrir/gtags-label)
+                  (cons (concat "GTAGSLABEL=" fenrir/gtags-label) process-environment)
+                process-environment))
+             ;; (2) GTAGSCONF -- point gtags at the system config that DEFINES the
+             ;; labels, whenever it exists.  Mirrors gtags.sh's "point at the system
+             ;; config that defines the labels" block.  Injected on BOTH create AND
+             ;; update: `global -u' re-resolves the stored label and still needs the
+             ;; conf to define it.  This is a defense against a future ~/.globalrc
+             ;; that lacks the pygments/native-pygments labels -- on THIS box there
+             ;; is no ~/.globalrc so the sysconfdir conf already resolves bare, but a
+             ;; corp box may ship one that shadows it.
+             (process-environment
+              (if (file-exists-p "/etc/gtags/gtags.conf")
+                  (cons "GTAGSCONF=/etc/gtags/gtags.conf" process-environment)
+                process-environment))
+             ;; (3) python->python3 PATH shim -- mirrors gtags.sh's PYSHIM block.
+             ;; pygments_parser.py shebangs `#!/usr/bin/env python', so a box without
+             ;; the `python-is-python3' package (only `python3', no `python') makes
+             ;; the parser silently fail and gtags writes a corrupt/0-byte index.
+             ;; We create a fresh temp dir holding a `python' symlink to the real
+             ;; python3 and PREPEND it to PATH.  This PROACTIVELY PREVENTS the very
+             ;; corruption the post-build validation (`fenrir/gtags--index-corrupt-p')
+             ;; otherwise only detects-and-wipes.  The dir is cleaned up by the
+             ;; sentinel once the subprocess exits.
+             (process-environment
+              (if (and (not (executable-find "python"))
+                       (executable-find "python3"))
+                  (let* ((dir (make-temp-file "fenrir-gtags-pyshim" t))
+                         (link (expand-file-name "python" dir)))
+                    (make-symbolic-link (executable-find "python3") link t)
+                    (setq shimdir dir)
+                    ;; Prepend the shim dir to the PATH entry that make-process will
+                    ;; inherit (mutate the just-copied process-environment, not the
+                    ;; global one).
+                    (cons (concat "PATH=" dir path-separator (getenv "PATH"))
+                          process-environment))
+                process-environment))
+             (buf (generate-new-buffer " *fenrir-gtags*"))
+             (cmd (if update '("global" "-u") '("gtags")))
+             (proc (make-process
+                    :name (format "fenrir-gtags[%s]" (abbreviate-file-name root))
+                    :buffer buf
+                    :command cmd
+                    :connection-type 'pipe   ; no PTY -- a batch CLI, not a REPL
+                    :noquery t               ; don't prompt on Emacs exit
+                    :sentinel (fenrir/gtags--build-sentinel root update buf shimdir))))
+        (puthash root proc fenrir/gtags--builds)
+        proc))))
 
 (defun fenrir/gtags--go-dominant-p (root)
   "Return non-nil iff ROOT looks like a Go project (cheap, bounded scan).
@@ -758,55 +983,39 @@ fallback -- gtags-on-Go is the explicit opt-in fallback, not the silent default.
         nil)))
 
 (defun fenrir/gtags--fresh-build (build-root)
-  "Create a GTAGS index in BUILD-ROOT with the working label, then VALIDATE it.
+  "Kick off an ASYNC GTAGS create for BUILD-ROOT after a synchronous pre-flight.
 Shared by the no-index create path and the corrupt-index recovery path (both in
 `fenrir/gtags-create-or-update').  Steps, in order:
   1. Steer Go-dominant repos to gopls (`fenrir/gtags--maybe-steer-to-gopls' --
      signals `user-error' and unwinds if the user picks gopls).
   2. Refuse a source-less dir (the cheap empty-build gate).
-  3. Build with `fenrir/gtags-label' injected (suppresses ggtags' Go-blind
-     ctags prompt).
-  4. POST-BUILD VALIDATION (FIX 1): if the result is corrupt / 0-byte, DELETE the
-     stub files and `user-error' with the real reason -- never leave a corpse.
-  5. Re-resolve ggtags' cached project so xref answers immediately; warn if the
-     index is valid-but-symbol-less (wrong parser for the repo's languages).
-TTY-safe (only minibuffer y-or-n-p / messages) and daemon-safe (opens no source
-file -> no `eglot-ensure' to block the single-threaded daemon)."
+  3. Kick off the build via `fenrir/gtags--build-async' and RETURN immediately.
+
+WHY the split.  Steps 1-2 are interactive / fast and MUST stay synchronous (a
+prompt cannot run in a sentinel; the source-count probe is a cheap bounded scan).
+The actual `gtags' RUN -- the part that took many seconds on a 1108-file repo and
+froze the daemon -- is what goes async.  POST-BUILD VALIDATION (corrupt/empty
+checks, stub wipe, ggtags cache invalidation) therefore moves OUT of here and
+INTO the sentinel (`fenrir/gtags--build-sentinel'): it can only run once the
+subprocess has exited, which is now after this function has already returned.
+
+Because the build is async, the M-. that triggered the etags-fallback offer will
+NOT find symbols immediately -- the user is told to re-run M-. / M-? when the
+\"✓ GTAGS built\" message lands.  TTY-safe (only minibuffer y-or-n-p / messages)
+and daemon-safe (opens no source file -> no `eglot-ensure' to block the daemon,
+and the heavy CLI runs off the main thread)."
   (fenrir/gtags--maybe-steer-to-gopls build-root)
   (when (zerop (fenrir/gtags--source-file-count build-root))
     (user-error
      "No source files under %s -- indexing here would write an empty, corrupt \
 GTAGS.  Pick a directory that contains code"
      (abbreviate-file-name build-root)))
-  ;; `fenrir/gtags--create-with-label' runs `gtags' synchronously in BUILD-ROOT
-  ;; with GTAGSLABEL=`fenrir/gtags-label' injected, suppressing ggtags' Go-blind
-  ;; \"Use `ctags' backend?\" prompt.
-  (fenrir/gtags--create-with-label build-root)
-  ;; POST-BUILD VALIDATION (FIX 1).  A 0-byte / corrupt index (parser helper
-  ;; crashed -> \"unexpected EOF\") gets DELETED, with the real reason reported --
-  ;; never leave a corpse that a later `global -u' chokes on.
-  (when (fenrir/gtags--index-corrupt-p build-root)
-    (fenrir/gtags--wipe-index build-root)
-    (user-error
-     "gtags produced a corrupt/empty index in %s (parser '%s' failed -- likely \
-the helper interpreter was unreachable or the build was interrupted); removed \
-the stub files.  For Go prefer gopls, or set `fenrir/gtags-label' to \
-\"new-ctags\""
-     (abbreviate-file-name build-root)
-     (or fenrir/gtags-label "builtin")))
-  ;; Re-resolve THIS buffer (and siblings) against the new index.
-  (ggtags-invalidate-buffer-project-root (file-truename build-root))
-  ;; A VALID but symbol-less index isn't corrupt, but it IS useless -- warn
-  ;; instead of pretending success (builtin parser on a Go repo, new-ctags on TS).
-  (if (fenrir/gtags--index-empty-p build-root)
-      (message
-       "GTAGS built in %s but indexed NO symbols -- the parser ('%s') doesn't \
-cover this repo's languages.  Set `fenrir/gtags-label' to \"pygments\" \
-(Go/Python/TS) or use gopls for Go"
-       (abbreviate-file-name build-root)
-       (or fenrir/gtags-label "builtin"))
-    (message "GTAGS created in %s -- M-. / M-? now use GNU Global"
-             (abbreviate-file-name build-root))))
+  ;; Fire-and-forget: validation + cache invalidation happen in the sentinel.
+  (when (fenrir/gtags--build-async build-root)
+    (message
+     "Building GTAGS in %s... (async; you'll get a message when it finishes -- \
+then re-run M-. / M-?)"
+     (abbreviate-file-name build-root))))
 
 (defun fenrir/gtags--maybe-steer-to-gopls (root)
   "If ROOT is Go-dominant and gopls is installed, offer to abort in favor of gopls.
@@ -834,9 +1043,11 @@ or open the file from a directory that has go.mod; inspect with \
   "Build or refresh the GNU Global (GTAGS) index for the current project.
 With prefix arg FORCE-CREATE, rebuild from scratch even if an index exists.
 
-Resolves the project root via project.el (honoring `my-project-ignore-home', so
-$HOME is never indexed), verifies the `gtags' / `global' CLIs are installed, and
-refuses to index a root that contains no source files (the empty-GTAGS gotcha).
+Prompts for the directory to build the index in -- defaulting to the project.el
+root (honoring `my-project-ignore-home', so $HOME is never the default), so you
+can confirm or pick a sub-module / sibling root before a potentially-huge gtags
+walk.  Verifies the `gtags' / `global' CLIs are installed, and refuses to index
+a root with no source files (the empty-GTAGS gotcha) or a forbidden system dir.
 After (re)building, invalidates ggtags' cached project so its xref backend
 answers M-. / M-? immediately -- no buffer revisit needed.
 
@@ -857,18 +1068,32 @@ routes the cryptic etags prompt here."
     (fenrir/gtags--guide-install)
     (user-error "GNU Global not installed"))
   (require 'ggtags)
-  (let* ((existing (and (not force-create) (fenrir/gtags--existing-index-root)))
-         (root (or existing
-                   (fenrir/gtags--project-root)
-                   ;; No project and no existing index: fall back to the buffer's
-                   ;; directory rather than guessing -- but make the user confirm,
-                   ;; since indexing the wrong dir is the whole gotcha.
-                   (let ((d (expand-file-name default-directory)))
-                     (and (not (string= d (expand-file-name "~/")))
-                          (y-or-n-p (format "No project found.  Index %s? " d))
-                          d)))))
-    (unless root
-      (user-error "No indexable project root (refusing to index $HOME)"))
+  ;; ALWAYS prompt for WHERE to build the index, defaulting to the auto-resolved
+  ;; root (an existing index's root, else the project.el root, else this buffer's
+  ;; directory).  Indexing the wrong dir -- a too-high reactor container, or a
+  ;; source-less tree -- is the central gtags gotcha, so the root is your explicit
+  ;; choice every run: hit RET to take the default, or navigate to a sub-module /
+  ;; sibling root.  `read-directory-name' MUSTMATCH=t so the dir must exist; the
+  ;; result is normalised to the slash-terminated absolute form the helpers expect.
+  (let* ((default-root (or (and (not force-create) (fenrir/gtags--existing-index-root))
+                           (fenrir/gtags--project-root)
+                           (expand-file-name default-directory)))
+         (root (file-name-as-directory
+                (expand-file-name
+                 (read-directory-name "Build GTAGS index in directory: "
+                                      default-root default-root t))))
+         ;; Does the CHOSEN root already carry its OWN index?  `--existing-index-
+         ;; root' is buffer-relative and walks UP to a parent GTAGS; here you named
+         ;; the root, so test THAT dir directly -- a parent's index must not turn an
+         ;; explicit "index this subdir" into a silent parent update.
+         (existing (and (not force-create)
+                        (file-exists-p (expand-file-name "GTAGS" root))
+                        root)))
+    ;; Re-apply the $HOME / system-dir guard: you can now type any path, so
+    ;; `fenrir/gtags--project-root's own filtering no longer protects us.
+    (when (member root fenrir/gtags-forbidden-roots)
+      (user-error "Refusing to index %s (forbidden root)"
+                  (abbreviate-file-name root)))
     (cond
      ;; Existing index -> normally an incremental update (`global -u', via
      ;; ggtags), far cheaper than a full rebuild and keeps the index warm.  But
@@ -893,29 +1118,19 @@ corrupted\").  Wipe the 3 index files and rebuild from scratch? "
 \\[universal-argument] \\[fenrir/gtags-create-or-update], or delete \
 GTAGS/GRTAGS/GPATH by hand)"
            (abbreviate-file-name existing))))
-       ;; Healthy index -> incremental update, but belt-and-suspenders: ggtags'
-       ;; `global -u' can itself surface \"seems corrupted\" (a race, or
-       ;; corruption between our probe and the update).  Catch THAT exact error
-       ;; and fall into the same wipe + rebuild offer rather than propagating it.
+       ;; Healthy index -> incremental update, ASYNC (`global -u' off the main
+       ;; thread so a large dirty tree doesn't freeze the daemon).  The sync
+       ;; `condition-case' wrapper the old code used to catch a \"seems corrupted\"
+       ;; race is gone -- a synchronous handler can't catch a failure that now
+       ;; happens in a subprocess.  The sentinel handles it instead: a non-zero
+       ;; `global -u' exit whose stderr says \"seems corrupted\" gets reported with
+       ;; a \"rebuild with C-u C-c g g\" hint (which re-enters this command's
+       ;; corrupt-index branch above and offers the wipe + rebuild).
        (t
-        (let ((default-directory existing))
-          (condition-case err
-              (progn
-                (ggtags-update-tags 'force)
-                (message "GTAGS updated in %s" (abbreviate-file-name existing)))
-            (error
-             (if (and (string-match-p "seems corrupted"
-                                      (error-message-string err))
-                      (yes-or-no-p
-                       (format
-                        "`global -u' reports the GTAGS index in %s is corrupted. \
- Wipe and rebuild from scratch? "
-                        (abbreviate-file-name existing))))
-                 (progn
-                   (fenrir/gtags--wipe-index existing)
-                   (fenrir/gtags--fresh-build existing))
-               ;; Not a corruption error (or user declined) -> re-raise.
-               (signal (car err) (cdr err)))))))))
+        (when (fenrir/gtags--build-async existing 'update)
+          (message
+           "Updating GTAGS in %s... (async; you'll get a message when it finishes)"
+           (abbreviate-file-name existing))))))
      ;; No index yet -> fresh build (gopls steer + validation inside the helper).
      (t
       (fenrir/gtags--fresh-build root)))))
@@ -1161,6 +1376,29 @@ declines.  So legitimate etags users keep their prompt; we only catch the
 (use-package apheleia
   :config
   (apheleia-global-mode +1))
+
+;; ansi-color (built-in): interpret SGR escape sequences in `compilation-mode'
+;; buffers so colorized build/test output renders as faces instead of raw
+;; `^[[32m' noise.  Wired here (shared build infra) rather than in any one
+;; language module because `compilation-filter-hook' is global -- it benefits
+;; every `M-x compile' / `recompile' command (cargo, npm, pytest, and the Go
+;; test runner `fenrir/go-run-test' in lisp/languages/init-go.el).
+;;
+;; KEY PROPERTY: this preserves error navigation.  The filter only consumes the
+;; SGR control bytes and applies the equivalent `face' text property to the
+;; surrounding text -- it never moves or rewrites the `file:line' tokens, so
+;; `compilation-mode's error regexp still matches and `M-g M-n' /
+;; `next-error' jump to failures exactly as before.  vterm would give colors
+;; too but throws those clickable jumps away; this keeps both.
+;;
+;; CAVEAT for Go: plain `go test -v' emits NO color, so this filter is a no-op
+;; for `fenrir/go-run-test' as written -- it lights up only once the command is
+;; swapped for a colorizing runner (e.g. `gotestsum --format testname',
+;; `richgo test', or rakyll's `gotest').  The filter is wired now so any such
+;; tool -- and every other already-colorizing compile command -- just works.
+(use-package ansi-color
+  :ensure nil
+  :hook (compilation-filter . ansi-color-compilation-filter))
 
 ;; dape: Debug Adapter Protocol client.  The Eglot-spirit counterpart to
 ;; dap-mode -- core-only deps (jsonrpc), no lsp-mode, no child frames.

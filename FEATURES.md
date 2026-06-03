@@ -232,18 +232,34 @@ lists the follow-up keys — no need to memorise prefixes.
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
   (this file) and `consult-imenu-multi` (open buffers of the same major mode). Same
   vertico + orderless + marginalia UI as the rest of §1.
-- **ggtags / GNU Global — the non-LSP xref fallback** (`init-languages.el`): when a buffer
-  has **no** live language server (a mode without an LSP hook, or one that failed to
-  attach), `M-.` / `M-?` fall through to GNU Global's `GTAGS` index instead of cryptically
-  prompting `Visit tags table (default TAGS): …`. **`C-c g g`** (`fenrir/gtags-create-or-update`)
-  builds or refreshes the index for the current project (`C-u` forces a full rebuild), and
-  the etags fallback now *offers* to build one (`Build a GNU Global (GTAGS) index now?`) when
-  none exists. **Eglot-safe by construction** — the offer can only fire after xref already
-  chose etags, i.e. no LSP was attached. The index is built with `GTAGSLABEL=pygments`
-  (`fenrir/gtags-label`; covers Go/Python/TS — switch to `new-ctags` for speed at the cost
-  of TypeScript), the result is **validated** (a failed / 0-byte build is deleted, never
-  left as a corrupt stub), and an existing corrupt / 0-byte index is recovered with a
-  wipe-and-rebuild offer instead of the raw `gtags: … seems corrupted` error. For a
+- **ggtags / GNU Global — the non-LSP xref fallback** (`init-languages.el`): `ggtags-mode`
+  is hooked onto **C/C++, Python, Go, and JS/TS/TSX** buffers, so when no language server is
+  attached (a server that failed to start, or a repo with no `go.mod` / `package.json` at the
+  resolved root — e.g. `~/code/coinsasia/` with a prebuilt `GTAGS`), `M-.` / `M-?` query an
+  existing `GTAGS` index directly instead of cryptically prompting `Visit tags table (default
+  TAGS): …` (or hanging while etags tries to parse the binary `GTAGS` as a plaintext table).
+  **`C-c g g`** (`fenrir/gtags-create-or-update`) builds or refreshes the index for the current
+  project (`C-u` forces a full rebuild); in a mode with no `ggtags-mode` hook and no index, the
+  etags fallback instead *offers* to build one (`Build a GNU Global (GTAGS) index now?`).
+  **Eglot-safe by construction** — `ggtags-mode`'s own `ggtags-mode-map` rebinds `M-.` →
+  `ggtags-find-tag-dwim` (which shells out to `global` and bypasses xref entirely); that grab
+  (plus `C-M-.`) is *neutralized* in `init-languages.el`, so `M-.` stays the global
+  `xref-find-definitions` and dispatches over `xref-backend-functions` — where Eglot prepends
+  and **wins whenever a server is live**, with `ggtags--xref-backend` answering only as the
+  no-server fallback. (The build-offer path can likewise only fire after xref already chose
+  etags, i.e. no LSP was attached.) The build runs **async** off a `make-process`
+  (the daemon stays responsive on a big repo; you get a `✓ GTAGS built` message when it
+  finishes, then re-run `M-.` / `M-?`). The index is built with `GTAGSLABEL=native-pygments`
+  (`fenrir/gtags-label`; built-in parser for C/C++/Java/PHP plus pygments for the rest —
+  Go/Python/TS/JS/Vue/Rust — switch to `new-ctags` for speed at the cost of TypeScript),
+  mirroring the [`tags-symbol-lookup` skill](~/.claude/plugins/cache/fenrir-claude-public-skills/tags-symbol-lookup/0.1.0/skills/tags-symbol-lookup/gtags.sh)'s
+  proven recipe: the build subprocess also gets `GTAGSCONF=/etc/gtags/gtags.conf` (so a
+  stray `~/.globalrc` can't shadow the label definitions) and, on a box without
+  `python-is-python3`, a throwaway `python`→`python3` PATH shim so the pygments parser
+  can't crash into a corrupt index. The result is **validated** (a failed / 0-byte build is
+  deleted, never left as a corrupt stub), and an existing corrupt / 0-byte index is
+  recovered with a wipe-and-rebuild offer instead of the raw `gtags: … seems corrupted`
+  error. For a
   Go-dominant repo with `gopls` on `PATH` it first steers you to gopls — the real fix is
   usually a missing `go.mod` at the project root. Needs `global` + `universal-ctags` +
   `python3-pygments` (installed by [`shell/install-root.sh`](shell/install-root.sh)).
@@ -367,9 +383,19 @@ lists the follow-up keys — no need to memorise prefixes.
   (a `B` glyph) so they stay visible on TTY frames (this config runs daemon +
   `emacsclient -nw`). `M-x dape` starts a session and prompts for a built-in
   config (`dlv`, `debugpy`, `codelldb`, `gdb`, `js-debug`, …) — you install the
-  adapter **binary**, not write configs; only Go's `dlv` is on `PATH` today. A `go-test`
-  config is registered ([`init-go.el`](lisp/languages/init-go.el)) so `M-x dape` offers a
-  one-pick "debug the current Go test" (delve `--mode test`).
+  adapter **binary**, not write configs; only Go's `dlv` is on `PATH` today.
+
+  **Single Go test at point** (the IDE "gutter Run/Debug" equivalent, in any
+  `go-ts-mode` buffer — [`init-go.el`](lisp/languages/init-go.el)): put the cursor
+  anywhere inside a `func TestXxx` and press **`C-c t t`** to run it or **`C-c t d`**
+  to debug it under delve — zero further prompts. Both auto-detect the enclosing
+  test name (treesit, with a regex fallback) and scope to `-run '^TestXxx$'` in
+  that file's **package** directory; `C-c t t` runs `go test … -v` in a `compile`
+  buffer, `C-c t d` launches a fully-specified dape session (no menu pick).
+  A matching `go-test` config is still registered so `M-x dape` offers the same
+  as a manual menu pick. (Both fix the old recipe's two bugs: `dape-cwd` =
+  module root broke subpackage tests, and a hard-coded port blocked concurrent
+  sessions.)
   Per-project overrides live in `.dir-locals.el`. Breakpoints persist across
   Emacs sessions (`dape-breakpoint-save` on quit, `dape-breakpoint-load` on
   startup). Modified buffers are saved before each run. Keymap below.
