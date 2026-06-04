@@ -311,6 +311,28 @@
          ("C-M-$" . jinx-languages))
   :custom (jinx-languages "en_US"))
 
+;; editorconfig (built-in since Emacs 30 -- hence `:ensure nil', or
+;; use-package-always-ensure would pull a redundant MELPA copy that shadows
+;; the bundled one).  On `find-file' it walks up from the visited file for a
+;; `.editorconfig', then sets the buffer-local editing-time policy that
+;; project ships: `indent_style'/`indent_size'/`tab_width' (-> the per-mode
+;; offset var + `indent-tabs-mode'), `trim_trailing_whitespace',
+;; `insert_final_newline', `charset', `max_line_length' (-> `fill-column').
+;; This is the cross-IDE indentation handshake every collaborator's editor
+;; already honours -- without it an Emacs save can re-tab a 2-space repo.
+;;
+;; How this divides labour with apheleia (init-languages.el): apheleia runs
+;; an *external* formatter on save and only fires for files whose language
+;; has one registered.  editorconfig sets the *interactive* buffer-local
+;; vars, so manual `TAB' / `indent-region' / newline-electric-indent obey
+;; project policy too -- and it covers the long tail of files apheleia has
+;; no formatter for (Makefiles, .conf, shell, YAML, prose).  They don't
+;; fight: a formatter, when present, still has the final say on save.
+;; No display path -- pure buffer-local logic, so TTY-irrelevant.
+(use-package editorconfig
+  :ensure nil
+  :hook (emacs-startup . editorconfig-mode))
+
 ;; hideshow (built-in): code folding.  `C-c @' is hideshow's own default
 ;; prefix, but its native sub-keys are unmemorable multi-modifier chords
 ;; (`C-c @ C-M-h', `C-c @ C-c', ...).  Rebind the whole prefix to a
