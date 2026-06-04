@@ -253,16 +253,28 @@ lists the follow-up keys — no need to memorise prefixes.
   (`fenrir/gtags-label`; built-in parser for C/C++/Java/PHP plus pygments for the rest —
   Go/Python/TS/JS/Vue/Rust — switch to `new-ctags` for speed at the cost of TypeScript),
   mirroring the [`tags-symbol-lookup` skill](~/.claude/plugins/cache/fenrir-claude-public-skills/tags-symbol-lookup/0.1.0/skills/tags-symbol-lookup/gtags.sh)'s
-  proven recipe: the build subprocess also gets `GTAGSCONF=/etc/gtags/gtags.conf` (so a
-  stray `~/.globalrc` can't shadow the label definitions) and, on a box without
-  `python-is-python3`, a throwaway `python`→`python3` PATH shim so the pygments parser
-  can't crash into a corrupt index. The result is **validated** (a failed / 0-byte build is
-  deleted, never left as a corrupt stub), and an existing corrupt / 0-byte index is
-  recovered with a wipe-and-rebuild offer instead of the raw `gtags: … seems corrupted`
-  error. For a
+  proven recipe: the build subprocess also gets `GTAGSCONF` pointed at the **tracked**
+  [`gtags.conf`](gtags.conf) (`fenrir/gtags-conf`) — a self-contained copy of the system
+  config whose skip list additionally drops `node_modules/ vendor/ venv/ dist/ build/
+  target/ …`, so neither a build nor an update indexes dependency trees (the stock conf
+  skips none of those — `~/code/coinsasia` measured **2.5 MB of real symbols vs 3.8 GB**
+  with the junk) — and, on a box without `python-is-python3`, a throwaway
+  `python`→`python3` PATH shim so the pygments parser can't crash into a corrupt index.
+  The result is **validated** (a failed / 0-byte build is deleted, never left as a corrupt
+  stub), and an existing corrupt / 0-byte index is recovered with a wipe-and-rebuild offer
+  instead of the raw `gtags: … seems corrupted` error. For a
   Go-dominant repo with `gopls` on `PATH` it first steers you to gopls — the real fix is
   usually a missing `go.mod` at the project root. Needs `global` + `universal-ctags` +
   `python3-pygments` (installed by [`shell/install-root.sh`](shell/install-root.sh)).
+- **GTAGS nested-index hygiene** — **`C-c g d`** (`fenrir/gtags-diagnose-duplicates`):
+  GNU Global resolves a lookup to the *nearest ancestor* `GTAGS`, so a `GTAGS` in a
+  subdirectory silently **shadows** the root index for every file beneath it (the bug where
+  `~/code/coinsasia/backend/GTAGS` hid the top-level `GTAGS` and xref answered from the
+  stale sub-index). Every (re)build auto-sweeps nested indexes (`fenrir/gtags-sweep-nested`,
+  default on) so the fresh root is the only resolvable one; `C-c g d` is the on-suspicion
+  command — lists every `GTAGS` in the subtree (`[root]`/`[nested]`, size+mtime) and offers
+  to delete the shadows. A `C-c g g` *update* also warns when the buffer's own index is
+  shadowed by a higher one.
 - **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
   for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
   Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls

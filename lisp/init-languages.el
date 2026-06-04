@@ -682,6 +682,26 @@ backend prompt can appear -- the build runs in a `make-process' subprocess."
                  (string :tag "other label"))
   :group 'fenrir)
 
+(defcustom fenrir/gtags-conf (expand-file-name "gtags.conf" user-emacs-directory)
+  "Path to the gtags.conf the async build injects as GTAGSCONF, or nil.
+A tracked, self-contained copy of the system /etc/gtags/gtags.conf whose `common'
+label carries an EXTENDED skip list (node_modules/, vendor/, venv/, dist/, build/,
+target/, ...) so neither a fresh `gtags' build nor a `global -u' update indexes
+dependency / build trees -- the stock system conf skips none of those, which let
+~/code/coinsasia balloon to 3.8 GB of node_modules/venv junk and re-bloat on every
+update.  The skip list lives in the CONFIG (not a `gtags -f' file list) because it
+is the only lever that reaches BOTH create and the `global -u' re-traversal.
+
+WHY a tracked copy rather than editing /etc/gtags/gtags.conf: keeps the exclusion
+reproducible on a fresh clone with no root/sudo write to a system file.  See the
+file's own header for the exact delta vs upstream and how to refresh it.
+
+If this file is missing, `fenrir/gtags--build-async' falls back to
+/etc/gtags/gtags.conf (which lacks the extra skips) so a half-set-up checkout
+still gets working parser labels.  Set to nil to force the system conf."
+  :type '(choice file (const :tag "fall back to /etc/gtags/gtags.conf" nil))
+  :group 'fenrir)
+
 (defun fenrir/gtags--index-files (root)
   "Return the absolute paths of the three GTAGS index files under ROOT.
 Used by both the validity probe and the wipe.  GTAGSDB/ID are deliberately not
@@ -804,6 +824,167 @@ bookkeeping `fenrir/gtags--wipe-index' does, minus the file deletion."
     (when (fboundp 'ggtags-invalidate-buffer-project-root)
       (ignore-errors
         (ggtags-invalidate-buffer-project-root (file-truename root))))))
+
+;; ===========================================================================
+;; NESTED-INDEX SHADOWING.  GNU Global resolves a lookup to the NEAREST ANCESTOR
+;; GTAGS walking up from the file's directory -- it never reaches a higher index
+;; once a lower one exists.  So a GTAGS in a SUBDIRECTORY silently SHADOWS the
+;; root index for every file beneath it.  Real bite: ~/code/coinsasia/backend/
+;; GTAGS hid ~/code/coinsasia/GTAGS, so xref on a Go file under backend/ answered
+;; from the stale, junk-laden backend index and the top-level one looked "unread".
+;;
+;; Two defenses below: a non-interactive SWEEP that a (re)build runs to delete
+;; nested indexes (so the freshly-built root is the only resolvable one), and an
+;; interactive DIAGNOSE command for when symptoms appear and you want to see /
+;; remove the duplicates by hand.
+
+(defcustom fenrir/gtags-sweep-nested t
+  "When non-nil, a GTAGS (re)build first deletes nested indexes under the root.
+A nested index shadows the root index for every file beneath it (GNU Global stops
+at the nearest ancestor GTAGS -- the backend/GTAGS-vs-top-GTAGS bug).  With this
+on, `fenrir/gtags--fresh-build' sweeps those nested indexes before building so the
+freshly-built root index is the only one any descendant file can resolve to.  The
+deleted files are regenerable and ggtags' caches for them are invalidated.  Set to
+nil if you intentionally keep independent per-subdirectory GTAGS indexes."
+  :type 'boolean
+  :group 'fenrir)
+
+(defun fenrir/gtags--nested-index-dirs (root)
+  "Return the directories of GTAGS indexes in STRICT subdirectories of ROOT.
+ROOT's own index directory is excluded -- only nested copies that would SHADOW
+ROOT's index are returned.  Skips the usual heavy / vendored trees while walking
+so the scan stays fast on a large repo (a nested index inside node_modules/ etc.
+shadows nothing the user navigates, so missing it is harmless)."
+  (let ((root (file-name-as-directory (expand-file-name root)))
+        (acc '()))
+    (dolist (f (ignore-errors
+                 (directory-files-recursively
+                  root (rx bos "GTAGS" eos) nil
+                  (lambda (d)
+                    (not (member (file-name-nondirectory d)
+                                 '(".git" "node_modules" "vendor" "target"
+                                   ".venv" "venv" "dist" "build")))))))
+      (let ((d (file-name-as-directory (file-name-directory f))))
+        (unless (equal d root) (push d acc))))
+    (nreverse acc)))
+
+(defun fenrir/gtags--ancestor-index-root (dir)
+  "Return the nearest STRICT ancestor directory of DIR holding a GTAGS, or nil.
+Detects the inverse-shadow case: DIR's own index is itself hidden under a higher
+index, so updating DIR perpetuates the split (the buffer's index resolved to
+backend/, but coinsasia/ above it also has one).  Walks up from DIR's parent,
+stopping at a forbidden root (`fenrir/gtags-forbidden-roots') or the filesystem
+root."
+  (let ((cur (file-name-directory (directory-file-name (expand-file-name dir))))
+        (result nil))
+    (catch 'done
+      (while cur
+        (let ((cur* (file-name-as-directory cur)))
+          (when (and (not (member cur* fenrir/gtags-forbidden-roots))
+                     (file-exists-p (expand-file-name "GTAGS" cur*)))
+            (setq result cur*)
+            (throw 'done nil))
+          (let ((up (file-name-directory (directory-file-name cur*))))
+            (if (equal up cur*) (throw 'done nil)   ; reached the filesystem root
+              (setq cur up))))))
+    result))
+
+(defun fenrir/gtags--sweep-nested-indexes (root &optional quiet)
+  "Delete GTAGS/GRTAGS/GPATH in every STRICT subdirectory of ROOT; return the dirs.
+A nested index shadows ROOT's index for every file beneath it, silently routing
+xref to the wrong (often stale) index.  Removing them on each (re)build guarantees
+ROOT's index is the only one a descendant file can resolve to.  Also invalidates
+ggtags' cached project struct per swept directory so a stale buffer does not keep
+answering from a deleted index.  Non-interactive and signal-free -> safe to call
+from a process sentinel; pass QUIET to suppress the summary `message'."
+  (let ((dirs (fenrir/gtags--nested-index-dirs root)))
+    (dolist (d dirs)
+      (dolist (f (fenrir/gtags--index-files d))
+        (when (file-exists-p f) (ignore-errors (delete-file f))))
+      (fenrir/gtags--invalidate-ggtags-cache d))
+    (when (and dirs (not quiet))
+      (message "Swept %d nested GTAGS index%s under %s: %s"
+               (length dirs) (if (= (length dirs) 1) "" "es")
+               (abbreviate-file-name root)
+               (mapconcat #'abbreviate-file-name dirs ", ")))
+    dirs))
+
+;;;###autoload
+(defun fenrir/gtags-diagnose-duplicates (&optional dir)
+  "Find GTAGS indexes that SHADOW each other under DIR and offer to remove them.
+Interactively DIR defaults to the buffer's existing-index root, else the
+project.el root, else `default-directory'; a prefix arg prompts for it.  GNU
+Global resolves M-. / M-? against the NEAREST ancestor GTAGS, so any index in a
+subdirectory silently hides the root index for every file beneath it -- the bug
+where ~/code/coinsasia/backend/GTAGS shadowed ~/code/coinsasia/GTAGS.
+
+Lists every GTAGS found in the subtree (size + mtime) in a `*gtags-duplicates*'
+buffer, marks the top-most as [root] and the rest as [nested] (the shadows), then
+offers to delete the nested ones.  Deletions are regenerable; ggtags' cached
+project structs for the removed dirs are invalidated so the next lookup
+re-resolves to the surviving root index.  This is the on-error / on-suspicion
+counterpart to the build-time `fenrir/gtags--sweep-nested-indexes'."
+  (interactive
+   (list (let ((default (or (fenrir/gtags--existing-index-root)
+                            (fenrir/gtags--project-root)
+                            (expand-file-name default-directory))))
+           (if current-prefix-arg
+               (read-directory-name "Diagnose GTAGS duplicates under: "
+                                    default default t)
+             default))))
+  (let* ((root (file-name-as-directory (expand-file-name dir)))
+         ;; ALL GTAGS in the subtree, ROOT's own included, shallow-first so the
+         ;; authoritative top index sorts before the shadows it hides.
+         (all (let (acc)
+                (dolist (f (ignore-errors
+                             (directory-files-recursively
+                              root (rx bos "GTAGS" eos) nil
+                              (lambda (d)
+                                (not (member (file-name-nondirectory d)
+                                             '(".git" "node_modules" "vendor" "target"
+                                               ".venv" "venv" "dist" "build")))))))
+                  (push (file-name-as-directory (file-name-directory f)) acc))
+                (sort acc #'string<)))
+         (nested (cl-remove root all :test #'equal)))
+    (cond
+     ((null all)
+      (message "No GTAGS index found under %s" (abbreviate-file-name root)))
+     ((null nested)
+      (message "Single GTAGS index under %s (at %s) -- no shadowing"
+               (abbreviate-file-name root)
+               (abbreviate-file-name (car all))))
+     (t
+      (with-current-buffer (get-buffer-create "*gtags-duplicates*")
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (format "GTAGS indexes under %s\n" (abbreviate-file-name root))
+                  (make-string 64 ?=) "\n")
+          (dolist (d all)
+            (let* ((attr (file-attributes (expand-file-name "GTAGS" d)))
+                   (size (and attr (file-attribute-size attr)))
+                   (mtime (and attr (format-time-string
+                                     "%Y-%m-%d %H:%M"
+                                     (file-attribute-modification-time attr)))))
+              (insert (format "%-8s %9s  %s  %s\n"
+                              (if (equal d root) "[root]" "[nested]")
+                              (if size (file-size-human-readable size) "?")
+                              (or mtime "?")
+                              (abbreviate-file-name d)))))
+          (insert "\n[nested] indexes SHADOW the index above them for every file "
+                  "beneath them.\n")
+          (goto-char (point-min)))
+        (display-buffer (current-buffer)))
+      (when (yes-or-no-p
+             (format "Delete %d nested (shadowing) GTAGS index%s under %s? "
+                     (length nested) (if (= (length nested) 1) "" "es")
+                     (abbreviate-file-name root)))
+        (dolist (d nested)
+          (dolist (f (fenrir/gtags--index-files d))
+            (when (file-exists-p f) (ignore-errors (delete-file f))))
+          (fenrir/gtags--invalidate-ggtags-cache d))
+        (message "Deleted %d nested GTAGS index%s -- %s is now authoritative"
+                 (length nested) (if (= (length nested) 1) "" "es")
+                 (abbreviate-file-name root)))))))
 
 (defun fenrir/gtags--last-output-line (buf)
   "Return the last non-blank line of process-output BUF, or a placeholder.
@@ -929,18 +1110,27 @@ thread so the daemon stays responsive."
               (if (and (not update) fenrir/gtags-label)
                   (cons (concat "GTAGSLABEL=" fenrir/gtags-label) process-environment)
                 process-environment))
-             ;; (2) GTAGSCONF -- point gtags at the system config that DEFINES the
-             ;; labels, whenever it exists.  Mirrors gtags.sh's "point at the system
-             ;; config that defines the labels" block.  Injected on BOTH create AND
-             ;; update: `global -u' re-resolves the stored label and still needs the
-             ;; conf to define it.  This is a defense against a future ~/.globalrc
-             ;; that lacks the pygments/native-pygments labels -- on THIS box there
-             ;; is no ~/.globalrc so the sysconfdir conf already resolves bare, but a
-             ;; corp box may ship one that shadows it.
+             ;; (2) GTAGSCONF -- point gtags at OUR tracked gtags.conf
+             ;; (`fenrir/gtags-conf', ~/.emacs.d/gtags.conf): a self-contained copy
+             ;; of the system conf whose `common' skip list ALSO drops node_modules/
+             ;; vendor/ venv/ dist/ build/ target/ ... -- the dirs the stock conf
+             ;; does NOT skip.  Injected on BOTH create AND update because the skip
+             ;; list is the only lever that reaches `global -u's full re-traversal
+             ;; (a `gtags -f' file list cannot): without it, every update re-added
+             ;; the dependency trees (~/code/coinsasia: 2.5 MB of symbols vs 3.8 GB
+             ;; with the junk, re-bloated on each `global -u').  Owning the conf
+             ;; under version control keeps the exclusion reproducible without
+             ;; editing the root-owned system file.  Falls back to the system conf
+             ;; if ours is missing (a half-set-up checkout still gets parser labels)
+             ;; or `fenrir/gtags-conf' is nil; GTAGSCONF still also defines the
+             ;; pygments/native-pygments labels the build relies on.
              (process-environment
-              (if (file-exists-p "/etc/gtags/gtags.conf")
-                  (cons "GTAGSCONF=/etc/gtags/gtags.conf" process-environment)
-                process-environment))
+              (let ((conf (if (and fenrir/gtags-conf (file-exists-p fenrir/gtags-conf))
+                              fenrir/gtags-conf
+                            "/etc/gtags/gtags.conf")))
+                (if (file-exists-p conf)
+                    (cons (concat "GTAGSCONF=" conf) process-environment)
+                  process-environment)))
              ;; (3) python->python3 PATH shim -- mirrors gtags.sh's PYSHIM block.
              ;; pygments_parser.py shebangs `#!/usr/bin/env python', so a box without
              ;; the `python-is-python3' package (only `python3', no `python') makes
@@ -1022,6 +1212,13 @@ and the heavy CLI runs off the main thread)."
      "No source files under %s -- indexing here would write an empty, corrupt \
 GTAGS.  Pick a directory that contains code"
      (abbreviate-file-name build-root)))
+  ;; Remove any nested indexes that would SHADOW the about-to-be-built root index
+  ;; (GNU Global resolves to the nearest ancestor GTAGS).  Gated on
+  ;; `fenrir/gtags-sweep-nested' so a deliberate per-subdir index setup can opt out.
+  ;; Runs BEFORE the async kick-off so the sweep is synchronous and done by the
+  ;; time the build (and the user's next M-. / M-?) sees the tree.
+  (when fenrir/gtags-sweep-nested
+    (fenrir/gtags--sweep-nested-indexes build-root))
   ;; Fire-and-forget: validation + cache invalidation happen in the sentinel.
   (when (fenrir/gtags--build-async build-root)
     (message
@@ -1140,9 +1337,22 @@ GTAGS/GRTAGS/GPATH by hand)"
        ;; corrupt-index branch above and offers the wipe + rebuild).
        (t
         (when (fenrir/gtags--build-async existing 'update)
-          (message
-           "Updating GTAGS in %s... (async; you'll get a message when it finishes)"
-           (abbreviate-file-name existing))))))
+          ;; If the index covering this buffer is ITSELF nested under a higher
+          ;; index, plain update keeps refreshing the shadow -- surface that and
+          ;; point at the diagnose command rather than silently doing the wrong
+          ;; thing.  One combined message (a second `message' would clobber it).
+          (let ((shadow (fenrir/gtags--ancestor-index-root existing)))
+            (message
+             (if shadow
+                 (format "Updating GTAGS in %s (async) -- NOTE: a higher index at \
+%s shadows this one; M-x fenrir/gtags-diagnose-duplicates to fix, or \
+C-u C-c g g at %s to rebuild the root"
+                         (abbreviate-file-name existing)
+                         (abbreviate-file-name shadow)
+                         (abbreviate-file-name shadow))
+               (format "Updating GTAGS in %s... (async; you'll get a message \
+when it finishes)"
+                       (abbreviate-file-name existing)))))))))
      ;; No index yet -> fresh build (gopls steer + validation inside the helper).
      (t
       (fenrir/gtags--fresh-build root)))))
@@ -1198,8 +1408,11 @@ declines.  So legitimate etags users keep their prompt; we only catch the
 
 ;; Project-scoped keybinding for the explicit command.  `C-c g' is free (the
 ;; Eglot refactor keys live under `C-c .' / `C-c h' in `eglot-mode-map'; `C-c g'
-;; is unused globally).  `g g' = "gtags generate".
+;; is unused globally).  `g g' = "gtags generate"; `g d' = "gtags diagnose"
+;; (list / remove shadowing nested indexes -- the on-suspicion counterpart to the
+;; build-time auto-sweep `fenrir/gtags--sweep-nested-indexes').
 (global-set-key (kbd "C-c g g") #'fenrir/gtags-create-or-update)
+(global-set-key (kbd "C-c g d") #'fenrir/gtags-diagnose-duplicates)
 
 ;; tree-sitter (built-in in 30): faster, more accurate syntax via *-ts-mode.
 ;; `treesit-auto' installs grammars on demand and remaps classic modes to their
