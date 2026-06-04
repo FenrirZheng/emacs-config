@@ -275,6 +275,16 @@ lists the follow-up keys — no need to memorise prefixes.
   command — lists every `GTAGS` in the subtree (`[root]`/`[nested]`, size+mtime) and offers
   to delete the shadows. A `C-c g g` *update* also warns when the buffer's own index is
   shadowed by a higher one.
+- **GTAGS search commands on the `C-c g` prefix** — gtags is a stateless CLI over the
+  on-disk index (no daemon to keep "resident"), so fast access = keeping the searches one
+  chord away. The explicit ggtags searches (which hit `global` directly, bypassing xref, so
+  they work even where Eglot owns `M-.`): **`C-c g .`** find-tag-dwim (def↔ref), **`C-c g r`**
+  references, **`C-c g s`** symbols with no definition (macros/externs), **`C-c g f`** find
+  file by name, **`C-c g /`** full-text grep over indexed files. (Build/maintain: `C-c g g`
+  build·update, `C-c g d` diagnose shadows.) **`C-c g p`** (`fenrir/gtags-prefer-here`) toggles
+  *this buffer* to consult ggtags **before** the LSP on `M-.` / `M-?` — buffer-local, off by
+  default; handy for a fast whole-repo sweep, at the cost of gtags' text-based imprecision
+  (a common name returns every textual definition, not the one scope-correct target).
 - **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
   for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
   Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls

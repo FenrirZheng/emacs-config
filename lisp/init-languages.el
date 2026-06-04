@@ -1406,13 +1406,51 @@ declines.  So legitimate etags users keep their prompt; we only catch the
   (advice-add 'visit-tags-table-buffer :around
               #'fenrir/visit-tags-table-buffer--guide-to-gtags))
 
-;; Project-scoped keybinding for the explicit command.  `C-c g' is free (the
-;; Eglot refactor keys live under `C-c .' / `C-c h' in `eglot-mode-map'; `C-c g'
-;; is unused globally).  `g g' = "gtags generate"; `g d' = "gtags diagnose"
-;; (list / remove shadowing nested indexes -- the on-suspicion counterpart to the
-;; build-time auto-sweep `fenrir/gtags--sweep-nested-indexes').
+(defun fenrir/gtags-prefer-here ()
+  "Toggle, in THIS buffer, whether ggtags answers `M-.' / `M-?' BEFORE the LSP.
+By default xref dispatches to Eglot first (semantic, scope-aware, one precise
+target) and `ggtags--xref-backend' answers only as the no-server fallback.  GNU
+Global's flat index is faster for some queries (references / cross-language whole
+-repo sweeps) and exists even where no server is attached, so this command flips
+the buffer-local `xref-backend-functions' to consult ggtags FIRST; a second call
+flips back.  Buffer-local only -- never changes the global default, and never
+touches the careful Eglot-first ordering in other buffers.  Trade-off when on:
+ggtags is text/symbol based, so `M-.' on a common name (`Get', `New') returns
+every textual definition across the repo rather than the single correct one."
+  (interactive)
+  (require 'ggtags)
+  (if (eq (car xref-backend-functions) #'ggtags--xref-backend)
+      ;; Currently ggtags-first -> demote back to the appended fallback ggtags-mode
+      ;; would normally install (or remove entirely if ggtags-mode isn't on here).
+      (progn
+        (remove-hook 'xref-backend-functions #'ggtags--xref-backend t)
+        (when (bound-and-true-p ggtags-mode)
+          (add-hook 'xref-backend-functions #'ggtags--xref-backend nil t))
+        (message "gtags: LSP-first restored (ggtags is fallback) in this buffer"))
+    ;; Promote ggtags to the front (negative depth); add-hook repositions the
+    ;; existing entry rather than duplicating it.
+    (add-hook 'xref-backend-functions #'ggtags--xref-backend -90 t)
+    (message "gtags: ggtags-first for M-. / M-? in this buffer (C-c g p again to undo)")))
+
+;; Project-scoped keybindings.  `C-c g' is free (the Eglot refactor keys live
+;; under `C-c .' / `C-c h' in `eglot-mode-map'; `C-c g' is unused globally).
+;;   g g  build / update the index           g d  diagnose & remove nested shadows
+;;   g .  find-tag-dwim (def<->ref)           g r  find references
+;;   g s  find symbols with no definition     g f  find file by name (via GTAGS)
+;;   g /  full-text grep over indexed files   g p  toggle ggtags-first M-. here
+;; The g.{.,r,s,f,/} group puts the explicit ggtags searches (which bypass xref
+;; dispatch and hit `global' directly) one chord away, so gtags is always usable
+;; even in a buffer where Eglot owns M-. -- "resident" access without a daemon
+;; (global is a stateless CLI over the on-disk index; there is nothing to keep
+;; running, only the index to keep present + the keys to keep handy).
 (global-set-key (kbd "C-c g g") #'fenrir/gtags-create-or-update)
 (global-set-key (kbd "C-c g d") #'fenrir/gtags-diagnose-duplicates)
+(global-set-key (kbd "C-c g .") #'ggtags-find-tag-dwim)
+(global-set-key (kbd "C-c g r") #'ggtags-find-reference)
+(global-set-key (kbd "C-c g s") #'ggtags-find-other-symbol)
+(global-set-key (kbd "C-c g f") #'ggtags-find-file)
+(global-set-key (kbd "C-c g /") #'ggtags-grep)
+(global-set-key (kbd "C-c g p") #'fenrir/gtags-prefer-here)
 
 ;; tree-sitter (built-in in 30): faster, more accurate syntax via *-ts-mode.
 ;; `treesit-auto' installs grammars on demand and remaps classic modes to their
