@@ -55,21 +55,30 @@
   ;; Rust-analyzer cockpit on `C-c R' (capital R -- distinct from the core's
   ;; lowercase `C-c r' = eglot-rename).  Bound into `rust-ts-mode-map' so these
   ;; ra-only commands never shadow anything in non-Rust Eglot buffers.
-  (define-prefix-command 'fenrir/rust-x-map)
-  (define-key rust-ts-mode-map (kbd "C-c R") 'fenrir/rust-x-map)
-  (let ((m 'fenrir/rust-x-map))
-    (define-key (symbol-value m) (kbd "e")      #'eglot-x-expand-macro)              ; expand macro at point
-    (define-key (symbol-value m) (kbd "r")      #'eglot-x-ask-runnables)             ; cargo run/test/bench, pick
-    (define-key (symbol-value m) (kbd "t")      #'eglot-x-ask-related-tests)         ; tests touching this fn
-    (define-key (symbol-value m) (kbd "d")      #'eglot-x-open-external-documentation) ; docs.rs for symbol
-    (define-key (symbol-value m) (kbd "w")      #'eglot-x-reload-workspace)          ; re-scan Cargo.toml
-    (define-key (symbol-value m) (kbd "p")      #'eglot-x-rebuild-proc-macros)       ; rebuild proc-macros
-    (define-key (symbol-value m) (kbd "s")      #'eglot-x-structural-search-replace) ; syntax-tree SSR
-    (define-key (symbol-value m) (kbd "g")      #'eglot-x-view-crate-graph)          ; dep graph (needs graphviz)
-    (define-key (symbol-value m) (kbd "m")      #'eglot-x-view-recursive-memory-layout) ; type memory layout
-    (define-key (symbol-value m) (kbd "a")      #'eglot-x-analyzer-status)           ; ra server status
-    (define-key (symbol-value m) (kbd "<up>")   #'eglot-x-move-item-up)              ; move fn/struct/variant up
-    (define-key (symbol-value m) (kbd "<down>") #'eglot-x-move-item-down)))          ; ... down
+  ;;
+  ;; LOAD-BEARING `with-eval-after-load': eglot-x is `:after eglot', so this
+  ;; `:config' fires the first time ANY language starts Eglot -- e.g. opening a
+  ;; Java file launches jdtls -> loads `eglot' -> runs this block.  At that
+  ;; point `rust-ts-mode-map' is void (rust-ts-mode hasn't loaded), so a bare
+  ;; `(define-key rust-ts-mode-map ...)' errors "void: rust-ts-mode-map" on the
+  ;; first non-Rust Eglot session.  Defer the keymap wiring until rust-ts-mode
+  ;; actually loads (i.e. a Rust buffer is opened).
+  (with-eval-after-load 'rust-ts-mode
+    (define-prefix-command 'fenrir/rust-x-map)
+    (define-key rust-ts-mode-map (kbd "C-c R") 'fenrir/rust-x-map)
+    (let ((m 'fenrir/rust-x-map))
+      (define-key (symbol-value m) (kbd "e")      #'eglot-x-expand-macro)              ; expand macro at point
+      (define-key (symbol-value m) (kbd "r")      #'eglot-x-ask-runnables)             ; cargo run/test/bench, pick
+      (define-key (symbol-value m) (kbd "t")      #'eglot-x-ask-related-tests)         ; tests touching this fn
+      (define-key (symbol-value m) (kbd "d")      #'eglot-x-open-external-documentation) ; docs.rs for symbol
+      (define-key (symbol-value m) (kbd "w")      #'eglot-x-reload-workspace)          ; re-scan Cargo.toml
+      (define-key (symbol-value m) (kbd "p")      #'eglot-x-rebuild-proc-macros)       ; rebuild proc-macros
+      (define-key (symbol-value m) (kbd "s")      #'eglot-x-structural-search-replace) ; syntax-tree SSR
+      (define-key (symbol-value m) (kbd "g")      #'eglot-x-view-crate-graph)          ; dep graph (needs graphviz)
+      (define-key (symbol-value m) (kbd "m")      #'eglot-x-view-recursive-memory-layout) ; type memory layout
+      (define-key (symbol-value m) (kbd "a")      #'eglot-x-analyzer-status)           ; ra server status
+      (define-key (symbol-value m) (kbd "<up>")   #'eglot-x-move-item-up)              ; move fn/struct/variant up
+      (define-key (symbol-value m) (kbd "<down>") #'eglot-x-move-item-down))))         ; ... down
 
 (provide 'init-rust)
 ;;; init-rust.el ends here
