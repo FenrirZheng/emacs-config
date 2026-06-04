@@ -1,0 +1,27 @@
+[package]
+name = "question-queue-core"
+version = "0.1.0"
+edition = "2021"
+description = "Emacs dynamic module: assemble a region+question markdown file, atomically drop it into a question-queue input/ dir, and parse the answer back out."
+license = "GPL-3.0-or-later"
+publish = false
+
+# cdylib => a bare .so that Emacs `module-load' can dlopen. The Makefile copies
+# target/release/libquestion_queue_core.so -> ../lib/question-queue-core.so
+# (Emacs wants the FEATURE name with no `lib' prefix).
+[lib]
+crate-type = ["cdylib"]
+
+# bindgen generates the raw emacs-module ABI bindings at build time from
+# /usr/include/emacs-module.h (the same system header cpp/junit-core uses).
+# No runtime dependencies: timestamps come from std::time, the collision-guard
+# hash from std::collections::hash_map::DefaultHasher.
+[build-dependencies]
+bindgen = "0.69"
+
+[profile.release]
+opt-level = 2
+# Keep panics unwinding (NOT abort): every extern "C" entry point wraps its body
+# in catch_unwind to turn a Rust panic into an Elisp `error' signal instead of
+# tearing down Emacs. `panic = "abort"' would defeat that.
+panic = "unwind"

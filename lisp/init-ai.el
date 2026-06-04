@@ -16,6 +16,18 @@
   :ensure nil
   :commands (claude-jobs-view))
 
+;; question-queue -- ship the highlighted region + a typed question into the
+;; external file-queue (~/code/question-queue/input/) via the Rust
+;; `question-queue-core' dynamic module, watch output/ with file-notify, and
+;; drop the answer into a *question-queue* side buffer.  Source:
+;; lisp/question-queue.el + rust/question-queue-core/.  `:commands'/`:bind' keep
+;; it lazy (the .so loads on first use; M-x question-queue-build builds it).
+(use-package question-queue
+  :ensure nil
+  :commands (question-queue-ask question-queue-build question-queue-set-dir)
+  :bind (("C-c q q" . question-queue-ask)
+         ("C-c q d" . question-queue-set-dir)))
+
 ;; gptel -- LLM chat client.  Available from MELPA / NonGNU ELPA.
 ;; Entry points (no key bindings claimed -- invoke via M-x):
 ;;   M-x gptel                     -- open / switch to a chat buffer

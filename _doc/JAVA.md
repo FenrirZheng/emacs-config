@@ -96,14 +96,18 @@ imports the whole reactor. Cross-module references work immediately.
 ### Case B — a container of multiple independent reactors
 
 ```
-M-x fenrir/eglot-java-set-workspace-root RET <container-dir> RET
+touch <container-dir>/.eglot-java-workspace
+M-x fenrir/project-reset-cache RET
 ```
 
-This drops the `.eglot-java-workspace` marker, resets the project cache, and
-offers to restart any running jdtls session. Then open a `.java` file under
-the container — one server now covers every reactor beneath it.
+This drops the `.eglot-java-workspace` marker by hand and clears the cached
+project root. Then open (or reopen) a `.java` file under the container — one
+server now covers every reactor beneath it. If a jdtls session is already
+running, shut it down (`M-x eglot-shutdown`) and reopen so it re-reads the
+layout.
 
-To undo: `M-x fenrir/eglot-java-unset-workspace-root` (falls back to Tier 2).
+To undo: `rm <container-dir>/.eglot-java-workspace` then
+`M-x fenrir/project-reset-cache` (falls back to Tier 2).
 
 There is also `M-x fenrir/eglot-java-add-roots-under RET <dir> RET`, which adds
 Maven/Gradle roots to a *running* session via
@@ -299,9 +303,10 @@ jdtls imports both as duplicate JDT projects. Keep one copy under the container.
 ### Root resolved too deep (only one sub-module's references show)
 
 Project detection landed on a sub-module. Confirm with `M-: (project-current)`.
-If you want the whole container fused, run
-`fenrir/eglot-java-set-workspace-root` at the container; if you want a single
-reactor, make sure no stray `.eglot-java-workspace` marker sits in a deeper dir.
+If you want the whole container fused, drop a `.eglot-java-workspace` marker
+at the container (`touch <container>/.eglot-java-workspace`); if you want a
+single reactor, make sure no stray `.eglot-java-workspace` marker sits in a
+deeper dir.
 Run `M-x fenrir/project-reset-cache` after any marker change.
 
 ### `M-g s` (type search) errors with "stringp, nil" / shows nothing
@@ -397,7 +402,7 @@ unless noted otherwise.
 | Bundle / workspace paths | `fenrir/jdtls-bundle-dir`, `fenrir/jdtls-workspace-dir` |
 | Project root resolution | `fenrir/project-find-java-build-root` (on `project-find-functions`) |
 | Container marker filename | `fenrir/java-workspace-marker` (`.eglot-java-workspace`) |
-| Set / unset container root | `fenrir/eglot-java-set-workspace-root`, `…-unset-workspace-root` |
+| Set / unset container root | manual: `touch` / `rm` `.eglot-java-workspace`, then `M-x fenrir/project-reset-cache` |
 | Ad-hoc workspace folders | `fenrir/eglot-java-add-roots-under` |
 | `jdt://` source handler | `fenrir/eglot--jdt-uri-handler`, `fenrir/eglot--find-jdtls-server` |
 | Per-server `:java` settings | `:java` entry of `eglot-workspace-configuration` |

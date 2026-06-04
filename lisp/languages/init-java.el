@@ -16,8 +16,9 @@
 ;;     of `:before-while' advices that keep diff-hl / org-roam / breadcrumb /
 ;;     vc-refresh / consult-eglot from choking on the synthetic non-`file://'
 ;;     URIs.
-;;   * `fenrir/eglot-java-add-roots-under' + the set/unset workspace-root
-;;     commands.
+;;   * `fenrir/eglot-java-add-roots-under' (ad-hoc workspace-folder additions);
+;;     the Tier 1 container marker (`fenrir/java-workspace-marker') is managed
+;;     by hand -- touch/rm the file, no dedicated command.
 ;;   * The `java-mode' / `java-ts-mode' -> `eglot-ensure' hooks.
 ;;
 ;; The language-agnostic Eglot core (settings, eglot-booster, consult-eglot,
@@ -570,82 +571,15 @@ session.  Interactive call prompts for DIR (default ~/code/)."
              (abbreviate-file-name (expand-file-name dir))
              roots)))
 
-;; ----- Container workspace marker: set / unset ------------------------------
-;; The durable counterpart to `fenrir/eglot-java-add-roots-under'.  Dropping a
-;; `fenrir/java-workspace-marker' file makes `fenrir/project-find-java-build-root'
-;; Tier 1 fuse every Java reactor beneath that dir into one jdtls workspace --
-;; surviving restarts, with no per-session didChangeWorkspaceFolders dance.
-
-(defun fenrir/eglot-java--restart-jdtls ()
-  "Shut down all live jdtls sessions so buffers reconnect afresh.
-Returns the count shut down.  jdtls re-reads the project layout on the
-next connect, so toggling a workspace marker takes effect after this."
-  (let ((servers (fenrir/eglot--jdtls-servers)))
-    (dolist (s servers) (ignore-errors (eglot-shutdown s 1 nil t)))
-    (length servers)))
-
-(defun fenrir/eglot-java-set-workspace-root (dir)
-  "Mark DIR as a unified jdtls workspace root.
-Creates `fenrir/java-workspace-marker' in DIR so every Java file beneath
-it resolves to DIR (Tier 1 of `fenrir/project-find-java-build-root'),
-fusing independent Maven/Gradle reactors under DIR into one Eglot server
-+ one jdtls Eclipse workspace -- the basis for cross-project
-find-references / navigation.  Resets the project cache and offers to
-restart any running jdtls session so the new root takes effect.
-
-Interactive default is the current project root, else `default-directory'."
-  (interactive
-   (list (read-directory-name
-          "Java workspace root (drop marker here): "
-          (or (ignore-errors (project-root (project-current)))
-              default-directory))))
-  (let* ((dir (file-name-as-directory (expand-file-name dir)))
-         (marker (expand-file-name fenrir/java-workspace-marker dir)))
-    (unless (file-directory-p dir)
-      (user-error "Not a directory: %s" dir))
-    (unless (file-exists-p marker)
-      (with-temp-file marker
-        (insert "Marks " (abbreviate-file-name dir) " as a unified jdtls/Eglot\n"
-                "workspace root -- read by fenrir/project-find-java-build-root in\n"
-                "~/.emacs.d/lisp/languages/init-java.el.  Every Java file beneath\n"
-                "this dir resolves to THIS dir as its project root, so independent\n"
-                "Maven/Gradle reactors here share one Eglot server + one jdtls\n"
-                "Eclipse workspace (cross-project find-references).  See\n"
-                "~/.emacs.d/_doc/JAVA.md.  Created by M-x "
-                "fenrir/eglot-java-set-workspace-root.\n")))
-    (fenrir/project-reset-cache)
-    (let ((n (when (and (fenrir/eglot--jdtls-servers)
-                        (y-or-n-p "Marker set.  Restart running jdtls session(s) now? "))
-               (fenrir/eglot-java--restart-jdtls))))
-      (message "Java workspace root: %s%s"
-               (abbreviate-file-name dir)
-               (cond ((and n (> n 0))
-                      (format " (%d session(s) shut down; reopen a .java file to reconnect)" n))
-                     (t " (reopen .java files or M-x eglot to apply)"))))))
-
-(defun fenrir/eglot-java-unset-workspace-root (dir)
-  "Remove `fenrir/java-workspace-marker' from DIR (inverse of
-`fenrir/eglot-java-set-workspace-root').  Java files beneath DIR then
-fall back to the topmost-pom heuristic (Tier 2).  Interactive default is
-the nearest ancestor that currently holds the marker."
-  (interactive
-   (list (read-directory-name
-          "Remove Java workspace marker from: "
-          (or (locate-dominating-file default-directory fenrir/java-workspace-marker)
-              default-directory))))
-  (let* ((dir (file-name-as-directory (expand-file-name dir)))
-         (marker (expand-file-name fenrir/java-workspace-marker dir)))
-    (unless (file-exists-p marker)
-      (user-error "No %s in %s" fenrir/java-workspace-marker (abbreviate-file-name dir)))
-    (delete-file marker)
-    (fenrir/project-reset-cache)
-    (let ((n (when (and (fenrir/eglot--jdtls-servers)
-                        (y-or-n-p "Marker removed.  Restart running jdtls session(s) now? "))
-               (fenrir/eglot-java--restart-jdtls))))
-      (message "Removed Java workspace marker from %s%s"
-               (abbreviate-file-name dir)
-               (if (and n (> n 0))
-                   (format " (%d session(s) shut down)" n) "")))))
+;; ----- Container workspace marker -------------------------------------------
+;; Tier 1 of `fenrir/project-find-java-build-root' fuses every Java reactor
+;; beneath a dir holding `fenrir/java-workspace-marker' into one jdtls
+;; workspace.  The marker is managed by hand -- create it with
+;;   touch <container-dir>/.eglot-java-workspace
+;; and remove it with `rm' (then `M-x fenrir/project-reset-cache' and reopen
+;; the .java buffers, or `M-x eglot', so jdtls re-reads the project layout).
+;; `fenrir/eglot-java-add-roots-under' remains for ad-hoc, non-durable
+;; `workspace/didChangeWorkspaceFolders' additions to a live session.
 
 ;; ----- eglot-ensure hooks ---------------------------------------------------
 ;; Java attaches on BOTH `java-mode' (built-in regex) and `java-ts-mode'
