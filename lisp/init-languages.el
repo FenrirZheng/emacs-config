@@ -26,7 +26,9 @@
 ;; ~/ itself is a git repo (the dotfiles tree).  Two interacting problems:
 ;;   1. project.el would otherwise treat all of $HOME as one giant project and
 ;;      project-find-file would walk the whole home directory.  Fixed by the
-;;      :around advice on `project-try-vc' that returns nil when the root is $HOME.
+;;      :around advice on `project-try-vc' that returns nil when the root is
+;;      $HOME -- or the filesystem root `/' (the latter also dodges a breadcrumb
+;;      crash on /tmp buffers; see the advice's docstring).
 ;;   2. Sub-directories inside the dotfiles repo that don't have their own .git
 ;;      (e.g. ~/.emacs.d/, ~/.config/<foo>/) would also be killed by (1) because
 ;;      `vc-find-root' walks up to ~/.git.  Fixed by `project-vc-extra-root-markers':
@@ -52,11 +54,21 @@
      "Makefile"))        ; generic
   :config
   (defun my-project-ignore-home (orig-fun dir)
-    "If `project-try-vc' would return $HOME as the project root, ignore it."
+    "If `project-try-vc' would return $HOME or the filesystem root, ignore it.
+$HOME is the dotfiles repo (~1500 tracked files) -- treating it as a project
+makes `project-find-file' walk the whole home directory.  `/' is
+`project-try-vc' degenerating when DIR has no VCS root anywhere above it (e.g.
+a buffer under /tmp): besides the same runaway-walk risk, a `/' root makes
+`breadcrumb--project-crumbs-1' build an empty-string base crumb -- and an
+empty string cannot carry the `bc-dont-shorten' text property, so
+`breadcrumb--summarize' wrongly tries to `(substring \"\" 0 1)' and signals
+`args-out-of-range', uncaught, during `normal-mode' -- which aborts the whole
+`find-file' (cf. the filesystem-root note on `fenrir/gtags-forbidden-roots'
+below, the gtags-side guard against the same degeneration)."
     (let ((proj (funcall orig-fun dir)))
       (if (and proj
-               (string= (expand-file-name (project-root proj))
-                        (expand-file-name "~/")))
+               (member (expand-file-name (project-root proj))
+                       (list (expand-file-name "~/") "/")))
           nil
         proj)))
   (advice-add 'project-try-vc :around #'my-project-ignore-home))
