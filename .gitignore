@@ -48,3 +48,9 @@
 # Per-module sources (cpp/<name>/{src,vendor,CMakeLists.txt}) stay tracked.
 /cpp/build/
 /cpp/lib/
+
+# rust/ tree-sitter grammar workspace: cloned upstream grammar source +
+# build outputs (rebuilt by rust/install-treesit-grammar.sh). The script +
+# README stay tracked.
+/rust/tree-sitter-rust/
+/rust/build/

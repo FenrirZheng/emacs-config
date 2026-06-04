@@ -24,6 +24,9 @@
 ;; master.  Fill the gap: v0.23.3 is the newest tag still at LANGUAGE_VERSION 14
 ;; (v0.24.0 is the first ABI-15 tag).  This makes both treesit-auto auto-install
 ;; and a manual `M-x treesit-install-language-grammar' fetch the ABI-14 grammar.
+;; A standalone (Emacs-free) deployer that builds the same pinned grammar lives
+;; at [`rust/install-treesit-grammar.sh'](../../rust/install-treesit-grammar.sh)
+;; -- keep its GRAMMAR_TAG in sync with the `abi14-revision' below.
 (with-eval-after-load 'treesit-auto
   (when-let* ((r (seq-find (lambda (x) (eq (treesit-auto-recipe-lang x) 'rust))
                            treesit-auto-recipe-list)))
