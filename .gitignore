@@ -43,3 +43,8 @@
 *.elc
 *.eln
 .aider*
+
+# cpp/ C++ libraries workspace: build outputs (rebuilt by cpp/build.sh).
+# Per-module sources (cpp/<name>/{src,vendor,CMakeLists.txt}) stay tracked.
+/cpp/build/
+/cpp/lib/

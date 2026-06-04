@@ -418,6 +418,30 @@ lists the follow-up keys — no need to memorise prefixes.
   Emacs sessions (`dape-breakpoint-save` on quit, `dape-breakpoint-load` on
   startup). Modified buffers are saved before each run. Keymap below.
 
+  **Single JUnit test at point / whole file** (the Java analogue, in any
+  `java-ts-mode` / `java-mode` buffer — [`init-java.el`](lisp/languages/init-java.el),
+  mirrors Go's `C-c t` test prefix above):
+
+  | key | command | action |
+  |---|---|---|
+  | `C-c t t` | `junit-run-dwim` | run the `@Test` method at point; if point isn't in a test, run the whole file |
+  | `C-c t m` | `junit-run-method-at-point` | run the `@Test` method enclosing point |
+  | `C-c t f` | `junit-run-file` | run every test in the file |
+  | `C-c t b` | `junit-runner-build` | (re)build the `junit-core` module |
+
+  The parsing + command construction is a **C++ Emacs dynamic module**,
+  `junit-core` (in the [cpp/ workspace](cpp/README.md),
+  [`cpp/junit-core/`](cpp/junit-core/)), driven by the elisp front-end
+  [`junit-runner.el`](lisp/junit-runner.el). The module uses tree-sitter to find
+  the test method at a line (JUnit 4 + 5 annotations, nested `@Nested` classes
+  via `Outer$Nested`), walks up to detect Maven vs Gradle, and returns the exact
+  `mvn test -Dtest=…` / `./gradlew test --tests …` command; elisp runs it through
+  `compile` (so `*junit*` is a compilation buffer with error jumps + `g`
+  recompile). Build once with `M-x junit-runner-build` (or `cpp/build.sh`);
+  needs `libtree-sitter-dev`. Like Go's keys, `C-c t` becomes a test prefix
+  **inside Java buffers only** — it shadows vterm (§9) there; `C-c t` stays vterm
+  everywhere else.
+
 All dape commands live in `dape-global-map` under the **`C-x C-a`** prefix:
 
 | Key | Command | What it does |

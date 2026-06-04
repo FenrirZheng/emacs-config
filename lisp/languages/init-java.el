@@ -656,5 +656,27 @@ the nearest ancestor that currently holds the marker."
 (add-hook 'java-mode-hook    #'eglot-ensure)
 (add-hook 'java-ts-mode-hook #'eglot-ensure)
 
+;; ----- JUnit test runner (junit-core C++ module) ----------------------------
+;; tree-sitter-based JUnit discovery + Maven/Gradle command construction lives
+;; in the `junit-core' dynamic module (cpp/); `junit-runner' is the elisp
+;; front-end that loads it on demand and runs the test via `compile'.  Source
+;; and build: cpp/junit-core/src/junit-core.cpp, cpp/build.sh.  The require is cheap (no
+;; .so load until the first command); build the module once with
+;; `M-x junit-runner-build'.
+(require 'junit-runner nil t)
+
+;; `C-c t' test prefix -- deliberately NOT under `C-c o' (combobulate) or the
+;; Eglot refactor keys (`C-c .' / `r' / `i' / `x' / `f' / `h ...').
+(defun fenrir/junit-bind-keys (map)
+  "Bind the JUnit runner commands under `C-c t' in MAP."
+  (define-key map (kbd "C-c t t") #'junit-run-dwim)
+  (define-key map (kbd "C-c t m") #'junit-run-method-at-point)
+  (define-key map (kbd "C-c t f") #'junit-run-file)
+  (define-key map (kbd "C-c t b") #'junit-runner-build))
+(with-eval-after-load 'cc-mode
+  (fenrir/junit-bind-keys java-mode-map))
+(with-eval-after-load 'java-ts-mode
+  (fenrir/junit-bind-keys java-ts-mode-map))
+
 (provide 'init-java)
 ;;; init-java.el ends here
