@@ -14,6 +14,21 @@
 ;; Eglot attaches on `rust-ts-mode' (treesit-auto remaps .rs files to it).
 (add-hook 'rust-ts-mode-hook #'eglot-ensure)
 
+;; Pin the tree-sitter-rust grammar to an ABI-14 tag.  Emacs 30.1 caps the
+;; tree-sitter ABI at 14 (`treesit-library-abi-version' => 14); tree-sitter-rust
+;; master is ABI 15 since v0.24.0, so a freshly-built grammar loads with
+;; `(nil version-mismatch 15)' and `rust-ts-mode' silently falls back / errors
+;; (same trap that excludes css/json/lua from `treesit-auto-langs' in the core).
+;; treesit-auto already honours an `abi14-revision' slot per recipe -- it just
+;; ships none for rust (it has them for several other langs), so rust defaults to
+;; master.  Fill the gap: v0.23.3 is the newest tag still at LANGUAGE_VERSION 14
+;; (v0.24.0 is the first ABI-15 tag).  This makes both treesit-auto auto-install
+;; and a manual `M-x treesit-install-language-grammar' fetch the ABI-14 grammar.
+(with-eval-after-load 'treesit-auto
+  (when-let* ((r (seq-find (lambda (x) (eq (treesit-auto-recipe-lang x) 'rust))
+                           treesit-auto-recipe-list)))
+    (setf (treesit-auto-recipe-abi14-revision r) "v0.23.3")))
+
 ;; rust-analyzer: `clippy' as the on-save check (mirrors what you'd run in a
 ;; terminal) and proc-macros expanded so derive macros stop showing as
 ;; "unknown".  `closingBraceHints' 25-line threshold matches VSCode's default
