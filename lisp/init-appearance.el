@@ -88,7 +88,15 @@
 ;;                               doom-tokyo-night)
 ;; C-c e / C-c e t / C-c e T verified free.  Tab management deliberately stays on
 ;; the native `C-x t' prefix -- no C-c key is invented for it.
+;; `:demand t' is LOAD-BEARING: this block carries the DEFAULT theme in its
+;; `:config' (`load-theme' below).  Without :demand, the `:bind' keys make
+;; use-package defer the whole block, so `:config' -- and the theme load --
+;; would only fire the first time you press `C-c e t'/`C-c e T'.  At daemon
+;; boot / fresh GUI start that left every frame on the white Emacs default
+;; theme until a key was pressed.  :demand forces eager load so the theme
+;; paints at startup; the keys are still bound.
 (use-package ef-themes
+  :demand t
   :custom (ef-themes-to-toggle '(ef-melissa-dark ef-melissa-light))
   :bind (("C-c e t" . ef-themes-toggle)
          ("C-c e T" . consult-theme))
