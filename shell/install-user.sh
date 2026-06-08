@@ -137,8 +137,9 @@ cat <<'EOF'
   • First Emacs launch: M-x nerd-icons-install-fonts (downloads TTFs once)
   • jinx compiles its C module on first load (~2s; needs libenchant-2-dev)
   • vterm compiles its C module on first launch (needs cmake + libvterm-dev)
-  • Tree-sitter css/json/lua are ABI 15 and unusable on Emacs 30 (ABI 14);
-    the treesit-auto exclusion in lisp/init-languages.el routes around this,
-    with lua → lua-mode font-lock + lua-language-server LSP wired in
-    lisp/languages/init-lua.el (server installed in section 6 above)
+  • Emacs 30 caps tree-sitter grammar ABI at 14; some upstreams are ABI 15.
+    css/json are excluded from treesit-auto (built-in modes); c/lua/rust are
+    pinned to their newest ABI-14 tag and rebuilt by rust/treesit-grammar*/
+    (run `make -C rust`, or let treesit-auto auto-install the pinned tag).
+    lua also gets lua-language-server LSP (server installed in section 6 above)
 EOF

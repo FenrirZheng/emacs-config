@@ -12,6 +12,11 @@
 #   make clean      # drop each subproject's build/
 #   make distclean  # also drop each checkout + deployed artefact
 #   make GRAMMAR_TAG=v0.23.4   # command-line vars propagate to sub-makes
+#                              # NB: this now hits ALL THREE grammar subprojects
+#                              # (rust/c/lua), each of which has a different
+#                              # correct tag — so a global override is rarely
+#                              # what you want.  Override one grammar's pin with
+#                              # `make -C treesit-grammar-c GRAMMAR_TAG=...`.
 #
 # To add a subproject: create rust/<name>/ with a Makefile that exposes the
 # phony targets below (all / install / verify / clean / distclean), then add
@@ -20,7 +25,7 @@
 # the grammar's hand-rolled `cc` — so each subproject owns its own recipe and
 # this file stays build-agnostic.  Workspace overview: [README.md](README.md).
 
-SUBPROJECTS := treesit-grammar question-queue-core
+SUBPROJECTS := treesit-grammar treesit-grammar-c treesit-grammar-lua question-queue-core
 
 # Targets that fan out to every subproject, each forwarded verbatim via $@.
 FORWARDED := all install verify clean distclean

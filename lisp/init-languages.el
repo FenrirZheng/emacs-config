@@ -1474,17 +1474,20 @@ every textual definition across the repo rather than the single correct one."
   ;;           covers our use cases (Vue <style> blocks go through Volar).
   ;;   json -- simple grammar; built-in `js-json-mode' is fine and the
   ;;           LSP (vscode-json-language-server) does the heavy lifting.
-  ;;   lua  -- `tree-sitter-grammars/tree-sitter-lua' is also ABI 15 at HEAD
-  ;;           (verified 2026-05-19: `treesit-auto-install' freshly cloned +
-  ;;           compiled the grammar and STILL produced ABI 15).  No
-  ;;           ABI-14-compatible tag exists upstream.  Fall back to MELPA
-  ;;           `lua-mode' (regex-based, see `languages/init-lua.el') for
-  ;;           highlighting; revisit if/when upstream tags ABI 14 or Emacs
-  ;;           lifts the ABI cap.
-  ;; All three modes are still hooked to eglot in their language modules; we
-  ;; just lose the tree-sitter font-lock / structural navigation, which is
-  ;; no real loss for these grammars.
-  (setq treesit-auto-langs (seq-difference treesit-auto-langs '(css json lua)))
+  ;; Both modes are still hooked to eglot in their language modules; we just
+  ;; lose the tree-sitter font-lock / structural navigation, which is no real
+  ;; loss for these grammars.
+  ;;
+  ;; NOT excluded (handled by an ABI-14 pin instead -- the better fix when an
+  ;; ABI-14 tag exists upstream): c, lua, rust.  These stay in
+  ;; `treesit-auto-langs' and their language modules pin the grammar to its
+  ;; newest ABI-14 tag via the `abi14-revision' recipe slot, so treesit-auto
+  ;; auto-installs a loadable grammar instead of ABI-15 HEAD -- see
+  ;; `languages/init-c-cpp.el' (c, v0.23.6), `languages/init-lua.el' (lua,
+  ;; v0.3.0; was excluded here until 2026-06-08, when v0.3.0 was found to be a
+  ;; valid ABI-14 tag), and `languages/init-rust.el' (rust, v0.23.3).  Each pin
+  ;; also has a standalone Makefile deployer under `rust/treesit-grammar*/'.
+  (setq treesit-auto-langs (seq-difference treesit-auto-langs '(css json)))
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode 1))
 
@@ -1537,7 +1540,7 @@ every textual definition across the repo rather than the single correct one."
 ;; elements), so Python and every grammar-backed language fold accurately --
 ;; fixing hideshow's documented Python weakness.
 ;;
-;; Coexistence with hideshow: where NO parser exists (css / json / lua --
+;; Coexistence with hideshow: where NO parser exists (css / json --
 ;; excluded from `treesit-auto-langs' above) treesit-fold silently no-ops and
 ;; hideshow stays the fold mechanism, so the two never fight over the same
 ;; buffer.

@@ -113,7 +113,7 @@ and previews entries at point.
 | `M-g w` | `avy-goto-word-1` | Jump to a word |
 | `M-g l` | `avy-goto-line` | Jump to a line |
 | `C-=` | `expreg-expand` | Grow the region along the **tree-sitter parse tree**: word → string → node → enclosing node → … `C-+` (= `C-S-=`) shrinks it. Exact if-statement / parameter-list / JSX-element boundaries in every grammar-backed language |
-| `C-M-=` | `er/expand-region` | The **no-grammar fallback** for `C-=` — grows by Lisp sexps (word → sexp → string → defun → …). For css / json / lua, which have no tree-sitter parser (excluded from `treesit-auto`), where expreg has nothing to climb |
+| `C-M-=` | `er/expand-region` | The **no-grammar fallback** for `C-=` — grows by Lisp sexps (word → sexp → string → defun → …). For css / json, which have no tree-sitter parser (excluded from `treesit-auto`), where expreg has nothing to climb |
 | `C->` | `mc/mark-next-like-this` | Multiple cursors: mark the next occurrence of the region/word |
 | `C-<` | `mc/mark-previous-like-this` | …the previous occurrence |
 | `C-c C-<` | `mc/mark-all-like-this` | Mark *all* occurrences |
@@ -173,7 +173,7 @@ indentation-structured languages like Python.
 **Code folding (tree-sitter)** — `treesit-fold` complements HideShow above by folding on
 the **parse tree** instead of braces / indentation, so it folds Python (and every other
 grammar-backed language) accurately exactly where hideshow is weak. `global-treesit-fold-mode`
-is on; in a buffer with no tree-sitter parser (css / json / lua) it no-ops and hideshow
+is on; in a buffer with no tree-sitter parser (css / json) it no-ops and hideshow
 stays in charge — the two coexist. Folds render as an overlay ellipsis (no fringe — TTY-safe).
 Its own `C-c z` prefix is kept off hideshow's `C-c @` and combobulate's `C-c o` (§7) so all
 three can be live in one buffer. Config lives with the tree-sitter stack in
@@ -407,15 +407,22 @@ lists the follow-up keys — no need to memorise prefixes.
   `C-M-$` switches languages mid-buffer. Pinned to `en_US` by default; first load
   compiles a small C module (~2 s, one-off). Requires `apt install enchant-2
   libenchant-2-dev`.
-- **lua-mode** (MELPA): `.lua` files open in `lua-mode` — regex-based highlighting.
-  Picked over the built-in `lua-ts-mode` because the upstream
-  `tree-sitter-grammars/tree-sitter-lua` grammar is ABI 15 at HEAD and Emacs
-  30.1 caps at ABI 14 (same reason `css` and `json` are excluded from `treesit-auto`
-  in [`init-languages.el`](lisp/init-languages.el)). **LSP**: Eglot attaches
-  `lua-language-server` (LuaLS) — go-to-def, hover, `consult-eglot-symbols`,
-  Flymake diagnostics. The server isn't on apt; [`shell/install-user.sh`](shell/install-user.sh)
-  installs it from upstream GitHub releases into `~/.local/share/lua-language-server/`
-  with a `~/.local/bin/` symlink. If the binary is missing, Eglot just declines to
+- **lua-ts-mode** (built-in) + **lua-mode** (MELPA) fallback: `.lua` files open in
+  the tree-sitter `lua-ts-mode` when the grammar is present, and fall back to
+  regex-based `lua-mode` when it isn't (the same "hook both modes" pattern as
+  C/C++). The upstream `tree-sitter-grammars/tree-sitter-lua` grammar is ABI 15
+  at HEAD and Emacs 30.1 caps at ABI 14, so the grammar is **pinned to `v0.3.0`**
+  (its newest ABI-14 tag) via the `abi14-revision` recipe slot in
+  [`init-lua.el`](lisp/languages/init-lua.el) and rebuilt by
+  [`rust/treesit-grammar-lua/`](rust/treesit-grammar-lua/README.md) — same fix as
+  `rust` (`v0.23.3`) and `c` (`v0.23.6`); `css` / `json` instead just drop out of
+  `treesit-auto` since the built-in modes suffice. (Lua used `lua-mode` only until
+  2026-06-08, when `v0.3.0` was found to be a valid ABI-14 tag.) **LSP**: Eglot
+  attaches `lua-language-server` (LuaLS) on both modes — go-to-def, hover,
+  `consult-eglot-symbols`, Flymake diagnostics. The server isn't on apt;
+  [`shell/install-user.sh`](shell/install-user.sh) installs it from upstream
+  GitHub releases into `~/.local/share/lua-language-server/` with a
+  `~/.local/bin/` symlink. If the binary is missing, Eglot just declines to
   start — highlighting still works. No formatter / REPL wired.
 - **dape**: Debug Adapter Protocol client — an in-editor step debugger, the
   Eglot-spirit counterpart to `dap-mode`. Core-only deps (`jsonrpc`), no

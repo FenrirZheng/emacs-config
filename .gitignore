@@ -57,6 +57,10 @@
 # per-subproject Makefiles, and the READMEs stay tracked.
 /rust/treesit-grammar/tree-sitter-rust/
 /rust/treesit-grammar/build/
+/rust/treesit-grammar-c/tree-sitter-c/
+/rust/treesit-grammar-c/build/
+/rust/treesit-grammar-lua/tree-sitter-lua/
+/rust/treesit-grammar-lua/build/
 # deployed dynamic modules (workspace-wide, like cpp/lib/) + cargo target dir.
 /rust/lib/
 /rust/question-queue-core/target/

@@ -15,6 +15,33 @@
 (add-hook 'c-ts-mode-hook   #'eglot-ensure)
 (add-hook 'c++-ts-mode-hook #'eglot-ensure)
 
+;; Pin the tree-sitter-c grammar to an ABI-14 tag.  Emacs 30.1 caps the
+;; tree-sitter ABI at 14 (`treesit-library-abi-version' => 14); tree-sitter-c
+;; jumped to ABI 15 at v0.24.0, so a grammar built from a recent tag loads with
+;; `(nil version-mismatch 15)' and `c-ts-mode' refuses to start with
+;;   "Cannot activate tree-sitter ... grammar for c is unavailable
+;;    (version-mismatch): 15"
+;; (the same trap that excludes css/json from `treesit-auto-langs' in the core,
+;; and that the rust grammar pins around in `init-rust.el').  treesit-auto
+;; honours an `abi14-revision' slot per recipe but ships none for c, so c
+;; defaults to master.  Fill the gap: v0.23.6 is the newest tag still at
+;; LANGUAGE_VERSION 14 (v0.24.0 is the first ABI-15 tag).  This makes both
+;; treesit-auto auto-install and `M-x treesit-install-language-grammar' fetch the
+;; ABI-14 grammar.  A standalone (Emacs-free) deployer that builds the same
+;; pinned grammar lives at
+;; [`rust/treesit-grammar-c/Makefile'](../../rust/treesit-grammar-c/Makefile)
+;; (`make' in that dir) -- keep its GRAMMAR_TAG in sync with the `abi14-revision'
+;; below.
+;;
+;; NB: c++ (tree-sitter-cpp) is NOT pinned here -- its current grammar is ABI 14
+;; and loads fine.  If a future treesit-auto re-install pulls an ABI-15 cpp and
+;; `c++-ts-mode' starts emitting the same warning, add a sibling pin for `cpp'
+;; (newest ABI-14 tag) the same way.
+(with-eval-after-load 'treesit-auto
+  (when-let* ((r (seq-find (lambda (x) (eq (treesit-auto-recipe-lang x) 'c))
+                           treesit-auto-recipe-list)))
+    (setf (treesit-auto-recipe-abi14-revision r) "v0.23.6")))
+
 ;; Register clangd explicitly with `--inlay-hints'.  Honesty note: clangd >= 14
 ;; already emits inlay hints BY DEFAULT once the client advertises the
 ;; `inlayHint' capability (Eglot does, and the global `eglot-inlay-hints-mode'

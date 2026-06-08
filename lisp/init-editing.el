@@ -128,7 +128,7 @@
          ("C-+" . expreg-contract)))
 
 ;; expand-region: kept as the NO-GRAMMAR fallback for expreg above, moved off
-;; `C-=' onto `C-M-='.  css / json / lua have no tree-sitter parser (excluded
+;; `C-=' onto `C-M-='.  css / json have no tree-sitter parser (excluded
 ;; from `treesit-auto-langs', init-languages.el), so expreg has nothing to climb
 ;; there; expand-region's sexp/heuristic growth still works.  Grows the region
 ;; semantically (word -> sexp -> string -> defun -> ...).

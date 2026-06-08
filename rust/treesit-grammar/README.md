@@ -91,5 +91,8 @@ runtime): change both, re-run `make`, restart the daemon.
   Eglot / rust-analyzer config and the `treesit-auto` ABI-14 pin.
 - [cpp/README.md](../../cpp/README.md) — the analogous C++ dynamic-module
   workspace this folder's tracked/ignored split is modeled on.
+- [rust/treesit-grammar-c/README.md](../treesit-grammar-c/README.md) /
+  [rust/treesit-grammar-lua/README.md](../treesit-grammar-lua/README.md) — the
+  sibling C / Lua grammar deployers built from the same pattern.
 - Project notes: [../../CLAUDE.md](../../CLAUDE.md) (tree-sitter grammar
-  handling, the `css`/`json`/`lua` ABI-15 exclusions).
+  handling, the ABI-14 pins for rust/c/lua, the `css`/`json` exclusions).

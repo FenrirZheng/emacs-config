@@ -18,7 +18,8 @@
 ;; tree-sitter ABI at 14 (`treesit-library-abi-version' => 14); tree-sitter-rust
 ;; master is ABI 15 since v0.24.0, so a freshly-built grammar loads with
 ;; `(nil version-mismatch 15)' and `rust-ts-mode' silently falls back / errors
-;; (same trap that excludes css/json/lua from `treesit-auto-langs' in the core).
+;; (same trap that excludes css/json from `treesit-auto-langs' in the core, and
+;; that c (init-c-cpp.el) and lua (init-lua.el) pin around the same way).
 ;; treesit-auto already honours an `abi14-revision' slot per recipe -- it just
 ;; ships none for rust (it has them for several other langs), so rust defaults to
 ;; master.  Fill the gap: v0.23.3 is the newest tag still at LANGUAGE_VERSION 14
