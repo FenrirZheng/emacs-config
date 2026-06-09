@@ -82,6 +82,10 @@
 (push '(menu-bar-lines . 0) default-frame-alist)
 (push '(tool-bar-lines . 0) default-frame-alist)
 (push '(vertical-scroll-bars) default-frame-alist)
+;; Start the GUI frame maximized (fills the screen, keeps the window manager's
+;; title bar / borders).  Set on `default-frame-alist' so the very first frame
+;; is born maximized -- no post-init resize flash.  No-op in a TUI.
+(push '(fullscreen . maximized) default-frame-alist)
 
 ;; Suppress implicit frame resize when toolbar/menubar visibility changes --
 ;; saves several geometry round-trips on GUI startup.
