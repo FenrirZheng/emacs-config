@@ -90,5 +90,35 @@
 (add-hook 'c++-mode-hook    #'ggtags-mode)
 (add-hook 'c++-ts-mode-hook #'ggtags-mode)
 
+;; Brace-hop dwim (vim `%'-style), bound to `C-c %' in C / C++ buffers only.
+;; combobulate has no C / C++ support (see header), so structural motion here is
+;; the built-in sexp navigation -- this is a one-key wrapper that picks the right
+;; direction from context instead of remembering C-M-f vs C-M-b:
+;;   - point ON an opening bracket  (`([{') -> `forward-sexp'  (land past its match)
+;;   - point just AFTER a closer    (`)]}') -> `backward-sexp' (land on its opener)
+;;   - otherwise -> scan to the next opener on the line and hop to its match;
+;;     with none on the line, fall back to a plain `forward-sexp'.
+;; Uses `char-syntax' (not a literal bracket list) so it tracks the major mode's
+;; syntax table -- C++ template `<>' are NOT paren-syntax, so they're skipped,
+;; which matches clangd / c++-ts-mode behaviour.  Bound on `C-c %' (a free C-c
+;; slot; bare `%' is left to self-insert).
+(defun fenrir/c-sexp-dwim ()
+  "Hop between matching brackets, vim `%'-style.
+On an opening bracket jump just past its match; directly after a
+closing bracket jump back to its opener; otherwise move to the
+next opening bracket on the line and hop to its match (falling
+back to `forward-sexp' when the line has none)."
+  (interactive)
+  (cond
+   ((and (char-after)  (eq (char-syntax (char-after))  ?\()) (forward-sexp))
+   ((and (char-before) (eq (char-syntax (char-before)) ?\))) (backward-sexp))
+   (t (if (re-search-forward "\\s(" (line-end-position) t)
+          (progn (backward-char) (forward-sexp))
+        (forward-sexp)))))
+
+(with-eval-after-load 'c-ts-mode
+  (define-key c-ts-mode-map   (kbd "C-c %") #'fenrir/c-sexp-dwim)
+  (define-key c++-ts-mode-map (kbd "C-c %") #'fenrir/c-sexp-dwim))
+
 (provide 'init-c-cpp)
 ;;; init-c-cpp.el ends here

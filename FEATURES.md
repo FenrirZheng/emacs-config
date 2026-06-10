@@ -399,6 +399,14 @@ lists the follow-up keys — no need to memorise prefixes.
   TTY where the truecolour styles (`darken-foreground` / `shade-background`) collapse.
   No keybinding — automatic in eglot-managed buffers; config in
   [`init-c-cpp.el`](lisp/languages/init-c-cpp.el).
+- **`C-c %` — brace-hop dwim** (C / C++ only): vim `%`-style one-key jump between
+  matching brackets (`fenrir/c-sexp-dwim` in [`init-c-cpp.el`](lisp/languages/init-c-cpp.el)).
+  On an opening `([{` it `forward-sexp`s to just past the match; right after a closing
+  `)]}` it `backward-sexp`s to the opener; elsewhere it scans to the next opener on the
+  line and hops to its match (else plain `forward-sexp`). combobulate has no C / C++
+  support, so this wraps the built-in sexp motion instead — it uses `char-syntax`, so
+  C++ template `<>` (not paren-syntax) are correctly skipped. Bound in
+  `c-ts-mode-map` / `c++-ts-mode-map` only; bare `%` still self-inserts.
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
   `markdown-command` is `pandoc`.
 - **jinx**: fast spell checker for every text-mode buffer (org, markdown, gfm, ...).
