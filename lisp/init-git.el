@@ -134,6 +134,17 @@ from a revision buffer it is a plain revision-vs-revision comparison."
   ;; redraws the margin accurately after a commit/stage/unstage/...
   ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
    (magit-post-refresh . diff-hl-magit-post-refresh))
+  ;; Hunk-level gutter actions on a `C-c v' prefix ("VCS changes") -- the modern
+  ;; IDE "jump between changes / preview / revert / stage this hunk" the gutter
+  ;; offers, without opening a full Magit buffer.  (The `C-x v' prefix is taken
+  ;; by `fenrir/magit-vc-map' above, so diff-hl's own command map is unreachable
+  ;; -- hence these explicit binds.)  `diff-hl-show-hunk' previews inline on TTY;
+  ;; `diff-hl-stage-current-hunk' stages just the hunk at point.
+  :bind (("C-c v n" . diff-hl-next-hunk)
+         ("C-c v p" . diff-hl-previous-hunk)
+         ("C-c v s" . diff-hl-show-hunk)
+         ("C-c v r" . diff-hl-revert-hunk)
+         ("C-c v S" . diff-hl-stage-current-hunk))
   :init
   ;; Enable in every file buffer, not just `prog-mode': org notes, config
   ;; files and prose are version-controlled too.
