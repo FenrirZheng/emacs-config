@@ -190,6 +190,67 @@ three can be live in one buffer. Config lives with the tree-sitter stack in
 
 ---
 
+## 5b. Modern-IDE layer ([`init-ide.el`](lisp/init-ide.el))
+
+The VSCode / JetBrains conveniences the rest of the config didn't already cover,
+gathered into one module. All TTY-safe. The heavy IDE machinery lives elsewhere
+(LSP/refactor/hierarchy + tree-sitter + debugger in §7, git porcelain in §8,
+project search in §1–2, completion in §1/§4) — this section is the rest.
+
+**Always-on (no keys to press):**
+
+| Feature | Where active | What you get |
+|---|---|---|
+| `hl-line` **(built-in)** | prog + dired/ibuffer/grep/occur/package-menu | Current line highlighted (not global — keeps vterm/org/minibuffer clean) |
+| `subword-mode` **(built-in)** | everywhere (`global-subword-mode`) | `M-f`/`M-b`/`M-d` stop at camelCase boundaries (`get`\|`User`\|`Name`) |
+| `indent-bars` | prog + `yaml-ts-mode` | Vertical indentation guides (char backend — renders on TTY) |
+| `colorful-mode` | prog + css/web/html/conf | Inline colour swatch behind every `#rrggbb` / `rgb(...)` / CSS name |
+| `ws-butler` | prog | Trims trailing whitespace **only on lines you edited** (diff-safe on-save trim) |
+| `dumb-jump` | xref fallback (last backend) | `M-.` still jumps via ripgrep when no LSP/GTAGS exists — never shadows Eglot |
+
+**Keys:**
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c s s` | `symbol-overlay-put` | Highlight every occurrence of the symbol at point (toggle) — "highlight usages" |
+| `C-c s n` / `C-c s p` | `symbol-overlay-jump-next` / `-prev` | Jump between the highlighted occurrences |
+| `C-c s r` | `symbol-overlay-rename` | Rename all occurrences **in this buffer** (lexical, no LSP needed) |
+| `C-c s a` | `symbol-overlay-remove-all` | Clear all symbol highlights |
+| `M-<up>` / `M-<down>` | `move-text-up` / `-down` | Drag the line / region up or down (VSCode `Alt+↑/↓`); org keeps its own |
+| `C-c S` | `string-inflection-all-cycle` | Cycle the identifier: `snake` → `SCREAMING` → `Camel` → `camel` → `kebab` |
+| `C-c ;` / `C-c '` | `goto-last-change` / `-reverse` | Jump to where you last edited, then the edit before that |
+| `C-c k` / `C-c K` | `devdocs-lookup` / `devdocs-peruse` | Offline devdocs.io API docs (run `M-x devdocs-install LANG` once per language) |
+| `C-c B` | `dired-sidebar-toggle-sidebar` | File-tree sidebar (reuses dired + its nerd-icons/subtree enhancers) |
+
+**Git extras (`C-c G` prefix — GitLens-style; Magit owns the porcelain in §8):**
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c G l` | `git-link` | Copy the forge permalink (pinned to commit SHA) for the current line / region |
+| `C-c G h` | `git-link-homepage` | Copy the repo's homepage URL |
+| `C-c G t` | `git-timemachine` | Step through this file's history in place (`p`/`n` = older/newer, `q` quit) |
+| `C-c G b` | `blamer-mode` | Toggle inline end-of-line blame (author · when · summary) for the buffer |
+
+**Workspaces (`C-c W` prefix — `tabspaces`, project-scoped on top of the §11 tab-bar):**
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c W s` | `tabspaces-switch-or-create-workspace` | Switch to (or create) a named workspace tab |
+| `C-c W o` | `tabspaces-open-or-create-project-and-workspace` | Open a project as its own workspace |
+| `C-c W b` | `tabspaces-switch-to-buffer` | Switch buffer **within** this workspace (filtered list) |
+| `C-c W d` / `C-c W k` | `tabspaces-close-workspace` / `tabspaces-kill-buffers-close-workspace` | Close the workspace (keep / kill its buffers) |
+| `C-c W r` | `tabspaces-remove-current-buffer` | Drop the current buffer from this workspace |
+| `C-c W w` | `tabspaces-show-workspaces` | List all workspaces |
+
+Each workspace tab has its **own buffer list**, so `C-x b` / `consult-buffer` show only
+that project's buffers (`tabspaces-use-filtered-buffers-as-default` is on).
+
+**REST client:** open any `.http` / `.rest` file → `restclient-mode`; write a request and
+press `C-c C-c` to fire it and pretty-print the response (the in-editor Postman / VSCode
+REST Client).
+
+---
+
 ## 6. Help system, upgraded (`which-key` in [`init-defaults.el`](lisp/init-defaults.el), `helpful` in [`init-editing.el`](lisp/init-editing.el))
 
 | Key | Command | What it does |

@@ -12,6 +12,10 @@
 ;;   init-corfu           -- In-buffer code completion (Corfu + Cape)
 ;;   init-snippets        -- YASnippet
 ;;   init-editing        -- Editing enhancements (avy, pulsar, popper, jinx, ...)
+;;   init-ide            -- Modern-IDE layer (indent guides, symbol highlight,
+;;                          colour swatches, dumb-jump, devdocs, goto-chg,
+;;                          move-text, ws-butler, git-link/timemachine/blamer,
+;;                          dired-sidebar, tabspaces, restclient)
 ;;   init-languages      -- Project, LSP (Eglot) & shared language infra; the
 ;;                          per-language modules under lisp/languages/ load after
 ;;                          it (init-java, init-go, init-python, init-rust,
@@ -155,6 +159,7 @@ up new or changed files.  Progress and warnings land in the
         init-corfu
         init-snippets
         init-editing
+        init-ide                ; modern-IDE conveniences (guides, sidebar, REST, ...)
         init-languages          ; shared LSP / tree-sitter / editing infra
         ;; Per-language modules (lisp/languages/), loaded AFTER init-languages:
         ;; each attaches its own eglot-ensure hook + eglot-workspace-configuration
