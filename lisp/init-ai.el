@@ -28,6 +28,37 @@
   :bind (("C-c q q" . question-queue-ask)
          ("C-c q d" . question-queue-set-dir)))
 
+;; copilot -- GitHub Copilot AI inline completion: greyed-out "ghost text"
+;; suggestions as you type, the headline feature of every modern IDE that gptel
+;; / aidermacs (chat-style) don't provide.  Renders via an overlay, so it works
+;; on a TTY frame; the suggestion only appears when there's something to suggest.
+;;
+;; DELIBERATELY OPT-IN, not a `prog-mode' hook.  Two one-time setup steps gate
+;; it: `M-x copilot-install-server' (downloads the Node language server -- node
+;; v25 is on PATH here) and `M-x copilot-login' (device-code auth, needs a
+;; Copilot subscription).  Hooking `prog-mode' before those are done would make
+;; every code buffer spam "server not running" -- so instead `C-c M-c' toggles
+;; `copilot-mode' per buffer.  Once set up, add `(add-hook 'prog-mode-hook
+;; #'copilot-mode)' here to make it always-on.
+;;
+;; Keys: the accept/cycle keys live in `copilot-completion-map', which is only
+;; active WHILE a ghost suggestion is showing -- so binding `TAB' there accepts
+;; the suggestion when one is visible and indents normally otherwise (it does
+;; not fight yasnippet / corfu / indent in the common case).
+(use-package copilot
+  :commands (copilot-mode copilot-login copilot-install-server)
+  :bind (("C-c M-c" . copilot-mode)            ; per-buffer toggle (opt-in)
+         :map copilot-completion-map
+         ("<tab>"   . copilot-accept-completion)
+         ("TAB"     . copilot-accept-completion)
+         ("C-<tab>" . copilot-accept-completion-by-word)
+         ("C-c M-n" . copilot-next-completion)
+         ("C-c M-p" . copilot-previous-completion))
+  :custom
+  ;; copilot warns (once per buffer) when it can't match the major mode's indent
+  ;; offset to a known variable; harmless here and just noise, so silence it.
+  (copilot-indent-offset-warning-disable t))
+
 ;; gptel -- LLM chat client.  Available from MELPA / NonGNU ELPA.
 ;; Entry points (no key bindings claimed -- invoke via M-x):
 ;;   M-x gptel                     -- open / switch to a chat buffer

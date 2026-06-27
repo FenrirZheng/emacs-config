@@ -260,8 +260,18 @@ lives where it thematically belongs):
 | `C-c m …` | `smerge-mode` **(built-in)** | [`init-git.el`](lisp/init-git.el) | Merge-conflict resolver, auto-enabled on conflict markers. `C-c m n`/`p` next/prev, `RET` keep-current, `a` keep-all, `u`/`l` keep-upper/lower, `E` ediff |
 | `M-g t` / `M-g T` | `consult-todo` / `consult-todo-all` | [`init-git.el`](lisp/init-git.el) | Jump to a TODO/FIXME/HACK with preview — this buffer / every open buffer |
 | `C-c D` | `docker` | [`init-docker.el`](lisp/init-docker.el) | Manage containers/images/volumes/networks (start/stop/logs/exec/inspect) — needs the `docker` CLI |
+| `C-c M-c` | `copilot-mode` | [`init-ai.el`](lisp/init-ai.el) | Toggle GitHub Copilot AI inline ("ghost text") completion in this buffer — `TAB` accepts, `C-TAB` accepts a word, `C-c M-n`/`M-p` cycle |
 
 `.dockerfile` / `Dockerfile*` files open in `dockerfile-mode` (`C-c C-b` builds the image).
+
+**Copilot one-time setup:** `M-x copilot-install-server` (downloads the Node server) then
+`M-x copilot-login` (device-code auth, needs a Copilot subscription). It's opt-in per buffer
+on purpose — to make it always-on in code, add `(add-hook 'prog-mode-hook #'copilot-mode)`.
+
+**Bracket peek (built-in):** when the matching open-bracket is scrolled off-screen, the line
+that opens it is shown in an overlay at point (`show-paren-context-when-offscreen`,
+[`init-defaults.el`](lisp/init-defaults.el)) — so a closing `})]` at the bottom of a long
+function tells you what it closes without scrolling up.
 
 ---
 

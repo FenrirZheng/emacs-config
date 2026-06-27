@@ -22,6 +22,11 @@
   (delete-selection-mode 1)              ; typing replaces the active region
   (electric-pair-mode 1)                 ; auto-insert matching brackets/quotes
   (global-so-long-mode 1)                ; survive opening huge minified files
+  ;; show-paren-mode is on by default (Emacs 28+); when the matching OPEN paren
+  ;; is scrolled off the top of the window, echo that line in an overlay at
+  ;; point -- so closing a long `})]' at the bottom of a function tells you what
+  ;; it closes without scrolling up.  The modern-IDE "matching-bracket peek".
+  (setq show-paren-context-when-offscreen 'overlay)
   ;; --- files / backups ---
   (setq make-backup-files nil)           ; no foo~ litter next to the file
   ;; Replace classic `#foo#' recovery autosaves with `auto-save-visited-mode'.

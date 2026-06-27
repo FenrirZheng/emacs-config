@@ -11,11 +11,11 @@
  '(package-selected-packages
    '(ace-link ace-window aidermacs apheleia avy-zap bash-completion
               blamer breadcrumb cape colorful-mode combobulate
-              consult-dir consult-eglot consult-todo corfu-terminal
-              dape devdocs diff-hl difftastic dired-collapse
-              dired-narrow dired-sidebar dired-subtree diredfl docker
-              dockerfile-mode doom-modeline doom-themes dumb-jump
-              ef-themes eglot-booster eglot-inactive-regions
+              consult-dir consult-eglot consult-todo copilot
+              corfu-terminal dape devdocs diff-hl difftastic
+              dired-collapse dired-narrow dired-sidebar dired-subtree
+              diredfl docker dockerfile-mode doom-modeline doom-themes
+              dumb-jump ef-themes eglot-booster eglot-inactive-regions
               embark-consult envrc exec-path-from-shell expand-region
               expreg flymake-eslint forge gcmh ggtags git-link
               git-timemachine goto-chg gptel helpful imenu-list
