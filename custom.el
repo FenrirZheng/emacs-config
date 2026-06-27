@@ -11,22 +11,24 @@
  '(package-selected-packages
    '(ace-link ace-window aidermacs apheleia avy-zap bash-completion
               blamer breadcrumb cape colorful-mode combobulate
-              consult-dir consult-eglot corfu-terminal dape devdocs
-              diff-hl difftastic dired-collapse dired-narrow
-              dired-sidebar dired-subtree diredfl doom-modeline
-              doom-themes dumb-jump ef-themes eglot-booster
-              eglot-inactive-regions embark-consult envrc
-              exec-path-from-shell expand-region expreg flymake-eslint
-              forge gcmh ggtags git-link git-timemachine goto-chg
-              gptel helpful indent-bars jinx lua-mode magit-delta
-              magit-todos marginalia move-text multiple-cursors
+              consult-dir consult-eglot consult-todo corfu-terminal
+              dape devdocs diff-hl difftastic dired-collapse
+              dired-narrow dired-sidebar dired-subtree diredfl docker
+              dockerfile-mode doom-modeline doom-themes dumb-jump
+              ef-themes eglot-booster eglot-inactive-regions
+              embark-consult envrc exec-path-from-shell expand-region
+              expreg flymake-eslint forge gcmh ggtags git-link
+              git-timemachine goto-chg gptel helpful imenu-list
+              indent-bars jinx lua-mode magit-delta magit-todos
+              marginalia move-text multiple-cursors
               nerd-icons-completion nerd-icons-dired
               nerd-icons-ibuffer no-littering orderless org-appear
               org-modern org-roam-ui popper pulsar rainbow-delimiters
               restclient sideline-flymake string-inflection
               symbol-overlay system-packages tabspaces tempel
-              treesit-auto treesit-fold vertico vterm vue-mode vundo
-              web-server wgrep ws-butler yasnippet-snippets))
+              treesit-auto treesit-fold undo-fu-session vertico vterm
+              vterm-toggle vue-mode vundo web-server wgrep ws-butler
+              yasnippet-snippets))
  '(package-vc-selected-packages
    '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate")

@@ -161,6 +161,19 @@
   :bind (("C-c ;" . goto-last-change)
          ("C-c '" . goto-last-change-reverse)))
 
+;; imenu-list: a persistent side window showing the buffer's imenu tree
+;; (functions / classes / headings) -- the VSCode "Outline" pane / JetBrains
+;; "Structure" tool window.  Complements `consult-imenu' (M-g i, a transient
+;; minibuffer pick): imenu-list is the always-visible map you navigate by, click
+;; to jump, and which auto-refreshes as you move.  `*-smart-toggle' shows it if
+;; hidden and hides it if it's the focused window, so `C-c O' ("Outline") is a
+;; clean one-key toggle.  Pure side window -- TTY-safe.
+(use-package imenu-list
+  :bind ("C-c O" . imenu-list-smart-toggle)
+  :custom
+  (imenu-list-focus-after-activation t)
+  (imenu-list-auto-resize t))
+
 ;; ---------------------------------------------------------------------------
 ;; Editing / lightweight refactoring
 ;; ---------------------------------------------------------------------------

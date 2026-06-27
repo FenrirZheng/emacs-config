@@ -22,7 +22,8 @@
 ;;                          init-typescript, init-c-cpp, init-lua, init-vue,
 ;;                          init-web, init-markdown)
 ;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
-;;   init-terminal       -- vterm
+;;   init-terminal       -- vterm + vterm-toggle (integrated terminal)
+;;   init-docker         -- dockerfile-mode + docker.el container management
 ;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
 ;;   init-dired          -- Dired + small enhancers (diredfl, nerd-icons-dired,
 ;;                          dired-subtree, dired-narrow) + consult-dir
@@ -176,6 +177,7 @@ up new or changed files.  Progress and warnings land in the
         init-markdown
         init-git
         init-terminal
+        init-docker             ; dockerfile-mode + docker.el management UI
         init-appearance
         init-dired
         init-org

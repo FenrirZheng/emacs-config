@@ -221,6 +221,7 @@ project search in §1–2, completion in §1/§4) — this section is the rest.
 | `C-c ;` / `C-c '` | `goto-last-change` / `-reverse` | Jump to where you last edited, then the edit before that |
 | `C-c k` / `C-c K` | `devdocs-lookup` / `devdocs-peruse` | Offline devdocs.io API docs (run `M-x devdocs-install LANG` once per language) |
 | `C-c B` | `dired-sidebar-toggle-sidebar` | File-tree sidebar (reuses dired + its nerd-icons/subtree enhancers) |
+| `C-c O` | `imenu-list-smart-toggle` | Outline / Structure pane: a persistent side window of the buffer's imenu tree |
 
 **Git extras (`C-c G` prefix — GitLens-style; Magit owns the porcelain in §8):**
 
@@ -248,6 +249,19 @@ that project's buffers (`tabspaces-use-filtered-buffers-as-default` is on).
 **REST client:** open any `.http` / `.rest` file → `restclient-mode`; write a request and
 press `C-c C-c` to fire it and pretty-print the response (the in-editor Postman / VSCode
 REST Client).
+
+**More IDE conveniences, layered into their home modules** (same initiative, but the code
+lives where it thematically belongs):
+
+| Key | Command | Lives in | What it does |
+|---|---|---|---|
+| `C-c T` | `vterm-toggle` | [`init-terminal.el`](lisp/init-terminal.el) | Integrated-terminal toggle (VSCode `Ctrl+\``): show/hide a project-scoped vterm, `cd`'d to the current dir |
+| _(automatic)_ | `undo-fu-session-global-mode` | [`init-editing.el`](lisp/init-editing.el) | Persists native undo history to disk, so undo survives reopening a file / daemon restart |
+| `C-c m …` | `smerge-mode` **(built-in)** | [`init-git.el`](lisp/init-git.el) | Merge-conflict resolver, auto-enabled on conflict markers. `C-c m n`/`p` next/prev, `RET` keep-current, `a` keep-all, `u`/`l` keep-upper/lower, `E` ediff |
+| `M-g t` / `M-g T` | `consult-todo` / `consult-todo-all` | [`init-git.el`](lisp/init-git.el) | Jump to a TODO/FIXME/HACK with preview — this buffer / every open buffer |
+| `C-c D` | `docker` | [`init-docker.el`](lisp/init-docker.el) | Manage containers/images/volumes/networks (start/stop/logs/exec/inspect) — needs the `docker` CLI |
+
+`.dockerfile` / `Dockerfile*` files open in `dockerfile-mode` (`C-c C-b` builds the image).
 
 ---
 

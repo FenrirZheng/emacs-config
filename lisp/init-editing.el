@@ -167,6 +167,20 @@
   ;; readable.  Nerd-icons font in this config already covers them on TTY.
   (vundo-glyph-alist vundo-unicode-symbols))
 
+;; undo-fu-session: PERSIST the native undo history to disk per file, so undo
+;; survives closing and reopening a buffer (and a daemon restart) -- the
+;; "undo doesn't reset when I reopen the file" behaviour every modern editor
+;; has.  Pairs with vundo above: vundo *visualises* the in-memory native undo
+;; tree, undo-fu-session *saves and restores* it.  It hooks plain Emacs undo
+;; (no `undo-fu' package required) and works with `undo-tree'-free setups like
+;; this one.  no-littering already redirects `undo-fu-session-directory' into
+;; `var/', so nothing lands at the repo root.  Compresses sessions when zstd /
+;; gzip is available; the incremental on-disk format is bounded by
+;; `undo-fu-session-file-limit', so large repos don't accumulate unbounded
+;; history files.
+(use-package undo-fu-session
+  :init (undo-fu-session-global-mode 1))
+
 ;; hl-todo: colour-code TODO / FIXME / HACK / NOTE / BUG keywords in comments.
 ;; (magit-todos in section 9 reuses this keyword set for its repo-wide list.)
 (use-package hl-todo

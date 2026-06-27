@@ -231,5 +231,47 @@ from a revision buffer it is a plain revision-vs-revision comparison."
     [("D" "Difftastic diff (dwim)" difftastic-magit-diff)
      ("S" "Difftastic show"        difftastic-magit-show)]))
 
+;; smerge (built-in): the merge-conflict resolver -- the IDE "accept current /
+;; incoming / both" UI for `<<<<<<< ======= >>>>>>>' markers.  Two ergonomics
+;; fixes over the bare built-in:
+;;   1. AUTO-ENABLE: `smerge-mode' is normally off until you `M-x' it, so a
+;;      freshly-merged file with conflicts looks like plain broken text.  The
+;;      `find-file' / revert hook scans for a conflict marker and turns it on
+;;      automatically -- conflicts light up the moment you open the file.
+;;   2. MEMORABLE PREFIX: the native prefix is `C-c ^' (awkward, like hideshow's
+;;      old chords).  Move it to `C-c m' ("merge"); which-key then lists the
+;;      single-letter actions (`n'/`p' next/prev, `RET' keep-current,
+;;      `a' keep-all, `u'/`l' keep-upper/lower, `b' keep-base, `R' refine,
+;;      `E' ediff) after the prefix.
+;; `smerge-command-prefix' is read when the keymap is constructed, so set it via
+;; `:custom' (before the mode's map is built) rather than after the fact.
+(defun fenrir/smerge-maybe-enable ()
+  "Turn on `smerge-mode' if the buffer contains a git conflict marker.
+Top-level (not inside the `use-package' `:init') so the byte-compiler sees
+the definition before the `add-hook' references it."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^<<<<<<< " nil t)
+      (smerge-mode 1))))
+
+(use-package smerge-mode
+  :ensure nil
+  :custom (smerge-command-prefix (kbd "C-c m"))
+  :init
+  (add-hook 'find-file-hook #'fenrir/smerge-maybe-enable)
+  (add-hook 'after-revert-hook #'fenrir/smerge-maybe-enable))
+
+;; consult-todo: jump to any hl-todo keyword (TODO / FIXME / HACK / BUG / ...)
+;; via a consult minibuffer with live preview -- the "navigate to TODO" picker.
+;; Complements magit-todos above (which lists them statically in the Magit
+;; status buffer): this is the interactive jump-to-one, reusing the same
+;; `hl-todo-keyword-faces' set (init-editing.el) so what's coloured in the
+;; buffer is exactly what's listed.  `M-g t' = this buffer, `M-g T' = every
+;; open buffer (the `M-g' "goto" prefix already holds consult-imenu / -flymake).
+(use-package consult-todo
+  :after (consult hl-todo)
+  :bind (("M-g t" . consult-todo)
+         ("M-g T" . consult-todo-all)))
+
 (provide 'init-git)
 ;;; init-git.el ends here
