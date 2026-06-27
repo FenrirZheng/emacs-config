@@ -158,6 +158,19 @@ from a revision buffer it is a plain revision-vs-revision comparison."
   ;; diffs the buffer against its committed blob, per-buffer, cheap in $HOME.
   (diff-hl-flydiff-mode 1))
 
+;; Make hunk-hopping repeatable: after the first `C-c v n' (or `p'/`s'/`r'),
+;; bare `n'/`p'/`s'/`r' continue without the `C-c v' prefix until any other
+;; key.  `repeat-mode' is already on (init-defaults.el); `:repeat t' stamps the
+;; `repeat-map' property on each command so it joins that machinery.  Stepping
+;; through every change in a file is the canonical repeat case.
+(defvar-keymap fenrir/diff-hl-hunk-repeat-map
+  :doc "Repeat map for diff-hl hunk navigation (see `repeat-mode')."
+  :repeat t
+  "n" #'diff-hl-next-hunk
+  "p" #'diff-hl-previous-hunk
+  "s" #'diff-hl-show-hunk
+  "r" #'diff-hl-revert-hunk)
+
 ;; forge: Magit-native GitHub PR / Issue browsing.  Adds two sections to the
 ;; magit-status buffer ("Pull requests" and "Issues") and a `@' transient
 ;; (e.g. `@ p l' to fetch PRs, `@ p p' to act on the PR at point) that lives

@@ -1589,6 +1589,16 @@ every textual definition across the repo rather than the single correct one."
               ("C-c ! p" . flymake-show-project-diagnostics)
               ("C-c ! c" . flymake-show-diagnostic)))
 
+;; Make error-hopping repeatable: after `M-n' / `M-p' (flymake-goto-next/prev-
+;; error above), bare `n' / `p' continue stepping through diagnostics until any
+;; other key -- the "cycle problems" gesture of a modern IDE.  `repeat-mode' is
+;; already on (init-defaults.el); `:repeat t' joins these commands to it.
+(defvar-keymap fenrir/flymake-error-repeat-map
+  :doc "Repeat map for flymake error navigation (see `repeat-mode')."
+  :repeat t
+  "n" #'flymake-goto-next-error
+  "p" #'flymake-goto-prev-error)
+
 ;; sideline + sideline-flymake: VSCode-style "Error Lens" inline diagnostics.
 ;;
 ;; Why this matters on a TTY-only setup: Flymake's default surfaces are the

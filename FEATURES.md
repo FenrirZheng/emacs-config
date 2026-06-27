@@ -222,6 +222,7 @@ project search in §1–2, completion in §1/§4) — this section is the rest.
 | `C-c k` / `C-c K` | `devdocs-lookup` / `devdocs-peruse` | Offline devdocs.io API docs (run `M-x devdocs-install LANG` once per language) |
 | `C-c B` | `dired-sidebar-toggle-sidebar` | File-tree sidebar (reuses dired + its nerd-icons/subtree enhancers) |
 | `C-c O` | `imenu-list-smart-toggle` | Outline / Structure pane: a persistent side window of the buffer's imenu tree |
+| `C-c E` | `separedit` | Edit the comment / string / code-block at point in a dedicated buffer with the embedded language's own mode (`C-c C-c` writes back) |
 
 **Git extras (`C-c G` prefix — GitLens-style; Magit owns the porcelain in §8):**
 
@@ -259,7 +260,7 @@ lives where it thematically belongs):
 | _(automatic)_ | `undo-fu-session-global-mode` | [`init-editing.el`](lisp/init-editing.el) | Persists native undo history to disk, so undo survives reopening a file / daemon restart |
 | `C-c m …` | `smerge-mode` **(built-in)** | [`init-git.el`](lisp/init-git.el) | Merge-conflict resolver, auto-enabled on conflict markers. `C-c m n`/`p` next/prev, `RET` keep-current, `a` keep-all, `u`/`l` keep-upper/lower, `E` ediff |
 | `M-g t` / `M-g T` | `consult-todo` / `consult-todo-all` | [`init-git.el`](lisp/init-git.el) | Jump to a TODO/FIXME/HACK with preview — this buffer / every open buffer |
-| `C-c v n` / `C-c v p` | `diff-hl-next-hunk` / `-previous` | [`init-git.el`](lisp/init-git.el) | Jump between changed hunks (the gutter marks) in the current file |
+| `C-c v n` / `C-c v p` | `diff-hl-next-hunk` / `-previous` | [`init-git.el`](lisp/init-git.el) | Jump between changed hunks (the gutter marks); **repeatable** — bare `n`/`p`/`s`/`r` continue (repeat-mode) |
 | `C-c v s` / `C-c v r` / `C-c v S` | `diff-hl-show-hunk` / `-revert-hunk` / `-stage-current-hunk` | [`init-git.el`](lisp/init-git.el) | Preview / revert / stage just the hunk at point, without opening Magit |
 | `C-c D` | `docker` | [`init-docker.el`](lisp/init-docker.el) | Manage containers/images/volumes/networks (start/stop/logs/exec/inspect) — needs the `docker` CLI |
 | `C-c M-c` | `copilot-mode` | [`init-ai.el`](lisp/init-ai.el) | Toggle GitHub Copilot AI inline ("ghost text") completion in this buffer — `TAB` accepts, `C-TAB` accepts a word, `C-c M-n`/`M-p` cycle |

@@ -194,6 +194,22 @@
 (use-package string-inflection
   :bind ("C-c S" . string-inflection-all-cycle))
 
+;; separedit: edit the thing point is inside -- a code block in a comment, a
+;; string literal (SQL / regex / shell embedded in source), a markdown / org
+;; fenced code block, or a commit-message body -- in a SEPARATE indirect buffer
+;; with that content's OWN major mode (so you get real LSP / font-lock / indent
+;; for the embedded language), then `C-c C-c' writes it back.  The Emacs answer
+;; to "edit this embedded snippet with proper tooling" (org's `C-c '' for src
+;; blocks, generalised to any host language).  Builds on `edit-indirect'
+;; (already in elpa/) but auto-detects the embedded language.  `C-c '' is taken
+;; (goto-last-change-reverse), so this lives on `C-c E' ("Edit indirect").
+(use-package separedit
+  :bind ("C-c E" . separedit)
+  :custom
+  (separedit-default-mode 'prog-mode)
+  (separedit-continue-fill-column t)
+  (separedit-remove-trailing-spaces-in-comment t))
+
 ;; ws-butler: trim trailing whitespace, but ONLY on the lines you actually
 ;; touched this session -- the safe version of "trim on save" that every editor
 ;; ships.  A blunt `delete-trailing-whitespace' on save rewrites whitespace on

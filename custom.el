@@ -24,7 +24,7 @@
               nerd-icons-completion nerd-icons-dired
               nerd-icons-ibuffer no-littering orderless org-appear
               org-modern org-roam-ui popper pulsar rainbow-delimiters
-              restclient sideline-flymake string-inflection
+              restclient separedit sideline-flymake string-inflection
               symbol-overlay system-packages tabspaces tempel
               treesit-auto treesit-fold undo-fu-session vertico vterm
               vterm-toggle vue-mode vundo web-server wgrep ws-butler
