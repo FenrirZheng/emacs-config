@@ -193,7 +193,9 @@ three can be live in one buffer. Config lives with the tree-sitter stack in
 ## 5b. Modern-IDE layer ([`init-ide.el`](lisp/init-ide.el))
 
 The VSCode / JetBrains conveniences the rest of the config didn't already cover,
-gathered into one module. All TTY-safe. The heavy IDE machinery lives elsewhere
+gathered into one module. Works on **both TTY and GUI** Emacs (everything is
+TTY-safe, the stricter case — a GUI frame runs the same layer unchanged, just
+rendering a few pieces richer). The heavy IDE machinery lives elsewhere
 (LSP/refactor/hierarchy + tree-sitter + debugger in §7, git porcelain in §8,
 project search in §1–2, completion in §1/§4) — this section is the rest.
 
