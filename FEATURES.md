@@ -280,6 +280,40 @@ function tells you what it closes without scrolling up.
 
 ---
 
+## 5c. GUI-frame eye-candy + diagrams ([`init-gui.el`](lisp/init-gui.el), [`init-diagrams.el`](lisp/init-diagrams.el))
+
+This daemon serves **both** TTY (`emacsclient -nw`) and GUI (`emacsclient -c`)
+frames — sometimes at the same time — so GUI-only packages are gated by how they
+behave on a terminal frame:
+
+**On automatically — safe on both TTY and GUI:**
+
+| Feature | GUI frame | TTY frame |
+|---|---|---|
+| `vertico-posframe` | Minibuffer floats as a centred child frame | Falls back to the normal bottom Vertico (per-display `posframe-workable-p` check) |
+| `ligature` | Programming ligatures (`-> => != >=` …) with a capable font | OpenType features ignored — harmless no-op |
+
+**On demand:**
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c H` | `fenrir/eldoc-box-dwim` | Hover docs: an `eldoc-box` child frame on GUI; falls back to the eldoc **doc buffer** on TTY |
+| `C-c M-g` | `fenrir/gui-popups-toggle` | Toggle the **GUI-only** posframe popups (`which-key-posframe`, `transient-posframe`) + `pixel-scroll-precision-mode`. ⚠️ Only for a **GUI-only** session — turn them **off** before using a TTY frame of the same daemon, or which-key/transient break there (they're global modes with no TTY fallback) |
+
+**Diagrams-as-code** ([`init-diagrams.el`](lisp/init-diagrams.el)):
+
+| File / mode | Render | Notes |
+|---|---|---|
+| `.puml` / `.plantuml` → `plantuml-mode` | `C-c C-c` (or `C-c C-p` preview) | Local `java -jar` mode; jar at `var/plantuml/plantuml.jar`. PNG renders in a GUI frame — for TTY set `(setq plantuml-output-type "txt")` for ASCII art |
+| `.mmd` / `.mermaid` → `mermaid-mode` | `C-c C-c` compile, `C-c C-o` open | Uses the `mmdc` CLI |
+| org `#+begin_src plantuml` / `mermaid` | `C-c C-c` | Wired into `org-babel` (both languages) |
+
+**One-time renderer setup** (both already done on this machine; needed again on a fresh clone):
+- PlantUML jar: `M-x plantuml-download-jar` (or re-curl into `var/plantuml/`, see the module header). Needs `java` (+ `dot` for class/state diagrams).
+- Mermaid CLI: `npm install -g @mermaid-js/mermaid-cli` (provides `mmdc`).
+
+---
+
 ## 6. Help system, upgraded (`which-key` in [`init-defaults.el`](lisp/init-defaults.el), `helpful` in [`init-editing.el`](lisp/init-editing.el))
 
 | Key | Command | What it does |

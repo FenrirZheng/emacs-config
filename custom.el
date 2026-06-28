@@ -16,19 +16,21 @@
               dired-collapse dired-narrow dired-sidebar dired-subtree
               diredfl docker dockerfile-mode doom-modeline doom-themes
               dumb-jump ef-themes eglot-booster eglot-inactive-regions
-              embark-consult envrc exec-path-from-shell expand-region
-              expreg flymake-eslint forge gcmh ggtags git-link
-              git-timemachine goto-chg gptel helpful imenu-list
-              indent-bars jinx lua-mode magit-delta magit-todos
-              marginalia move-text multiple-cursors
-              nerd-icons-completion nerd-icons-dired
-              nerd-icons-ibuffer no-littering orderless org-appear
-              org-modern org-roam-ui popper pulsar rainbow-delimiters
+              eldoc-box embark-consult envrc exec-path-from-shell
+              expand-region expreg flymake-eslint forge gcmh ggtags
+              git-link git-timemachine goto-chg gptel helpful
+              imenu-list indent-bars jinx ligature lua-mode
+              magit-delta magit-todos marginalia mermaid-mode
+              move-text multiple-cursors nerd-icons-completion
+              nerd-icons-dired nerd-icons-ibuffer no-littering
+              ob-mermaid orderless org-appear org-modern org-roam-ui
+              plantuml-mode popper pulsar rainbow-delimiters
               restclient separedit sideline-flymake string-inflection
               symbol-overlay system-packages tabspaces tempel
-              treesit-auto treesit-fold undo-fu-session vertico vterm
-              vterm-toggle vue-mode vundo web-server wgrep ws-butler
-              yasnippet-snippets))
+              transient-posframe treesit-auto treesit-fold
+              undo-fu-session vertico vertico-posframe vterm
+              vterm-toggle vue-mode vundo web-server wgrep
+              which-key-posframe ws-butler yasnippet-snippets))
  '(package-vc-selected-packages
    '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
      (combobulate :url "https://github.com/mickeynp/combobulate")

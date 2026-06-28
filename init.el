@@ -24,7 +24,10 @@
 ;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
 ;;   init-terminal       -- vterm + vterm-toggle (integrated terminal)
 ;;   init-docker         -- dockerfile-mode + docker.el container management
+;;   init-diagrams       -- PlantUML + Mermaid text-to-diagram (jar / mmdc)
 ;;   init-appearance     -- doom-themes, doom-modeline, nerd-icons
+;;   init-gui            -- GUI-frame-only eye-candy (vertico-posframe, ligatures,
+;;                          eldoc-box, which-key/transient posframe), TTY-gated
 ;;   init-dired          -- Dired + small enhancers (diredfl, nerd-icons-dired,
 ;;                          dired-subtree, dired-narrow) + consult-dir
 ;;   init-org            -- Org-mode (light touch)
@@ -178,7 +181,9 @@ up new or changed files.  Progress and warnings land in the
         init-git
         init-terminal
         init-docker             ; dockerfile-mode + docker.el management UI
+        init-diagrams           ; PlantUML + Mermaid text-to-diagram
         init-appearance
+        init-gui                ; GUI-only eye-candy (posframe/eldoc-box/ligatures), TTY-gated
         init-dired
         init-org
         init-org-roam
