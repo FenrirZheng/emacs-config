@@ -286,19 +286,42 @@ This daemon serves **both** TTY (`emacsclient -nw`) and GUI (`emacsclient -c`)
 frames — sometimes at the same time — so GUI-only packages are gated by how they
 behave on a terminal frame:
 
-**On automatically — safe on both TTY and GUI:**
+**Tier A — on automatically, safe on both TTY and GUI** (each self-falls-back or its effect is a pure overlay/face that just renders plainer on a terminal):
 
 | Feature | GUI frame | TTY frame |
 |---|---|---|
 | `vertico-posframe` | Minibuffer floats as a centred child frame | Falls back to the normal bottom Vertico (per-display `posframe-workable-p` check) |
 | `ligature` | Programming ligatures (`-> => != >=` …) with a capable font | OpenType features ignored — harmless no-op |
+| `beacon` | Coloured beam flashes the line when point teleports (window switch, big scroll, avy/consult jump) | Plainer overlay flash — still works |
+| `dimmer` | Inactive windows dimmed so the focused buffer pops (which-key/magit/org kept bright) | Foreground dimmed; degrades on low-colour, never breaks |
+| `solaire-mode` | "Real" file buffers get a subtly different background from UI buffers | Face remap — harmless |
+| `highlight-numbers` | Numeric literals in their own face (prog-mode) | Same (font-lock keyword) |
+| `goggles` | Soft pulse over the just-edited region (yank/delete/kill) | Plainer overlay |
+| `volatile-highlights` | Transient highlight of yank/undo regions | Same (overlay) |
+| `nerd-icons-corfu` | Kind glyph (fn/var/keyword…) in each corfu candidate's margin | Glyphs if the terminal font is a Nerd Font, else text |
+| `lin` | Stylish mode-aware `hl-line` for list/selection buffers (dired/ibuffer/grep/occur…) | Same (face) |
+| `pulsing-cursor` | Cursor gently pulses instead of a hard blink | Harmless (drives the same blink machinery) |
 
-**On demand:**
+**Tier B — on demand, the command adapts per display (GUI feature ↔ TTY fallback / no-op):**
 
 | Key | Command | What it does |
 |---|---|---|
 | `C-c H` | `fenrir/eldoc-box-dwim` | Hover docs: an `eldoc-box` child frame on GUI; falls back to the eldoc **doc buffer** on TTY |
-| `C-c M-g` | `fenrir/gui-popups-toggle` | Toggle the **GUI-only** posframe popups (`which-key-posframe`, `transient-posframe`) + `pixel-scroll-precision-mode`. ⚠️ Only for a **GUI-only** session — turn them **off** before using a TTY frame of the same daemon, or which-key/transient break there (they're global modes with no TTY fallback) |
+| `C-c J` | `fenrir/jump-buffer-dwim` | Buffer switcher: a `frog-jump-buffer` posframe grid on GUI; falls back to `consult-buffer` on TTY |
+| `C-c M-v` | `fenrir/mixed-pitch-dwim` | Toggle variable-pitch prose (`mixed-pitch`) in this buffer; reports a no-op on TTY (no variable-pitch fonts there) |
+| `C-c M-f` | `fenrir/fontaine-set-preset-dwim` | Pick a `fontaine` font-size preset (small/regular/large/huge); refuses on TTY |
+| `C-c M-r` | `fenrir/prism-toggle` | Toggle `prism` depth-based ("rainbow") code colouring in this buffer — opt-in per buffer (striking on a truecolor GUI, noisy on an 8-colour TTY) |
+| `C-c M-d` | `dashboard-open` | Open the graphical startup dashboard (logo banner + recents/projects/bookmarks) |
+
+**Tier C — GUI-only global display-replacing modes, NOT auto-enabled (no TTY fallback):**
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-c M-g` | `fenrir/gui-popups-toggle` | Toggle the **GUI-only** global display modes in one switch: posframe popups (`which-key-posframe`, `transient-posframe`), `pixel-scroll-precision-mode`, `good-scroll` (animated smooth scroll), `mlscroll` (graphical mode-line scrollbar), `spacious-padding` (frame borders/padding), `nyan-mode` (mode-line image). ⚠️ Only for a **GUI-only** session — turn them **off** before using a TTY frame of the same daemon, or which-key/transient break there |
+| `C-c M-m` | `fenrir/minimap-toggle-dwim` | Toggle the `minimap` code-overview side window; refuses on TTY |
+| `C-c M-t` | `centaur-tabs-mode` | Toggle the `centaur-tabs` graphical buffer tab bar (VSCode-style file tabs; distinct from the `C-c W` tab-bar/tabspaces workspaces) |
+
+> New in this layer: 20 packages. They aren't in `elpa/` on a fresh add — run `M-x my/package-refresh` then restart Emacs once so `use-package` installs them (the archive is never refreshed at startup; see [CLAUDE.md](CLAUDE.md#package-install-discipline-load-bearing-quirks)).
 
 **Diagrams-as-code** ([`init-diagrams.el`](lisp/init-diagrams.el)):
 
