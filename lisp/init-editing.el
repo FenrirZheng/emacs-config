@@ -283,24 +283,6 @@
   :ensure nil
   :init (winner-mode 1))
 
-;; breadcrumb: header-line shows `project / file / class / function' path of
-;; point, powered by `project.el', `imenu', and (when active) Eglot's symbol
-;; information.  Concrete use: deep inside a 500-line file, the header tells
-;; you which function / class you're inside without scrolling up; the
-;; project segment makes it obvious which repo when several are open.
-;; Pairs with combobulate's node navigation (§8) -- as you climb the tree,
-;; the breadcrumb updates to reflect the enclosing scope.
-;;
-;; Header-line wasn't shown before this package; `breadcrumb-mode' turns it
-;; on globally and steals one line per window.  Toggle off in a specific
-;; buffer with `M-x breadcrumb-local-mode' or globally with the same
-;; command name (the global mode is a toggle).
-;;
-;; Source: GNU ELPA (`gnu' archive, already enabled in section 1).  Same
-;; author as `eglot-booster' (§8) and `vertico-posframe' / `indent-bars'.
-(use-package breadcrumb
-  :init (breadcrumb-mode 1))
-
 ;; jinx: spell checker backed by `enchant-2' (C binary; orders of magnitude
 ;; faster than the elisp-only `flyspell').  Active in every text-mode buffer
 ;; (org, markdown, gfm, fundamental text, ...) via `global-jinx-mode'.

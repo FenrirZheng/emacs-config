@@ -30,7 +30,8 @@
 ;;                                    the terminal font is a Nerd Font, else text)
 ;;               * lin               (a tasteful `hl-line' for list/selection
 ;;                                    buffers -- dired/ibuffer/grep/... ; a face)
-;;               * pulsing-cursor    (gentle cursor pulse; GUI-leaning, harmless)
+;;               * pulsar            (pulses the current line after jump/scroll
+;;                                    commands; overlay-based, harmless on TTY)
 ;;
 ;;   TIER B -- on-demand only, fired by a command that ADAPTS per display
 ;;             (child frame / variable-pitch / font preset on GUI, an explicit
@@ -176,11 +177,12 @@
   (setq lin-face 'lin-cyan)
   (lin-global-mode 1))
 
-;; pulsing-cursor: gently pulse the cursor instead of a hard blink, so a parked
-;; cursor is easier to find on a busy screen.  GUI-leaning but harmless on TTY
-;; (it drives the same blink machinery there).
-(use-package pulsing-cursor
-  :config (pulsing-cursor-mode 1))
+;; pulsar: briefly pulses the current line after navigation commands (scroll,
+;; other-window, goto-line, ...) so the eye doesn't lose point on a jump.
+;; Overlay-based (`pulsar-face'), so it degrades to a plain colour flash on a
+;; low-colour TTY instead of breaking.
+(use-package pulsar
+  :init (pulsar-global-mode 1))
 
 ;; ------------------------------------------------------------------ TIER B ---
 

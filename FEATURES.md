@@ -43,7 +43,7 @@ a candidate).
 | `M-g m` | `consult-mark` | Jump to a recent mark in this buffer — beats hammering `C-u C-SPC` |
 | `M-g k` | `consult-global-mark` | Same, but across **all** buffers — recover "where was I before that detour?" |
 | `M-g f` | `consult-flymake` | List diagnostics with consult preview (`C-u` for project-wide); pairs with the LSP/flymake stack in §7 |
-| `M-g s` | `consult-eglot-symbols` | **Project-wide LSP symbol jump** (LSP buffers only — bound in `eglot-mode-map`). Unlike `M-g I` (open buffers, same major mode), this hits the LSP's `workspace/symbol` index so unopened files are found too. See §7 |
+| `M-g e` | `consult-eglot-symbols` | **Project-wide LSP symbol jump** (LSP buffers only — bound in `eglot-mode-map`). Unlike `M-g I` (open buffers, same major mode), this hits the LSP's `workspace/symbol` index so unopened files are found too. Not `M-g s` — avy already owns that globally for `avy-goto-symbol-1`. See §7 |
 | `M-y` | `consult-yank-pop` | Browse the whole kill-ring (not just paste the last entry) |
 | `<` | — | Inside the above commands, `<` *narrows* to one source (e.g. only buffers, not recents) |
 
@@ -374,7 +374,7 @@ lists the follow-up keys — no need to memorise prefixes.
   `c-ts-mode`, `c++-ts-mode`, `java-ts-mode` (so: pyright/pylsp, gopls, rust-analyzer,
   typescript-language-server, clangd, jdtls). `eglot-autoshutdown t` kills the server when
   its last buffer closes; the JSON-RPC events log is disabled.
-- **consult-eglot**: `M-g s` → `consult-eglot-symbols` (bound only in
+- **consult-eglot**: `M-g e` → `consult-eglot-symbols` (bound only in
   `eglot-mode-map`). Asks the language server's `workspace/symbol` index for **every**
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
   (this file) and `consult-imenu-multi` (open buffers of the same major mode). Same
@@ -460,8 +460,10 @@ lists the follow-up keys — no need to memorise prefixes.
   powered by `project.el` + `imenu` + (when active) Eglot's symbol info. Concrete use:
   deep inside a long file, the header tells you which function / class you're inside
   without scrolling up; the project segment disambiguates when several repos are open.
-  Globally enabled; toggle off per buffer with `M-x breadcrumb-local-mode`. From GNU
-  ELPA (same author as eglot-booster and `indent-bars`).
+  Enabled in `prog-mode` buffers only — org/markdown have their own outline-navigation
+  surfaces and a redundant breadcrumb would clash visually in long org buffers; toggle
+  per buffer with `M-x breadcrumb-local-mode`. From GNU ELPA (same author as
+  eglot-booster and `indent-bars`).
 - **flymake** **(built-in)**: on-the-fly diagnostics, fed by Eglot from the LSP. `M-n` /
   `M-p` jump to the next / previous error; the `C-c !` cluster opens the list views —
   `C-c ! l` this buffer's diagnostics (`flymake-show-buffer-diagnostics`), `C-c ! p` the
@@ -936,6 +938,17 @@ Prereqs: the `aider` CLI on PATH (installed via `uv tool install --python 3.12
 aider-chat`); `vterm` ([`init-terminal.el`](lisp/init-terminal.el)). aider reads
 `GEMINI_API_KEY` from the environment — exported by the untracked `~/.profile.local`,
 harvested into the daemon by an `exec-path-from-shell-copy-env` call in the module.
+
+[`claude-jobs-view`](lisp/claude-jobs-view.el) — a `tabulated-list-mode` UI over the
+external `jobctl` CLI for persistent Claude Code background sessions: list, send a prompt,
+dispatch a new session, attach (via `vterm`), tail logs, and kill/delete, all from one
+buffer.
+
+| Binding | Command |
+|---------|---------|
+| `C-c j` | `claude-jobs-view` — open the session list |
+
+`:commands`-only autoload — the ~700-line module doesn't load until the first `C-c j`.
 
 `M-x fenrir/tmux-claude-split` ([`init-tmux-claude.el`](lisp/init-tmux-claude.el)) — when
 Emacs runs inside tmux, splits the current pane left/right (the equivalent of tmux's

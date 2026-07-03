@@ -348,17 +348,18 @@ seems stuck on a stale answer."
 ;; monorepo without opening its file first.  Same vertico + orderless +
 ;; marginalia UI as the rest of the minibuffer stack.
 ;;
-;; Bound on `M-g s' ("goto symbol") only inside `eglot-mode-map' -- the key
-;; is meaningless in non-LSP buffers, and scoping the binding avoids
-;; shadowing whatever a future major mode might want on `M-g s'.  Needs an
-;; Eglot session live in the current buffer; in a buffer without one, the
-;; command errors out clearly rather than silently returning nothing.
-;; (`languages/init-java.el' advises `consult-eglot--transformer' to survive
-;; jdt:// results.)
+;; Bound on `M-g e' ("eglot symbols") only inside `eglot-mode-map' -- the key
+;; is meaningless in non-LSP buffers.  NOT `M-g s': avy already claims that
+;; globally for `avy-goto-symbol-1' (init-editing.el), so binding it here too
+;; would shadow avy in every Eglot buffer instead of "a future major mode".
+;; Needs an Eglot session live in the current buffer; in a buffer without
+;; one, the command errors out clearly rather than silently returning
+;; nothing.  (`languages/init-java.el' advises `consult-eglot--transformer'
+;; to survive jdt:// results.)
 (use-package consult-eglot
   :after (consult eglot)
   :bind (:map eglot-mode-map
-              ("M-g s" . consult-eglot-symbols)))
+              ("M-g e" . consult-eglot-symbols)))
 
 ;; xref backend tuning -- affects M-. (find-definitions) and M-? (find-
 ;; references) across both LSP and non-LSP buffers.
@@ -1650,8 +1651,7 @@ every textual definition across the repo rather than the single correct one."
 ;; AND the major mode has an entry, so it stays quiet in unrelated buffers.
 ;; (`languages/init-vue.el' adds the `vue-mode' -> prettier entry.)
 (use-package apheleia
-  :config
-  (apheleia-global-mode +1))
+  :hook (after-init . apheleia-global-mode))
 
 ;; ansi-color (built-in): interpret SGR escape sequences in `compilation-mode'
 ;; buffers so colorized build/test output renders as faces instead of raw

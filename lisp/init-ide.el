@@ -134,10 +134,13 @@
 ;; rg is already a hard dependency of this config (consult-ripgrep), so prefer
 ;; it over plain grep for speed.
 (use-package dumb-jump
+  :defer t
   :custom (dumb-jump-prefer-searcher 'rg)
   :init
   ;; Append (not prepend) so eglot-xref-backend / ggtags--xref-backend win when
-  ;; present; see the xref layering note in init-languages.el.
+  ;; present; see the xref layering note in init-languages.el.  `dumb-jump-xref-
+  ;; activate' is autoloaded, so `:defer t' keeps the package itself unloaded
+  ;; until xref actually falls through to it.
   (add-hook 'xref-backend-functions #'dumb-jump-xref-activate 90))
 
 ;; devdocs: browse offline copies of devdocs.io API documentation inside Emacs
@@ -180,11 +183,14 @@
 
 ;; move-text: drag the current line (or active region) up/down with
 ;; `M-<up>' / `M-<down>' -- VSCode's `Alt+Up' / `Alt+Down', reindenting as it
-;; goes.  `move-text-default-bindings' installs exactly those two global keys;
-;; org-mode rebinds `M-<up>'/`M-<down>' buffer-locally (`org-metaup' etc.), so
-;; structure-editing in org still wins there -- no conflict in code buffers.
+;; goes.  Bound directly to the two autoloaded commands `move-text-default-
+;; bindings' installs, so the package loads lazily on first use instead of
+;; eagerly at startup.  org-mode rebinds `M-<up>'/`M-<down>' buffer-locally
+;; (`org-metaup' etc.), so structure-editing in org still wins there -- no
+;; conflict in code buffers.
 (use-package move-text
-  :config (move-text-default-bindings))
+  :bind (("M-<up>"   . move-text-up)
+         ("M-<down>" . move-text-down)))
 
 ;; string-inflection: cycle the identifier at point through naming conventions
 ;; -- snake_case -> SCREAMING_SNAKE -> CamelCase -> camelCase -> kebab-case.

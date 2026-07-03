@@ -285,6 +285,15 @@ the definition before the `add-hook' references it."
   (add-hook 'find-file-hook #'fenrir/smerge-maybe-enable)
   (add-hook 'after-revert-hook #'fenrir/smerge-maybe-enable))
 
+;; Make conflict-hopping repeatable, same shape as the diff-hl hunk repeat-map
+;; above: after the first `C-c m n' (or `p'), bare `n'/`p' keep stepping
+;; through every remaining conflict in the file until any other key.
+(defvar-keymap fenrir/smerge-repeat-map
+  :doc "Repeat map for smerge conflict navigation (see `repeat-mode')."
+  :repeat t
+  "n" #'smerge-next
+  "p" #'smerge-prev)
+
 ;; consult-todo: jump to any hl-todo keyword (TODO / FIXME / HACK / BUG / ...)
 ;; via a consult minibuffer with live preview -- the "navigate to TODO" picker.
 ;; Complements magit-todos above (which lists them statically in the Magit

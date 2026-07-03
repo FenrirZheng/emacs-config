@@ -9,11 +9,13 @@
 ;;; Code:
 
 ;; claude-jobs-view -- tabulated UI for the `jobctl' CLI (persistent Claude
-;; Code background sessions).  Source: lisp/claude-jobs-view.el.  Entry point:
-;; M-x claude-jobs-view.  `:commands' makes the autoload lazy -- the file is
-;; only loaded the first time the command is invoked.
+;; Code background sessions).  Source: lisp/claude-jobs-view.el.  `C-c j'
+;; ("jobs") is free at the top level -- no other module claims it.
+;; `:commands' makes the autoload lazy -- the file is only loaded the first
+;; time the command is invoked.
 (use-package claude-jobs-view
   :ensure nil
+  :bind ("C-c j" . claude-jobs-view)
   :commands (claude-jobs-view))
 
 ;; question-queue -- ship the highlighted region + a typed question into the

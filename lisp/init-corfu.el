@@ -57,9 +57,12 @@
 
 
 (use-package cape
+  :defer t
   :init
   ;; Generic backends useful in every buffer: dabbrev (words in open buffers),
   ;; file paths, and elisp symbols.  Eglot adds language-aware ones on top.
+  ;; All three are autoloaded, so `:defer t' keeps cape itself unloaded until
+  ;; `completion-at-point' actually calls one of them.
   (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
