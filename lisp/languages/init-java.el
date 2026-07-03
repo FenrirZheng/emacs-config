@@ -95,38 +95,46 @@ Takes precedence over the topmost-pom heuristic."
   "Resolve DIR's Java project root as a project object (a (vc BACKEND ROOT) list).
 Tier 1: the nearest ancestor containing `fenrir/java-workspace-marker'.
 Tier 2: the topmost consecutive ancestor with a Maven/Gradle build file.
-Returns nil if neither applies, deferring to other `project-find-functions'."
-  (let* ((d (file-name-as-directory (expand-file-name (or dir default-directory))))
-         ;; `abbreviate-file-name' so the project path matches what
-         ;; `project-try-vc' produces elsewhere -- otherwise sibling buffers
-         ;; spawn separate eglot sessions because `equal' on the project
-         ;; struct compares "~/..." vs "/home/..." paths byte-for-byte.
-         (as-project
-          (lambda (root)
-            (let ((r (file-name-as-directory (expand-file-name root))))
-              (list 'vc (ignore-errors (vc-responsible-backend r))
-                    (abbreviate-file-name r)))))
-         (container (locate-dominating-file d fenrir/java-workspace-marker)))
-    (if container
-        (funcall as-project container)
-      (let* ((markers '("pom.xml" "build.gradle" "build.gradle.kts"
-                        "settings.gradle" "settings.gradle.kts"))
-             (has-marker
-              (lambda (dd)
-                (and dd (seq-some (lambda (m) (file-exists-p (expand-file-name m dd)))
-                                  markers))))
-             (cur d)
-             (root nil))
-        (while (and cur (not (string-equal cur "/")) (not (funcall has-marker cur)))
-          (let ((up (file-name-directory (directory-file-name cur))))
-            (setq cur (and (not (string-equal up cur)) up))))
-        (when (and cur (funcall has-marker cur))
-          (setq root cur)
-          (let ((up (file-name-directory (directory-file-name cur))))
-            (while (and up (not (string-equal up "/")) (funcall has-marker up))
-              (setq root up
-                    up (file-name-directory (directory-file-name up))))))
-        (when root (funcall as-project root))))))
+Returns nil if neither applies, deferring to other `project-find-functions'.
+Only claims a root for Java buffers: this sits on the GLOBAL
+`project-find-functions' and runs for every buffer, so an un-gated Tier-1
+`fenrir/java-workspace-marker' container would hijack the project root of any
+NON-Java file nested beneath it (e.g. the Python submodule
+`hitok2/sms-service'), forcing that file's LSP to root at the container and
+miss its project-local `.venv'.  The reactor-fusing container is meant for
+\"every Java file beneath it\", not every file."
+  (when (derived-mode-p 'java-mode 'java-ts-mode)
+    (let* ((d (file-name-as-directory (expand-file-name (or dir default-directory))))
+           ;; `abbreviate-file-name' so the project path matches what
+           ;; `project-try-vc' produces elsewhere -- otherwise sibling buffers
+           ;; spawn separate eglot sessions because `equal' on the project
+           ;; struct compares "~/..." vs "/home/..." paths byte-for-byte.
+           (as-project
+            (lambda (root)
+              (let ((r (file-name-as-directory (expand-file-name root))))
+                (list 'vc (ignore-errors (vc-responsible-backend r))
+                      (abbreviate-file-name r)))))
+           (container (locate-dominating-file d fenrir/java-workspace-marker)))
+      (if container
+          (funcall as-project container)
+        (let* ((markers '("pom.xml" "build.gradle" "build.gradle.kts"
+                          "settings.gradle" "settings.gradle.kts"))
+               (has-marker
+                (lambda (dd)
+                  (and dd (seq-some (lambda (m) (file-exists-p (expand-file-name m dd)))
+                                    markers))))
+               (cur d)
+               (root nil))
+          (while (and cur (not (string-equal cur "/")) (not (funcall has-marker cur)))
+            (let ((up (file-name-directory (directory-file-name cur))))
+              (setq cur (and (not (string-equal up cur)) up))))
+          (when (and cur (funcall has-marker cur))
+            (setq root cur)
+            (let ((up (file-name-directory (directory-file-name cur))))
+              (while (and up (not (string-equal up "/")) (funcall has-marker up))
+                (setq root up
+                      up (file-name-directory (directory-file-name up))))))
+          (when root (funcall as-project root)))))))
 
 ;; Place AHEAD of `project-try-vc' so Java/Maven roots win the `.project'
 ;; race.  `project-find-functions' is run in order, first non-nil wins.
