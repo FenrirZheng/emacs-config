@@ -11,7 +11,12 @@
   :custom
   (org-startup-indented t)               ; visually indent by outline level
   (org-hide-emphasis-markers t)          ; show *bold* as bold, hide the stars
-  (org-src-fontify-natively t))          ; syntax-highlight inside #+begin_src
+  (org-src-fontify-natively t)           ; syntax-highlight inside #+begin_src
+  ;; Auto-render inline images on file open (GUI frames only; TTY can't display
+  ;; them).  Without this an [[file:...]] image link shows as raw text until you
+  ;; `C-c C-x C-v', which reads as a "broken" link -- see the org-roam vault's
+  ;; image-link notes.  Global: applies to every org file, not just the vault.
+  (org-startup-with-inline-images t))
 
 ;; org-modern: restyle headings, lists, checkboxes, tables, blocks and
 ;; timestamps for a cleaner look.  Pure display -- it never edits your files.
