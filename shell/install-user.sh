@@ -59,6 +59,11 @@ if have cargo; then
   # emacs-lsp-booster: version pin matches init.el:713
   cargo install --locked --version 0.2.1 emacs-lsp-booster
   cargo install --locked difftastic
+  # taplo: TOML language server + formatter. The `lsp' feature enables the
+  # `taplo lsp' subcommand Eglot drives (languages/init-toml.el); the bare crate
+  # ships only fmt/lint. apheleia already maps toml-ts-mode → taplo, so this also
+  # lights up TOML format-on-save. Not on apt.
+  cargo install --locked --features lsp taplo-cli
 else
   skip "cargo 不在 PATH — emacs-lsp-booster / difftastic 跳過"
 fi

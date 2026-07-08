@@ -178,6 +178,7 @@ up new or changed files.  Progress and warnings land in the
         init-vue
         init-web
         init-markdown
+        init-toml               ; toml-ts-mode + taplo LSP (Cargo.toml, pyproject.toml)
         init-git
         init-terminal
         init-docker             ; dockerfile-mode + docker.el management UI

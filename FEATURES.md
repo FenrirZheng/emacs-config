@@ -565,6 +565,14 @@ lists the follow-up keys — no need to memorise prefixes.
   [`init-c-cpp.el`](lisp/languages/init-c-cpp.el).
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
   `markdown-command` is `pandoc`.
+- **TOML** ([`init-toml.el`](lisp/languages/init-toml.el)): `.toml` opens in the built-in
+  `toml-ts-mode`; Eglot attaches the **taplo** language server (`taplo lsp stdio`) for
+  schema-aware completion / hover / diagnostics in `Cargo.toml`, `pyproject.toml`, etc.
+  (taplo bundles a schema store keyed by filename). Format-on-save is free — apheleia already
+  ships a `taplo` formatter mapped to `toml-ts-mode`. All the standard Eglot keys apply
+  (`C-c .`/`r`/`f`/hover). Needs `cargo install taplo-cli --locked --features lsp` (the `lsp`
+  feature; installed by [`shell/install-user.sh`](shell/install-user.sh)); without the binary
+  the mode still edits + formats, only the LSP is absent.
 - **jinx**: fast spell checker for every text-mode buffer (org, markdown, gfm, ...).
   Backed by the `enchant-2` C binary — orders of magnitude faster than `flyspell`.
   `M-$` (was `ispell-word`) opens a vertico-driven correction menu for the word at point;
