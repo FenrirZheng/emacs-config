@@ -643,6 +643,35 @@ lists the follow-up keys — no need to memorise prefixes.
   **inside Java buffers only** — it shadows vterm (§9) there; `C-c t` stays vterm
   everywhere else.
 
+  **pytest test at point / file / project / last-failed** (the Python analogue,
+  in any `python-ts-mode` / `python-mode` buffer —
+  [`init-python.el`](lisp/languages/init-python.el), mirrors Go's & Java's
+  `C-c t` test prefix above):
+
+  | key | command | action |
+  |---|---|---|
+  | `C-c t t` | `fenrir/python-test-at-point` | run the test enclosing point; if point isn't in a test, run the whole file |
+  | `C-c t f` | `fenrir/python-test-file` | run every test in the current file |
+  | `C-c t a` | `fenrir/python-test-project` | run the whole suite from the project rootdir |
+  | `C-c t l` | `fenrir/python-test-last-failed` | re-run only last run's failures (`pytest --lf`) |
+
+  **Pure elisp** (no native module, unlike Java): the enclosing-test discovery
+  parses the one already-open buffer via built-in `treesit`, so it's
+  sub-millisecond and needs zero build step on a fresh clone. It maps the cursor
+  to the exact pytest nodeid — `FILE::test_x` for a top-level `def`,
+  `FILE::TestClass::test_x` for a method, `FILE::Outer::Inner::test_x` for a
+  nested class (every enclosing class is included), and `async def` is handled
+  transparently; a cursor on a test's decorator line (`@pytest.mark.parametrize`)
+  resolves to that test, and running a parametrized test by name runs **all** its
+  param cases. The `pytest` binary is the project's `.venv/bin/pytest` when a
+  `.venv/` exists (same walk-up the pyright venv detector uses — never a
+  hardcoded path), else `python -m pytest`; it runs from the pytest **rootdir**
+  (nearest `pyproject.toml`/`pytest.ini`/`tox.ini`/`setup.cfg`/`setup.py`) so
+  `conftest.py` fixtures resolve, through `compile` (so `*pytest*` is a
+  compilation buffer with error jumps + `g` recompile). Modified buffers are
+  saved first (pytest reads disk). Like Go's/Java's keys, `C-c t` is a test
+  prefix **inside Python buffers only** — it shadows vterm (§9) there.
+
 All dape commands live in `dape-global-map` under the **`C-x C-a`** prefix:
 
 | Key | Command | What it does |
