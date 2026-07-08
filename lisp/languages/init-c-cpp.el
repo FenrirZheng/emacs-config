@@ -120,5 +120,26 @@ back to `forward-sexp' when the line has none)."
   (define-key c-ts-mode-map   (kbd "C-c %") #'fenrir/c-sexp-dwim)
   (define-key c++-ts-mode-map (kbd "C-c %") #'fenrir/c-sexp-dwim))
 
+;; cmake-mode: font-lock + indentation for `CMakeLists.txt' / `*.cmake'.  This
+;; config lives in a CMake-driven native-module workspace ([`cpp/'](../../cpp/README.md)
+;; is an aggregator CMake tree; every module has its own `CMakeLists.txt'), yet
+;; those files open in plain `text-mode' -- no highlighting, no `#'-comment
+;; awareness, no indent.  cmake-mode fixes that.
+;;
+;; Why the regex mode, NOT `cmake-ts-mode': the built-in `cmake-ts-mode' needs
+;; the tree-sitter-cmake grammar, which (a) is NOT installed here
+;; (`treesit-ready-p 'cmake' => nil') and (b) has an UNPINNED treesit-auto recipe
+;; (`abi14-revision' nil), so auto-install would pull master -- risking the same
+;; ABI-15 `version-mismatch' trap the c / rust / lua grammars pin around.
+;; cmake-mode is pure Elisp font-lock: zero grammar, zero ABI risk, TTY-identical.
+;; If a pinned cmake grammar is ever added (mirror the c pin above), this can flip
+;; to `cmake-ts-mode' then.
+;;
+;; First-run note: not in elpa/ on a fresh clone -- `M-x my/package-refresh' then
+;; restart once so it installs (the archive isn't refreshed at startup).
+(use-package cmake-mode
+  :mode (("CMakeLists\\.txt\\'" . cmake-mode)
+         ("\\.cmake\\'"         . cmake-mode)))
+
 (provide 'init-c-cpp)
 ;;; init-c-cpp.el ends here

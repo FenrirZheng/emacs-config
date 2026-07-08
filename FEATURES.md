@@ -556,6 +556,13 @@ lists the follow-up keys — no need to memorise prefixes.
   support, so this wraps the built-in sexp motion instead — it uses `char-syntax`, so
   C++ template `<>` (not paren-syntax) are correctly skipped. Bound in
   `c-ts-mode-map` / `c++-ts-mode-map` only; bare `%` still self-inserts.
+- **cmake-mode** (C / C++): `CMakeLists.txt` and `*.cmake` open in `cmake-mode`
+  (font-lock + indent) instead of plain `text-mode` — the [`cpp/`](cpp/README.md) native-module
+  workspace is a CMake tree. Deliberately the **regex** mode, not the built-in
+  `cmake-ts-mode`: the tree-sitter-cmake grammar isn't installed and its treesit-auto recipe
+  is unpinned (would risk the same ABI-15 `version-mismatch` trap the c/rust/lua grammars pin
+  around), whereas cmake-mode is pure Elisp — zero grammar, TTY-identical. Config in
+  [`init-c-cpp.el`](lisp/languages/init-c-cpp.el).
 - **markdown-mode**: `README.md` opens in GitHub-flavoured Markdown mode (`gfm-mode`);
   `markdown-command` is `pandoc`.
 - **jinx**: fast spell checker for every text-mode buffer (org, markdown, gfm, ...).
@@ -874,8 +881,18 @@ source — narrow to them with `< q`. To get a preview side panel back, add
 - **org-appear**: temporarily reveals the `*bold*` / `=verbatim=` / `[[link]]` markup of
   whichever element point is on — the complement to `org-hide-emphasis-markers`, so you can
   still edit the markers without globally un-hiding them.
+- **`C-c c` — `org-capture`** (global, fires from any buffer): drops a quick TODO (`t`) or
+  note (`n`) into `inbox.org` at the org home (`org-directory` = `~/code/org-roam`). Distinct
+  from `C-c r c` (`org-roam-capture`, §14) which creates a *linked* Zettelkasten node — this
+  is a flat, unlinked inbox for later refiling; the captured entry has no `:ID:` so org-roam
+  ignores it as a non-node. The `t` template stamps a back-link (`%a`) to the buffer you
+  captured from.
+- **org-babel** evaluates `#+begin_src` blocks in `emacs-lisp`, `python`, and `shell` (plus
+  `plantuml` / `mermaid` from [`init-diagrams.el`](lisp/init-diagrams.el) — both use the same
+  additive `org-babel-do-load-languages`). `org-confirm-babel-evaluate` stays at its default
+  `t`, so every block execution prompts first (an org file can't silently run code on open).
 
-(Room to grow later: org-roam, org-agenda, capture templates.)
+(Room to grow later: org-agenda + `org-agenda-files`.)
 
 ---
 
