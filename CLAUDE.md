@@ -19,7 +19,7 @@ Local Elisp (not on MELPA): [`lisp/claude-jobs-view.el`](lisp/claude-jobs-view.e
 ## Startup discipline (`early-init.el`)
 
 [`early-init.el`](early-init.el) runs BEFORE the package system and the first frame. It owns:
-- GC tuning (`gc-cons-threshold` raised to `most-positive-fixnum` for startup, restored to 32 MB on `emacs-startup-hook`).
+- GC tuning (`gc-cons-threshold` raised to `most-positive-fixnum` for startup, dropped to a 16 MB floor on `emacs-startup-hook`; from there `gcmh-mode` in [`lisp/init-defaults.el`](lisp/init-defaults.el) adapts the threshold — high while active, sweep on idle).
 - `file-name-handler-alist` suspension during init (every `require` walks it — emptying it saves measurable time).
 - Frame chrome via `default-frame-alist` (menu/tool/scroll bars off **before** the first frame paints — calling `menu-bar-mode -1` in `init.el` is too late and causes a flash).
 - `package-enable-at-startup nil` so the implicit pre-init `package-activate-all` doesn't duplicate `init.el`'s explicit `(package-initialize)`.

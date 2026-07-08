@@ -20,7 +20,7 @@
 ;;                          per-language modules under lisp/languages/ load after
 ;;                          it (init-java, init-go, init-python, init-rust,
 ;;                          init-typescript, init-c-cpp, init-lua, init-vue,
-;;                          init-web, init-markdown)
+;;                          init-web, init-markdown, init-toml)
 ;;   init-git            -- Magit + diff-hl + magit-todos + delta + difftastic
 ;;   init-terminal       -- vterm + vterm-toggle (integrated terminal)
 ;;   init-docker         -- dockerfile-mode + docker.el container management

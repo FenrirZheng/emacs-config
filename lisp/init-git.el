@@ -53,7 +53,8 @@
   "L" #'magit-log-current         ; vc-print-root-log
   "g" #'magit-blame               ; vc-annotate
   "d" #'magit-status              ; vc-dir
-  "v" #'magit-stage-buffer-file   ; vc-next-action
+  "v" #'magit-file-stage          ; vc-next-action (magit-stage-buffer-file was
+                                  ; renamed in Magit 4.3.2)
   "u" #'magit-file-checkout       ; vc-revert
   "+" #'magit-pull                ; vc-update
   "P" #'magit-push                ; vc-push
@@ -130,10 +131,10 @@ from a revision buffer it is a plain revision-vs-revision comparison."
 ;; `emacs ./' in $HOME CPU spike. magit covers dired-side git status anyway.
 (use-package diff-hl
   :hook
-  ;; pre/post pair: `pre' snapshots state before a Magit refresh so `post'
-  ;; redraws the margin accurately after a commit/stage/unstage/...
-  ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
-   (magit-post-refresh . diff-hl-magit-post-refresh))
+  ;; Redraw the margin after a Magit refresh (commit/stage/unstage/...).
+  ;; The old `diff-hl-magit-pre-refresh' half of the pair was obsoleted in
+  ;; diff-hl 1.11.0 (aliased to `ignore') -- `post' alone does the job now.
+  (magit-post-refresh . diff-hl-magit-post-refresh)
   ;; Hunk-level gutter actions on a `C-c v' prefix ("VCS changes") -- the modern
   ;; IDE "jump between changes / preview / revert / stage this hunk" the gutter
   ;; offers, without opening a full Magit buffer.  (The `C-x v' prefix is taken

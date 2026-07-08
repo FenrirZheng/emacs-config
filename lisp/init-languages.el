@@ -172,10 +172,13 @@ seems stuck on a stale answer."
   (eglot-extend-to-xref t)
   ;; Server-initiated `applyEdit' requests (organize-imports, project-wide
   ;; rename, batch quickfix code actions) hit multiple files at once.
-  ;; Default `'confirm' prompts per file -- noisy for any rename that
-  ;; touches more than three.  Set to nil so refactors apply in one go;
-  ;; the aggregate diff still lands in `git diff' for review before commit.
-  (eglot-confirm-server-initiated-edits nil)
+  ;; The default `((t . maybe-summary))' pops a confirmation/diff prompt --
+  ;; noisy for any rename that touches more than three files.  nil applies
+  ;; refactors in one go; the aggregate diff still lands in `git diff' for
+  ;; review before commit.  (This is the Eglot 1.16+ name; the old
+  ;; `eglot-confirm-server-initiated-edits' is an obsolete alias -- custom.el
+  ;; already recorded the value under the new name.)
+  (eglot-confirm-server-edits nil)
   ;; IDE refactor / action keys, all scoped to `eglot-mode-map' so they do
   ;; nothing in non-LSP buffers and never shadow a major mode's own `C-c'
   ;; keys when no server is attached.

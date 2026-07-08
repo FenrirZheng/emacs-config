@@ -56,8 +56,6 @@
 ;;                                         which-key shows NOTHING on the terminal.
 ;;               * transient-posframe   -- its show fn *errors* on TTY, so every
 ;;                                         magit / transient menu breaks there.
-;;               * pixel-scroll-precision-mode (built-in) -- pixel scrolling is
-;;                                         meaningless on a TTY.
 ;;               * spacious-padding     -- adds internal borders / fringe padding
 ;;                                         (graphical frame parameters only).
 ;;               * nyan-mode            -- an IMAGE progress indicator in the
@@ -177,12 +175,9 @@
   (setq lin-face 'lin-cyan)
   (lin-global-mode 1))
 
-;; pulsar: briefly pulses the current line after navigation commands (scroll,
-;; other-window, goto-line, ...) so the eye doesn't lose point on a jump.
-;; Overlay-based (`pulsar-face'), so it degrades to a plain colour flash on a
-;; low-colour TTY instead of breaking.
-(use-package pulsar
-  :init (pulsar-global-mode 1))
+;; pulsar: listed in the TIER A commentary above, but its `use-package' block
+;; lives in `init-editing.el' (loaded earlier), where the avy/consult pulse
+;; wiring is -- a second block here would just re-run `pulsar-global-mode'.
 
 ;; ------------------------------------------------------------------ TIER B ---
 
@@ -338,9 +333,12 @@ striking on a GUI truecolor frame but collapses to noise on an 8/16-colour TTY."
 
 (defun fenrir/gui-popups-toggle ()
   "Toggle the GUI-only global display modes (TIER C).
-Covers the posframe popups (which-key / transient), pixel + animated
-smooth scrolling, the graphical mode-line scrollbar (`mlscroll'), frame
-padding (`spacious-padding'), and the `nyan-mode' mode-line indicator.
+Covers the posframe popups (which-key / transient), animated smooth
+scrolling (`good-scroll'), the graphical mode-line scrollbar
+\(`mlscroll'), frame padding (`spacious-padding'), and the `nyan-mode'
+mode-line indicator.  (`pixel-scroll-precision-mode' is NOT part of this
+toggle -- init-defaults.el turns it on globally; it no-ops on TTY frames,
+so there is nothing to switch off before returning to a terminal.)
 These are GLOBAL display-replacing modes with no TTY fallback, so they are
 manual: turn them on in a GUI-only Emacs, OFF before using a terminal frame
 of the same daemon (otherwise which-key/transient break on the TTY frame).
@@ -350,7 +348,6 @@ Refuses to turn on unless the current frame is graphical."
       (progn
         (when (fboundp 'which-key-posframe-mode) (which-key-posframe-mode -1))
         (when (fboundp 'transient-posframe-mode) (transient-posframe-mode -1))
-        (when (fboundp 'pixel-scroll-precision-mode) (pixel-scroll-precision-mode -1))
         (when (fboundp 'good-scroll-mode) (good-scroll-mode -1))
         (when (fboundp 'mlscroll-mode) (mlscroll-mode -1))
         (when (fboundp 'spacious-padding-mode) (spacious-padding-mode -1))
@@ -375,7 +372,6 @@ Refuses to turn on unless the current frame is graphical."
     (require 'nyan-mode nil t)
     (when (fboundp 'which-key-posframe-mode) (which-key-posframe-mode 1))
     (when (fboundp 'transient-posframe-mode) (transient-posframe-mode 1))
-    (when (fboundp 'pixel-scroll-precision-mode) (pixel-scroll-precision-mode 1))
     (when (fboundp 'good-scroll-mode) (good-scroll-mode 1))
     (when (fboundp 'mlscroll-mode) (mlscroll-mode 1))
     (when (fboundp 'spacious-padding-mode) (spacious-padding-mode 1))
