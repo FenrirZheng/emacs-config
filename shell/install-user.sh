@@ -6,6 +6,8 @@
 # Sections:
 #   1. npm globals  — LSPs / formatters / linters (skipped if no npm)
 #   2. cargo        — emacs-lsp-booster, difftastic (skipped if no cargo)
+#   2b. pipx        — black (apheleia Python format-on-save; skipped if no pipx)
+#   2c. lldb-dap    — stable symlink for dape (Debian ships lldb-dap-NN)
 #   3. go install   — gopls (skipped if no go)
 #   4. rustup       — rust-analyzer component (skipped if no rustup)
 #   5. terminfo     — tmux-256color +setf24/setb24 for Emacs TTY truecolor
@@ -59,6 +61,44 @@ if have cargo; then
   cargo install --locked difftastic
 else
   skip "cargo 不在 PATH — emacs-lsp-booster / difftastic 跳過"
+fi
+
+# ── 2b. pipx (isolated Python CLIs) ─────────────────────────────────────
+# black: apheleia already maps python-ts-mode → black, so Python format-on-save
+# is a no-op until this binary exists. pipx keeps it in its own venv (never the
+# system python) per the user's "never system pip" rule. Idempotent: pipx
+# install no-ops when already present.
+#
+# NOT installed here (deliberate): debugpy / pytest are per-PROJECT venv deps —
+# `M-x dape' launches the project's own `python -m debugpy.adapter', so debugpy
+# must live in THAT venv (`pip install debugpy' inside it), not a global. See the
+# reminders at the end.
+section "pipx Python tools"
+if have pipx; then
+  pipx install black
+  # Optional extras (uncomment if wanted — each needs a matching Emacs change):
+  #   pipx install ruff                  # fast linter/formatter; needs apheleia remap off black
+  #   pipx install basedpyright          # pyright fork; needs eglot-server-programs remap
+  #   pipx install cmake-language-server # CMake LSP; needs an eglot-server-programs entry
+else
+  skip "pipx 不在 PATH (apt: pipx) — black 跳過; apheleia Python 存檔格式化將 no-op"
+fi
+
+# ── 2c. lldb-dap symlink ────────────────────────────────────────────────
+# Debian's `lldb' apt package (install-root.sh) ships the DAP binary
+# VERSION-SUFFIXED as `lldb-dap-19' (bumps with each LLVM release), but dape's
+# built-in lldb-dap config invokes plain `lldb-dap'. Bridge with a stable
+# symlink in ~/.local/bin (on PATH, no sudo). Glob-picks the NEWEST installed
+# version so an LLVM upgrade (lldb-dap-20, ...) is picked up on re-run without
+# hardcoding a version. Idempotent: `ln -sfn' replaces any existing link.
+section "lldb-dap symlink (dape Rust/C++ debug)"
+lldb_dap_newest="$(ls -1 /usr/bin/lldb-dap-* 2>/dev/null | sort -V | tail -1 || true)"
+if [ -n "$lldb_dap_newest" ]; then
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$lldb_dap_newest" "$HOME/.local/bin/lldb-dap"
+  ok "lldb-dap → $lldb_dap_newest"
+else
+  skip "/usr/bin/lldb-dap-* 不在 (apt: lldb, 由 install-root.sh 安裝) — 符號連結跳過"
 fi
 
 # ── 3. go install ───────────────────────────────────────────────────────
@@ -134,6 +174,13 @@ if [ "${npm_prefix_flipped:-0}" -eq 1 ]; then
   echo '  • PATH: add $HOME/.npm-global/bin to your shell rc (npm prefix lives there now)'
 fi
 cat <<'EOF'
+  • Python debugging (dape): debugpy is a PER-PROJECT venv dep, not a global —
+    activate the project venv and `pip install debugpy`, then M-x dape. Same for
+    pytest (per-venv). apheleia black + C/C++ clang-format + gdb/lldb-dap
+    debugging (installed above) work globally with no further setup.
+  • Debug adapters now on PATH: gdb (C/C++/Rust) + lldb-dap (Rust/C++). M-x dape,
+    pick the matching config. dape ships the configs; you just installed the
+    binaries. Breakpoints render in the buffer margin (TTY-safe).
   • First Emacs launch: M-x nerd-icons-install-fonts (downloads TTFs once)
   • jinx compiles its C module on first load (~2s; needs libenchant-2-dev)
   • vterm compiles its C module on first launch (needs cmake + libvterm-dev)

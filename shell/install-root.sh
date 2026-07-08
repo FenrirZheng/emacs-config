@@ -31,6 +31,9 @@ APT_PKGS=(
   direnv                              # envrc          (init.el:636-638)
   git-delta                           # magit-delta    (init.el:1060-1063)
   clangd                              # eglot C/C++    (init.el:643)
+  clang-format                        # apheleia C/C++ format-on-save (apheleia maps c-ts-mode/c++-ts-mode → clang-format)
+  gdb                                 # dape C/C++ + Rust debug adapter (gdb --interpreter=dap; needs >=14, trixie ships 16)
+  lldb                                # dape lldb-dap adapter — richer Rust/C++ debugging (LLDB pretty-printers) than gdb
   global python3-pygments universal-ctags  # ggtags GNU Global xref fallback + Go/Py/TS parser (languages/init-languages.el fenrir/gtags-*)
   ncurses-term                        # tmux-256color: base for truecolor terminfo (install-user.sh §5)
 )
