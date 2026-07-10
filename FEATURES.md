@@ -350,6 +350,11 @@ behave on a terminal frame:
 `which-key` **(built-in)**: after a prefix key (`C-x`, `C-c`, …) wait 0.5 s and a panel
 lists the follow-up keys — no need to memorise prefixes.
 
+**Too many candidates in the panel? Search it**: press the prefix, then `C-h` — this
+routes through `embark-prefix-help-command` (wired in [`init-defaults.el`](lisp/init-defaults.el))
+into a Vertico minibuffer listing just that prefix's bindings, filterable by typing.
+`which-key` itself has no built-in text filter; this is what stands in for one.
+
 ---
 
 ## 7. Project, LSP & languages ([`init-languages.el`](lisp/init-languages.el) + per-language [`lisp/languages/`](lisp/languages/))

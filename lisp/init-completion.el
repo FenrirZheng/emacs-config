@@ -147,7 +147,15 @@
    consult-bookmark consult-recent-file
    :preview-key '(:debounce 0.2 any)))
 
+;; `:demand t' -- load embark at startup rather than waiting for C-. / C-; /
+;; C-h B.  Load-bearing for the `prefix-help-command' wiring in
+;; init-defaults.el: that `(with-eval-after-load 'embark ...)' body doesn't
+;; run until embark is loaded, so without :demand, C-h after a prefix key
+;; still falls through to the *Help* buffer (not the vertico-searchable
+;; embark one) until embark happens to load some other way first in the
+;; session.
 (use-package embark
+  :demand t
   :bind (("C-." . embark-act)            ; act on the thing at point / candidate
          ("C-;" . embark-dwim)           ; "do what I mean" -- default action
          ("C-h B" . embark-bindings)))   ; like `describe-bindings' via completing-read
