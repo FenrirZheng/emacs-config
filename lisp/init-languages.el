@@ -405,6 +405,22 @@ seems stuck on a stale answer."
 (use-package breadcrumb
   :hook (prog-mode . breadcrumb-local-mode))
 
+;; Eglot progress reporting -> echo area (rust-analyzer indexing, gopls, jdtls
+;; import, ...).  `eglot-report-progress' = `messages' routes every server's
+;; `$/progress' work-done reports through a `progress-reporter', so each update
+;; shows transiently in the echo area -- WITHOUT touching the header line
+;; (breadcrumb keeps it) or the mode line.  (Verified: the spinner updates are
+;; echo-area only; they are NOT accumulated into *Messages*, which is cleaner --
+;; visible while running, no log spam after.)  Rationale for not using the
+;; default `t': that draws Eglot's built-in mode-line progress segment, which
+;; doom-modeline (init-appearance.el) drops, so nothing showed; and a custom
+;; header-line renderer looked cluttered against breadcrumb.  The `messages'
+;; path is built-in and needs no renderer.  NOTE: this is read at connection
+;; time (it also gates the `workDoneProgress' client capability), so it only
+;; affects servers started AFTER it is set -- a live server needs
+;; `M-x eglot-reconnect'.
+(setq eglot-report-progress 'messages)
+
 ;; eldoc on TTY: echo area is the default display path (single line, brief,
 ;; gets clobbered by Corfu / other `message' callers but cheap and unobtrusive).
 ;; For longer signatures or godoc-on-hover, summon `M-x eldoc-doc-buffer'
