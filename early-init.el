@@ -35,6 +35,14 @@
             (setq gc-cons-threshold (* 16 1024 1024)
                   gc-cons-percentage 0.1)))
 
+;; Font caches are GUI-only state (a TTY frame has no font-object cache to
+;; compact -- glyphs come from the terminal, not a rasterizer), so this is a
+;; pure GUI-frame improvement with no TTY-side behavior at all: without it, a
+;; GC sweep can evict nerd-icons/ligature glyphs from the font cache, forcing
+;; them to reopen (and re-shape) on the next redisplay -- the docstring's own
+;; tradeoff is a larger memory footprint, not slower/frozen redisplay.
+(setq inhibit-compacting-font-caches t)
+
 ;; ---------------------------------------------------------------------------
 ;; file-name-handler-alist suspension
 ;; ---------------------------------------------------------------------------

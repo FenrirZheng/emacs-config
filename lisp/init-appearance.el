@@ -54,6 +54,81 @@
   (doom-modeline-buffer-file-name-style 'truncate-upto-project)
   (doom-modeline-vcs-max-length 18))
 
+;; native-comp async compilation queue segment: spinner + running job count.
+;; PRIVATE-API WARNING (verified against the real Emacs 30.1 source, not
+;; memory): `comp--async-runnings' (the `--' infix is Elisp convention for
+;; "not public API") and `native-comp-async-cu-done-functions' both live in
+;; comp-run.el, which is only loaded the first time an async native
+;; compilation actually runs in this session -- on a session where every
+;; installed package is already natively compiled, neither symbol may ever
+;; become bound.  The fboundp/boundp guards below are therefore load-bearing,
+;; not defensive style: without them this segment would error on any Emacs
+;; build/session where comp-run.el never loads.  A future Emacs release could
+;; also rename or remove these private symbols with no deprecation warning;
+;; the guards make that failure mode "segment silently disappears," not a
+;; mode-line error.
+;;
+;; No `spinner' package dependency -- not installed elsewhere in this config,
+;; so the animation frames are hand-rolled to avoid a new dependency for one
+;; segment.
+(defvar fenrir/native-comp--timer nil
+  "Repeating timer driving the native-comp queue segment's spinner glyph.")
+(defvar fenrir/native-comp--frame-index 0)
+(defconst fenrir/native-comp-spinner-frames
+  '("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"))
+(defvar fenrir/native-comp-flash-until nil
+  "Time until which the just-finished checkmark flash should still show.")
+
+(defun fenrir/native-comp--on-cu-done (_file)
+  "Flash a brief done indicator when an async compilation unit finishes."
+  (setq fenrir/native-comp-flash-until (time-add (current-time) 2))
+  (force-mode-line-update t))
+
+(when (boundp 'native-comp-async-cu-done-functions)
+  (add-hook 'native-comp-async-cu-done-functions #'fenrir/native-comp--on-cu-done))
+
+(defun fenrir/native-comp--ensure-timer ()
+  "Lazily start the redisplay timer -- most sessions never touch native-comp,
+so an always-on timer would be pure waste."
+  (unless (timerp fenrir/native-comp--timer)
+    (setq fenrir/native-comp--timer
+          (run-with-timer
+           0 0.3
+           (lambda ()
+             (setq fenrir/native-comp--frame-index
+                   (mod (1+ fenrir/native-comp--frame-index)
+                        (length fenrir/native-comp-spinner-frames)))
+             (force-mode-line-update t))))))
+
+(doom-modeline-def-segment native-comp-async
+  (let ((n (if (fboundp 'comp--async-runnings) (comp--async-runnings) 0)))
+    (cond
+     ((> n 0)
+      (fenrir/native-comp--ensure-timer)
+      (concat (doom-modeline-spc)
+              (propertize (nth fenrir/native-comp--frame-index
+                                fenrir/native-comp-spinner-frames)
+                          'face 'doom-modeline-info)
+              (doom-modeline-vspc)
+              (propertize (number-to-string n) 'face 'doom-modeline-info)
+              (doom-modeline-spc)))
+     ((and fenrir/native-comp-flash-until
+           (time-less-p (current-time) fenrir/native-comp-flash-until))
+      (concat (doom-modeline-spc)
+              (propertize "✓" 'face 'doom-modeline-info)
+              (doom-modeline-spc)))
+     (t
+      (setq fenrir/native-comp-flash-until nil)
+      nil))))
+
+;; Re-declare 'main with `native-comp-async' spliced in next to `lsp' -- the
+;; segment alone (above) only registers in `doom-modeline--fn-alist'; without
+;; this it would never render on any actual mode line.  Identical to upstream
+;; `main' (doom-modeline.el) except for the one insertion.
+(doom-modeline-def-modeline 'main
+  '(eldoc bar window-state workspace-name window-number modals matches follow buffer-info remote-host buffer-position word-count parrot selection-info)
+  '(compilation objed-state misc-info project-name persp-name battery grip irc mu4e gnus github debug repl lsp native-comp-async minor-modes input-method indent-info buffer-encoding major-mode process vcs check time))
+
 ;; nerd-icons-completion: icons in the minibuffer completion / marginalia column
 ;; (Vertico drives completion in this config).  GOTCHA: `marginalia-mode' has
 ;; ALREADY fired by the time this module loads (it is turned on at startup in

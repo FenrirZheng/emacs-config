@@ -77,6 +77,24 @@
 
 ;; ------------------------------------------------------------------ TIER A ---
 
+;; x-gtk-resize-child-frames: this daemon runs under GNOME Shell + mutter
+;; (confirmed via `XDG_CURRENT_DESKTOP'/`ps'), the exact desktop this GTK3
+;; variable's own docstring names as refusing to resize child frames under
+;; the default (nil) setting -- which is the GTK3 flicker this item targets.
+;; `resize-mode' is the no-flicker option; the docstring also warns it "may
+;; freeze Emacs when used with OTHER desktop environments" (GTK's resize
+;; mode is deprecated upstream), i.e. environments other than the
+;; GNOME-shell/mutter case this workaround exists for -- since we ARE on
+;; mutter, that freeze risk is the one the docstring implies this setting is
+;; safe against.  Still: this is a single GLOBAL variable read by every GTK
+;; child-frame resize in this one Emacs process (vertico-posframe below,
+;; corfu's popup, eldoc-box, transient-posframe/which-key-posframe when
+;; toggled on) -- were it ever to freeze, it freezes the whole daemon,
+;; TTY frame included, since there is only one process.  `boundp'-guarded
+;; because it's GTK-build-only (absent on a non-GTK Emacs build).
+(when (boundp 'x-gtk-resize-child-frames)
+  (setq x-gtk-resize-child-frames 'resize-mode))
+
 ;; vertico-posframe: show the Vertico minibuffer as a centred child frame on
 ;; GUI.  `:global t' mode, but every display goes through `posframe-workable-p',
 ;; so on a TTY frame it transparently falls back to the normal bottom-of-frame

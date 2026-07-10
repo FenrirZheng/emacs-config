@@ -193,7 +193,32 @@ the filesystem round-trip but not `emacsclient --eval' argv quoting."
   ;; to whatever this variable points at.  Embark's version pops a vertico
   ;; minibuffer with that prefix's bindings as candidates.
   (with-eval-after-load 'embark
-    (setq prefix-help-command #'embark-prefix-help-command)))
+    (setq prefix-help-command #'embark-prefix-help-command))
+  ;; Friendly labels for the personal `C-c' prefixes, so the which-key panel
+  ;; reads "g -> gtags" etc. on the FIRST `C-c' keypress instead of only
+  ;; becoming legible once you continue the chord and see raw command names.
+  ;; `C-c r', `C-c o' and `C-c t' are deliberately excluded: each is bound to
+  ;; a genuinely different thing depending on which minor-mode keymap is
+  ;; active in the current buffer (e.g. `C-c r' is eglot-rename in an
+  ;; eglot-managed buffer but the org-roam prefix map elsewhere) -- a single
+  ;; global label would misdescribe whichever meaning isn't showing.
+  (which-key-add-key-based-replacements
+    "C-c a" "aider"
+    "C-c B" "dired-sidebar"
+    "C-c D" "docker"
+    "C-c e" '("theme" . "ef-themes light/dark toggle")
+    "C-c g" '("gtags" . "GNU Global build/diagnose/nav")
+    "C-c G" '("git-extras" . "git-link / timemachine / blamer")
+    "C-c h" '("eglot-hier" . "call/type hierarchy, inlay hints, tokens")
+    "C-c j" "claude-jobs"
+    "C-c m" '("smerge" . "merge-conflict resolution")
+    "C-c q" '("question-queue" . "ask / set queue dir")
+    "C-c R" '("rust" . "cargo build/test/clippy/run")
+    "C-c s" '("symbol-overlay" . "highlight & navigate occurrences")
+    "C-c S" "string-inflection"
+    "C-c v" '("git-hunk" . "diff-hl next/prev/show/revert/stage")
+    "C-c W" '("workspace" . "tabspaces")
+    "C-c z" '("treesit-fold" . "tree-sitter code folding")))
 
 ;; ibuffer: replace the default `switch-to-buffer' on `C-x b' with ibuffer
 ;; (grouping, marking, batch operations).  `C-x C-b' is avoided because tmux'

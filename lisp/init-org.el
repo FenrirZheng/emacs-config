@@ -76,5 +76,28 @@
              (python . t)
              (shell . t)))))
 
+;; org-download: paste/drag images into org buffers.  Drag-and-drop
+;; (`org-download-dnd') is wired automatically -- the package's own top-level
+;; `(org-download-enable)' call (unconditional, end of org-download.el)
+;; prepends it into `dnd-protocol-alist' the moment the package loads.  It
+;; takes required (uri action) args and has NO `(interactive)' spec, so it's
+;; a DND protocol handler, not a bindable command -- nothing to put on a key,
+;; and it only ever fires from a real GUI drag event anyway (inert on a TTY
+;; frame).  The one command that belongs on a keybinding is
+;; `org-download-clipboard' (paste whatever image is on the system
+;; clipboard).  Verified free in plain `org-mode-map' (`lookup-key' returned
+;; nil); does not collide with eglot's `C-c i' organize-imports (that's
+;; `eglot-mode-map', a minor mode never active in .org buffers -- no
+;; `eglot-ensure' hook anywhere targets `org-mode-hook').  On a TTY-only
+;; session `org-download-clipboard' degrades gracefully: it signals a
+;; catchable `user-error' if xclip/wl-paste is missing, or silently no-ops if
+;; the clipboard tool can't reach a display -- verified from upstream source,
+;; no crash risk.
+(use-package org-download
+  :ensure t
+  :after org
+  :bind (:map org-mode-map
+         ("C-c i" . org-download-clipboard)))
+
 (provide 'init-org)
 ;;; init-org.el ends here
