@@ -22,11 +22,7 @@
   ;; backend enabled -- keep ONLY Git, since the stock list also probes
   ;; CVS/SVN/Hg/Bzr/... once per file for nothing. Interactive VC still goes
   ;; exclusively through Magit (see the `C-x v' remap below).
-  (setq vc-handled-backends '(Git))
-  ;; $HOME is tracked with `status.showUntrackedFiles=no' (~1M hidden entries);
-  ;; Magit doesn't honour that config and would still walk them. Drop the
-  ;; section -- in normal repos `git status -s` is one keystroke away anyway.
-  (remove-hook 'magit-status-sections-hook 'magit-insert-untracked-files))
+  (setq vc-handled-backends '(Git)))
 
 ;; C-x v : retire vc.el's prefix, hand it to Magit.
 ;; vc.el's stock `C-x v ...' commands work again (the Git backend is enabled
