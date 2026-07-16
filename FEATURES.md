@@ -56,6 +56,20 @@ a candidate).
   automatically.
 - **History**: `savehist` **(built-in)** persists minibuffer history across sessions and
   floats recent picks to the top.
+- **Cursor back-navigation (mark ring, built-in)** — the `M-g m` / `M-g k` pickers above
+  are the nice preview front-end, but the raw keys are worth knowing for quick "flip back
+  and forth" reading:
+  - Drop a manual anchor at point with `C-SPC C-SPC` (set mark, then deactivate the region).
+  - Step back through *this buffer's* recent positions with `C-u C-SPC`; step back *across
+    buffers* with `C-x C-SPC` (`pop-global-mark`).
+  - `set-mark-command-repeat-pop t` (set in [`init-defaults.el`](lisp/init-defaults.el))
+    means only that **first** keystroke needs the prefix — a bare `C-SPC C-SPC …` then keeps
+    popping the same ring, so back-nav is as light as `repeat-mode`.
+  - Many "far jump" commands (`C-s`, `M-.`, `M-<` / `M->`, `consult-*`) auto-push a mark, so
+    the ring fills as you move — no manual anchoring needed for those. The **global** ring
+    keeps just one slot per buffer (a cross-file trail, so `M-g k` shows ~one row per file),
+    capped at 16 (`global-mark-ring-max`). For fixed anchors that never get pushed out, use a
+    register (`C-x r SPC a` / `C-x r j a`) or a bookmark (`C-x r b`).
 - **Preview debounce**: expensive previewers (`consult-ripgrep`, `consult-grep`,
   `consult-find`, `consult-bookmark`, `consult-recent-file`) wait 200 ms of input idle
   before re-rendering — keeps typing in a large project from queueing a ripgrep per
