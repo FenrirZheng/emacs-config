@@ -78,6 +78,12 @@
   ;; the `C-x' prefix.  Also works for `C-x ^' (enlarge-window) etc.  Pure
   ;; ergonomics win, no setup beyond turning it on.
   (repeat-mode 1)
+  ;; set-mark-command-repeat-pop: after ONE `C-u C-SPC' (pop local mark ring)
+  ;; or `C-x C-SPC' (pop-global-mark), a bare `C-SPC' keeps popping the same
+  ;; ring -- so "jump back through recent positions" becomes C-SPC C-SPC C-SPC
+  ;; instead of re-typing the prefix each time.  The initial keystroke still
+  ;; needs the prefix; only the repeats are bare.  Kin to `repeat-mode' above.
+  (setq set-mark-command-repeat-pop t)
   ;; Put `M-x customize' output in its own file rather than appending to this
   ;; one.  (The block at the bottom of this file pre-dates this and is kept
   ;; for compatibility; new customisations go to custom.el.)
