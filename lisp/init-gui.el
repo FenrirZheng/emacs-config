@@ -40,6 +40,8 @@
 ;;               * eldoc-box        (child-frame hover -> doc-buffer on TTY)
 ;;               * frog-jump-buffer (posframe buffer grid -> `consult-buffer' TTY)
 ;;               * mixed-pitch      (variable-pitch prose -> no-op on TTY)
+;;               * olivetti         (centered prose margins; TTY-fine -- on-demand
+;;                                   purely by light-touch philosophy, no gate)
 ;;               * fontaine         (named font-size presets -> refuses on TTY)
 ;;               * prism            (depth-coloured code; opt-in per buffer --
 ;;                                   striking on truecolor GUI, noisy on 8-colour)
@@ -251,6 +253,16 @@ reports a no-op instead of silently doing nothing."
         (call-interactively #'mixed-pitch-mode)
       (user-error "Variable-pitch fonts need a graphical frame -- no-op on TTY")))
   :bind ("C-c M-v" . fenrir/mixed-pitch-dwim))   ; "Variable-pitch" (C-c M-p is copilot)
+
+;; olivetti: centered prose margins for long-form reading/writing (org notes).
+;; Manual toggle, not an org-mode-hook -- matches this config's light-touch
+;; philosophy and the mixed-pitch pattern above (Tier B: on-demand, not
+;; automatic).  Unlike mixed-pitch, olivetti's margin/width logic works fine
+;; on a TTY frame (it's just window margins + fill-column, no variable-pitch
+;; font needed) -- no display-graphic-p gate required.
+(use-package olivetti
+  :commands (olivetti-mode)
+  :bind ("C-c M-o" . olivetti-mode))   ; verified free
 
 ;; fontaine: named font-size presets (small/regular/large/huge) you can flip
 ;; between live -- handy when sharing a GUI screen or moving to an external

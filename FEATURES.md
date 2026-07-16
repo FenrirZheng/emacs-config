@@ -309,6 +309,7 @@ behave on a terminal frame:
 | `C-c H` | `fenrir/eldoc-box-dwim` | Hover docs: an `eldoc-box` child frame on GUI; falls back to the eldoc **doc buffer** on TTY |
 | `C-c J` | `fenrir/jump-buffer-dwim` | Buffer switcher: a `frog-jump-buffer` posframe grid on GUI; falls back to `consult-buffer` on TTY |
 | `C-c M-v` | `fenrir/mixed-pitch-dwim` | Toggle variable-pitch prose (`mixed-pitch`) in this buffer; reports a no-op on TTY (no variable-pitch fonts there) |
+| `C-c M-o` | `olivetti-mode` | Centered prose margins (`olivetti`) for long-form reading/writing — works on TTY too (window margins + fill-column, no fonts involved); on-demand purely by light-touch philosophy |
 | `C-c M-f` | `fenrir/fontaine-set-preset-dwim` | Pick a `fontaine` font-size preset (small/regular/large/huge); refuses on TTY |
 | `C-c M-r` | `fenrir/prism-toggle` | Toggle `prism` depth-based ("rainbow") code colouring in this buffer — opt-in per buffer (striking on a truecolor GUI, noisy on an 8-colour TTY) |
 | `C-c M-d` | `dashboard-open` | Open the graphical startup dashboard (logo banner + recents/projects/bookmarks) |
@@ -826,8 +827,12 @@ First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart 
 
 ## 11. Appearance ([`init-appearance.el`](lisp/init-appearance.el))
 
-- **doom-themes** — `doom-tokyo-night` loaded by default (swap for any `doom-*`); bold +
-  italic enabled; `doom-themes-org-config` tweaks Org faces to match.
+- **ef-themes** — `ef-melissa-dark` loaded by default (warm, sunlit dark palette; replaced
+  the cold doom-tokyo-night). `C-c e t` = `ef-themes-toggle` (flip `ef-melissa-dark` ↔
+  `ef-melissa-light`, night/day).
+- **doom-themes** — kept installed for its extras: `doom-themes-org-config` (re-run after
+  the ef theme loads, harmonizing Org faces) and as an alternative palette family (bold +
+  italic apply when a `doom-*` theme is selected).
 - **doom-modeline** — `doom-modeline-mode`, height 25. Tuned for narrow tmux panes so the
   right-side segments don't silently truncate: compact checker counter
   (`doom-modeline-check 'simple`), no buffer-encoding segment, `truncate-upto-project` file
@@ -844,9 +849,8 @@ First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart 
   completion). `marginalia-mode` is already on at startup, so the mode is enabled explicitly
   *and* hooked to `marginalia-mode-hook` for later re-wiring.
 - **nerd-icons-ibuffer** — a glyph per row in ibuffer (this config's `C-x b`).
-- **ef-themes** — opt-in alternative palette (doom-tokyo-night stays the default). `C-c e t`
-  = `ef-themes-toggle` (flips between `ef-day` / `ef-night`); `C-c e T` = `consult-theme`
-  (live-preview pick any installed theme, including a `doom-*` one).
+- **consult-theme** — `C-c e T`: live-preview pick any installed theme (e.g. the punchier
+  runner-up `doom-snazzy`, or back to `doom-tokyo-night`).
 - **tab-bar** **(built-in)** — TTY-native text workspace row. `tab-bar-show 1` auto-hides the
   row at a single tab (invisible until you open a second tab). Numeric hints on, mouse close
   / new buttons off for a clean TTY row. Tab commands stay on the native `C-x t` map
@@ -917,9 +921,18 @@ source — narrow to them with `< q`. To get a preview side panel back, add
 
 - `org-startup-indented` (visually indent by outline level), `org-hide-emphasis-markers`
   (show `*bold*` as bold, hide the stars), `org-src-fontify-natively` (highlight inside
-  `#+begin_src`).
-- **org-modern**: restyles headings, lists, checkboxes, tables, blocks and timestamps —
-  pure display, never edits your files. Also styles the agenda.
+  `#+begin_src`), `org-fontify-whole-heading-line` / `org-fontify-done-headline` (heading
+  faces span the full line; DONE headlines restyle their title too), `org-ellipsis " ▾"`
+  (single fold glyph instead of `...`, which reads as literal text on a dense TTY).
+- **org-modern**: restyles headings, lists, checkboxes, blocks and timestamps — pure
+  display, never edits your files. Also styles the agenda. Tuned: distinct bullet glyph
+  per heading depth (`◉ ○ ✸ ✿ ◆` — the default `'fold` left depth legible only via
+  indentation), tables stay plain ASCII `|` (Unicode box-drawing reads too heavy with CJK),
+  `org-modern-block-fringe` off (TTY frames have no fringe — the default `#+begin_src`
+  side bar was silently invisible in the daily `emacsclient -nw` session).
+- **valign**: overlay-based visual table column alignment — measures real display width
+  (CJK glyphs count as 2 columns), so mixed CJK/ASCII rows line up despite the plain `|`
+  separators. Pure display, TTY-safe; independent of `org-modern-table`'s on/off state.
 - **org-appear**: temporarily reveals the `*bold*` / `=verbatim=` / `[[link]]` markup of
   whichever element point is on — the complement to `org-hide-emphasis-markers`, so you can
   still edit the markers without globally un-hiding them.
@@ -933,8 +946,14 @@ source — narrow to them with `< q`. To get a preview side panel back, add
   `plantuml` / `mermaid` from [`init-diagrams.el`](lisp/init-diagrams.el) — both use the same
   additive `org-babel-do-load-languages`). `org-confirm-babel-evaluate` stays at its default
   `t`, so every block execution prompts first (an org file can't silently run code on open).
-
-(Room to grow later: org-agenda + `org-agenda-files`.)
+- **`C-c A` — `org-agenda`** (global): scope is deliberately `inbox.org` **only**, not the
+  whole vault (~1500 notes, almost none with TODO headlines — scanning them buys cost and
+  noise for nothing). The agenda is legitimately empty until the first `C-c c` capture
+  creates `inbox.org`; expanding `org-agenda-files` to more of the vault later is a
+  deliberate choice, not an oversight.
+- **`C-c M-o` — `olivetti-mode`** ([`init-gui.el`](lisp/init-gui.el), Tier B): centered
+  prose margins for long-form reading/writing. Manual toggle (no org-mode hook — light
+  touch); works fine on TTY.
 
 ---
 

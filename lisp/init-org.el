@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 ;; Section 12 of the pre-split monolithic init.el (see git log for the move).
-;; Minimal; expand later (org-roam, org-agenda, ...) as needed.
+;; Minimal; org-agenda is wired at inbox-only scope below -- expand as needed.
 
 ;;; Code:
 
@@ -14,11 +14,17 @@
   ;; roam creates a linked Zettelkasten node; this drops an unlinked line into a
   ;; flat inbox for later refiling).  Global bind (not `:map org-mode-map') so it
   ;; fires from code buffers too.
-  :bind ("C-c c" . org-capture)
+  ;; `C-c A' -- global `org-agenda' (verified free: `lookup-key' returned nil;
+  ;; lowercase `C-c a' is aidermacs, per the capture comment above).
+  :bind (("C-c c" . org-capture)
+         ("C-c A" . org-agenda))
   :custom
   (org-startup-indented t)               ; visually indent by outline level
   (org-hide-emphasis-markers t)          ; show *bold* as bold, hide the stars
   (org-src-fontify-natively t)           ; syntax-highlight inside #+begin_src
+  (org-fontify-whole-heading-line t)     ; extend heading face across the line, not just the text
+  (org-fontify-done-headline t)          ; visually distinguish DONE headlines' title text too
+  (org-ellipsis " ▾")                    ; single unambiguous fold glyph -- "..." reads as literal text on a dense TTY
   ;; Auto-render inline images on file open (GUI frames only; TTY can't display
   ;; them).  Without this an [[file:...]] image link shows as raw text until you
   ;; `C-c C-x C-v', which reads as a "broken" link -- see the org-roam vault's
@@ -29,6 +35,14 @@
   ;; a future agenda a sane default root instead of the built-in "~/org" that
   ;; doesn't exist on this box.
   (org-directory (file-truename "~/code/org-roam"))
+  ;; Agenda scope is DELIBERATELY `inbox.org' only, not the whole vault -- the
+  ;; vault holds ~1500 notes and (checked, not assumed) almost none carry a
+  ;; TODO headline, so pointing `org-agenda-files' at the root would buy scan
+  ;; cost and noise for nothing.  `inbox.org' is created by the first
+  ;; `org-capture' below; until then the agenda is legitimately empty.
+  ;; Expanding this list to more of the vault later is a deliberate future
+  ;; choice, not an oversight.
+  (org-agenda-files (list (expand-file-name "inbox.org" org-directory)))
   ;; Capture targets an `inbox.org' at the vault root.  It has NO `:ID:', so
   ;; org-roam treats it as a plain file, not a node -- captured TODOs stay out
   ;; of the graph until you deliberately refile them into a real note.  `%?'
@@ -50,7 +64,27 @@
   ;; drawing replacements (│ / ┃) read as visually heavy column dividers,
   ;; especially with CJK content.  Other restyling (headings, lists, blocks)
   ;; stays on.
-  (org-modern-table nil))
+  (org-modern-table nil)
+  ;; The default `org-modern-star' is 'fold (fold indicators only), which
+  ;; leaves heading depth legible only via indentation -- give each level a
+  ;; distinct bullet glyph instead.
+  (org-modern-star '("◉" "○" "✸" "✿" "◆"))
+  ;; The default (2) draws the #+begin_src side bar in the FRINGE -- TTY
+  ;; frames have no fringe, so in the daily `emacsclient -nw' session it
+  ;; silently rendered nothing.  Off, honestly.
+  (org-modern-block-fringe nil))
+
+;; valign: overlay-based visual column realignment for tables -- pure display,
+;; never touches buffer text.  org-modern-table is OFF above (Unicode box-
+;; drawing reads too heavy with CJK), but that leaves the ASCII `|' pipes with
+;; no per-glyph-width awareness, so CJK rows look ragged against ASCII ones.
+;; valign measures actual display width (CJK glyphs count as 2 columns) and
+;; pads with overlays -- fixes that independently of org-modern-table's
+;; on/off state.  TTY-safe: no child frames.
+(use-package valign
+  :hook (org-mode . valign-mode)
+  :custom
+  (valign-fancy-bar nil))   ; keep ASCII `|' bars, matching org-modern-table's choice
 
 ;; org-appear: temporarily reveal the *bold* / =verbatim= / [[link]] markup of
 ;; whichever element point is on -- the complement to `org-hide-emphasis-markers'
