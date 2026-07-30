@@ -104,6 +104,22 @@ nil also when the root is in `fenrir/gtags-forbidden-roots'."
       (unless (member root fenrir/gtags-forbidden-roots)
         root))))
 
+(defun fenrir/gtags--index-root ()
+  "Directory of the GTAGS index covering `default-directory', or nil.
+Shells out to `global --print-dbpath', which walks UP the directory tree
+the same way every query resolves -- so this matches exactly the index the
+xref backend will answer from.  Crucially this can differ from the
+project.el root: a sub-crate/sub-module with its own root marker (e.g.
+crates/server/Cargo.toml) resolves project.el to the SUBDIR while the
+index lives at the repo top.  Build and diagnose must default to the
+covering index, not the sub-project -- otherwise a rebuild from inside the
+sub-crate creates a nested index that shadows the root one."
+  (when (executable-find "global")
+    (with-temp-buffer
+      (when (eq 0 (ignore-errors
+                    (call-process "global" nil '(t nil) nil "--print-dbpath")))
+        (file-name-as-directory (string-trim (buffer-string)))))))
+
 ;; --- Create (async, validated) ----------------------------------------------
 ;; `gtags-mode-create' exists but its sentinel is fixed -- no hook point for
 ;; the post-create validation invariant #4 of the plan ("never leave a 0-byte
@@ -172,7 +188,9 @@ first (gtags refuses to overwrite it); on failure or an invalid result the
 stubs are wiped again so no corpse survives."
   (interactive
    (list (read-directory-name "gtags index root: "
-                              (or (fenrir/gtags--project-root) default-directory)
+                              (or (fenrir/gtags--index-root)  ; rebuild where the covering index lives
+                                  (fenrir/gtags--project-root)
+                                  default-directory)
                               nil t)))
   (unless (and (executable-find "gtags") (executable-find "global"))
     (user-error "GNU Global not found (Debian: sudo apt install global)"))
@@ -203,7 +221,8 @@ subdirectory silently hides the root index for every file beneath it (the
 backend/GTAGS-shadowed-coinsasia/GTAGS bug).  Interactively DIR defaults to
 the project root; prefix arg prompts."
   (interactive
-   (list (let ((default (or (fenrir/gtags--project-root)
+   (list (let ((default (or (fenrir/gtags--index-root)  ; scan from the covering index down
+                            (fenrir/gtags--project-root)
                             (expand-file-name default-directory))))
            (if current-prefix-arg
                (read-directory-name "Diagnose GTAGS under: " default default t)

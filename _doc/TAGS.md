@@ -78,6 +78,13 @@ hid `coinsasia/GTAGS`; xref answered from the stale sub-index). **`C-c g d`**
 (`fenrir/gtags-diagnose`) lists every `GTAGS` in the subtree (`[root]` / `[nested]`,
 sizes) and offers to delete the shadows.
 
+Both `C-c g g` and `C-c g d` default their directory to the **covering index root**
+(`global --print-dbpath`, which walks *up* exactly like queries resolve), falling back
+to the project.el root. The two can differ: a sub-crate/sub-module with its own root
+marker (`crates/server/Cargo.toml`) makes project.el resolve to the *subdir* while the
+index lives at the repo top — defaulting to the sub-project would make a rebuild
+create precisely the nested shadowing index described above.
+
 ### Forbidden roots
 
 `fenrir/gtags-build` refuses `$HOME` (the dotfiles repo), `/`, `/tmp/` and other system

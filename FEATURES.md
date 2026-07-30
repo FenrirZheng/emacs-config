@@ -557,8 +557,10 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   instead of etags' 1990s `Visit tags table` prompt. Needs `global` + `universal-ctags` +
   `python3-pygments` (installed by [`shell/install-root.sh`](shell/install-root.sh)).
 - **`C-c g` — index management** (navigation itself has no keys here; it's plain xref):
-  **`C-c g g`** (`fenrir/gtags-build`) builds the index async at the project root —
-  refuses `$HOME` / filesystem roots, wipes a pre-existing 0-byte stub, and **validates
+  **`C-c g g`** (`fenrir/gtags-build`) builds the index async — default root is the
+  **covering index root** (`global --print-dbpath`, upward walk), else the project root,
+  so a rebuild from inside a sub-crate lands on the repo-top index instead of creating a
+  nested shadow — refuses `$HOME` / filesystem roots, wipes a pre-existing 0-byte stub, and **validates
   the result** (a failed or corrupt build is deleted, never left as the stub every later
   `global -u` rejects with `seems corrupted`). **`C-c g u`** (`gtags-mode-update`) is the
   bulk async `global -u` for after a branch switch / pull. **`C-c g d`**
