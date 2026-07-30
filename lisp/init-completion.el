@@ -166,6 +166,56 @@
   :after (embark consult)
   :hook (embark-collect-mode . consult-preview-at-point-mode))
 
+;; Delete entries from the mark rings from inside `consult-mark' /
+;; `consult-global-mark' (M-g m / M-g k): `C-. d' on a candidate.  Neither
+;; consult nor embark ships a remove action -- the candidate list is a
+;; read-only view of the rings.
+;;
+;; Two non-obvious constraints shape the implementation:
+;;   * The action MUST be a plain one-argument function, NOT a command.
+;;     embark runs command actions through minibuffer re-injection, which
+;;     strips text properties (`substring-no-properties' in `embark--act')
+;;     -- and the marker we need lives in the candidate's `consult-location'
+;;     property.  Non-command functions receive the raw propertized string,
+;;     the same mechanism embark-consult's own `embark-consult-goto-location'
+;;     relies on.
+;;   * `consult-mark' candidates include the CURRENT mark (`mark-marker')
+;;     on top of the `mark-ring' entries, so that one is cleared with
+;;     `set-marker' rather than a ring removal.
+;;
+;; `consult-line' / `consult-outline' share the `consult-location' category;
+;; pressing d there matches no ring entry and is a harmless no-op.  The open
+;; minibuffer list does NOT refresh after a delete (consult computes its
+;; candidates once) -- reopen M-g m to see the shrunken ring.
+(defun fenrir/mark-ring-delete (cand)
+  "Remove CAND's position from its buffer's mark rings.
+CAND is a `consult-location' candidate string.  Drops every marker at
+that position from the buffer-local `mark-ring' and the global
+`global-mark-ring', and clears the buffer's current mark if it sits
+there too."
+  (when-let* ((marker (car (consult--get-location cand)))
+              (buf (marker-buffer marker))
+              (pos (marker-position marker)))
+    (let ((at-pos (lambda (m) (and (markerp m)
+                                   (eq (marker-buffer m) buf)
+                                   (eql (marker-position m) pos)))))
+      (with-current-buffer buf
+        (setq mark-ring (seq-remove at-pos mark-ring))
+        (when (funcall at-pos (mark-marker))
+          (set-marker (mark-marker) nil)))
+      (setq global-mark-ring (seq-remove at-pos global-mark-ring)))
+    (message "Removed mark at %s:%d" (buffer-name buf) pos)))
+
+(with-eval-after-load 'embark
+  (defvar-keymap fenrir/embark-consult-location-map
+    :doc "Embark actions for `consult-location' candidates (marks, lines)."
+    :parent embark-general-map
+    "d" #'fenrir/mark-ring-delete)
+  ;; Entry format is (TYPE KEYMAP-SYMBOL...) -- a list, not a dotted pair
+  ;; (`embark--raw-action-keymap' mapcars `symbol-value' over the cdr).
+  (setf (alist-get 'consult-location embark-keymap-alist)
+        (list 'fenrir/embark-consult-location-map)))
+
 ;; wgrep: make grep / ripgrep result buffers editable, then commit the edits
 ;; back to every file at once.  The payoff with the setup above: run
 ;; `consult-ripgrep' (M-s r), `embark-export' (C-. then E) the matches into a

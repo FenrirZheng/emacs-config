@@ -47,12 +47,11 @@
 ;;                                   striking on truecolor GUI, noisy on 8-colour)
 ;;               * dashboard        (graphical startup screen; a plain command)
 ;;
-;;   TIER C -- installed but NOT auto-enabled; flipped on by a command for a
-;;             GUI-only session, because they are GLOBAL display-replacing modes
-;;             with NO per-display fallback, and this daemon genuinely serves a
-;;             TTY frame and a GUI frame at the SAME time (verified: a live
-;;             `emacsclient -c' X frame coexists with the `-nw' tmux frame).
-;;             Enabling them globally for the GUI frame BREAKS the TTY frame:
+;;   TIER C -- GLOBAL display-replacing modes with NO per-display fallback, in
+;;             a daemon that genuinely serves a TTY frame and a GUI frame at the
+;;             SAME time (verified: a live `emacsclient -c' X frame coexisting
+;;             with the `-nw' tmux frame).  Enabling them globally for the GUI
+;;             frame BREAKS the TTY frame:
 ;;               * which-key-posframe   -- sets `which-key-popup-type' to `custom'
 ;;                                         globally; its show fn no-ops on TTY, so
 ;;                                         which-key shows NOTHING on the terminal.
@@ -66,10 +65,19 @@
 ;;               * good-scroll          -- animated pixel scrolling; GUI only.
 ;;               * mlscroll             -- a graphical, mouse-draggable scrollbar
 ;;                                         drawn in the mode line; GUI only.
-;;             So they're folded into `fenrir/gui-popups-toggle' (M-x, or the key
-;;             below) -- turn them on when you're in a GUI-only Emacs, off before
-;;             you go back to a terminal frame.  Auto-enabling them was tried and
-;;             reverted precisely because of the live mixed-frame breakage.
+;;             All six are folded into `fenrir/gui-popups-toggle' (`C-c M-g'):
+;;             turn them on when you're in a GUI-only Emacs, off before you go
+;;             back to a terminal frame.
+;;
+;;             Since 2026-07-30 the two POSFRAME popups are additionally driven
+;;             automatically by `fenrir/gui-popups-auto' on frame create/delete
+;;             -- but only while NO real terminal frame exists, and they are
+;;             switched straight back off (together with the eye-candy half)
+;;             the moment one connects.  Naive auto-enabling -- checking only
+;;             `(display-graphic-p)' of the new frame -- WAS tried and reverted
+;;             because of exactly the mixed-frame breakage described above; the
+;;             no-TTY-frame condition is what makes it safe, so do not
+;;             "simplify" that condition away.  See the block above the hook.
 ;;             Two more TIER-C tools stay command-driven with their own
 ;;             display-graphic guard rather than living in the batch toggle:
 ;;               * minimap       -- a code minimap side window (GUI-guarded cmd).
@@ -359,7 +367,58 @@ striking on a GUI truecolor frame but collapses to noise on an 8/16-colour TTY."
   :bind ("C-c M-t" . centaur-tabs-mode))
 
 (defvar fenrir/gui-popups-enabled nil
-  "Non-nil when `fenrir/gui-popups-toggle' has turned the TIER C modes on.")
+  "Non-nil when the TIER C posframe popups are currently on.
+Set by `fenrir/gui-popups-toggle' (manual) and by
+`fenrir/gui-popups-auto' (on frame create/delete).")
+
+(defvar fenrir/gui-eyecandy-enabled nil
+  "Non-nil when the TIER C eye-candy modes are currently on.
+Only `fenrir/gui-popups-toggle' ever turns these ON; the automatic path
+can turn them OFF (TTY safety) but never on.  See
+`fenrir/gui-popups-eyecandy-modes'.")
+
+;; Two sub-lists, because the automatic path (below) deliberately covers only
+;; the popups.  Both halves break a TTY frame, but only the popups pay their
+;; way automatically: they fix a *legibility* problem (which-key and the `<f5>'
+;; hub centred instead of a bottom strip).  The eye-candy half is a taste
+;; decision -- a nyan cat and a graphical scrollbar appearing by themselves
+;; because a GUI frame opened would be a surprise, not a dividend -- so it
+;; stays behind the explicit `C-c M-g'.  Feature and mode are listed as pairs
+;; because they are not derivable from each other (`nyan-mode's feature is
+;; `nyan-mode', not `nyan').
+(defconst fenrir/gui-popups-posframe-modes
+  '((which-key-posframe . which-key-posframe-mode)
+    (transient-posframe . transient-posframe-mode))
+  "TIER C modes that `fenrir/gui-popups-auto' may enable on its own.")
+
+(defconst fenrir/gui-popups-eyecandy-modes
+  '((good-scroll      . good-scroll-mode)
+    (mlscroll         . mlscroll-mode)
+    (spacious-padding . spacious-padding-mode)
+    (nyan-mode        . nyan-mode))
+  "TIER C modes that only `fenrir/gui-popups-toggle' turns on (never automatic).")
+
+(defun fenrir/gui-popups--apply (on modes)
+  "Turn each mode in MODES ON (non-nil) or OFF (nil).
+MODES is an alist of (FEATURE . MODE-FUNCTION), i.e. one of
+`fenrir/gui-popups-posframe-modes' / `fenrir/gui-popups-eyecandy-modes'.
+No display check and no message -- the callers own both.  Split out of
+`fenrir/gui-popups-toggle' so the frame-hook path
+\(`fenrir/gui-popups-auto') reuses the same code instead of duplicating
+the mode list and drifting from it."
+  (pcase-dolist (`(,feature . ,mode) modes)
+    (when on (require feature nil t))
+    (when (fboundp mode) (funcall mode (if on 1 -1))))
+  (unless on
+    ;; which-key-posframe-mode / transient-posframe-mode don't reliably
+    ;; restore their globals on disable -- put them back explicitly so a TTY
+    ;; frame's which-key / transient work again.  Unconditional: re-asserting
+    ;; the correct value when the popups were never on is a no-op.
+    (setq which-key-popup-type 'side-window)
+    (setq transient-display-buffer-action
+          '(display-buffer-in-side-window
+            (side . bottom) (dedicated . t) (inhibit-same-window . t)
+            (window-parameters (no-other-window . t))))))
 
 (defun fenrir/gui-popups-toggle ()
   "Toggle the GUI-only global display modes (TIER C).
@@ -369,47 +428,95 @@ scrolling (`good-scroll'), the graphical mode-line scrollbar
 mode-line indicator.  (`pixel-scroll-precision-mode' is NOT part of this
 toggle -- init-defaults.el turns it on globally; it no-ops on TTY frames,
 so there is nothing to switch off before returning to a terminal.)
-These are GLOBAL display-replacing modes with no TTY fallback, so they are
-manual: turn them on in a GUI-only Emacs, OFF before using a terminal frame
-of the same daemon (otherwise which-key/transient break on the TTY frame).
+These are GLOBAL display-replacing modes with no TTY fallback.
+`fenrir/gui-popups-auto' normally drives them automatically; this command
+stays as the manual override (and as the way to switch them off for the
+rest of a GUI-only session -- the auto hook only re-evaluates when a frame
+is created or deleted).
 Refuses to turn on unless the current frame is graphical."
   (interactive)
-  (if fenrir/gui-popups-enabled
+  (if (or fenrir/gui-popups-enabled fenrir/gui-eyecandy-enabled)
       (progn
-        (when (fboundp 'which-key-posframe-mode) (which-key-posframe-mode -1))
-        (when (fboundp 'transient-posframe-mode) (transient-posframe-mode -1))
-        (when (fboundp 'good-scroll-mode) (good-scroll-mode -1))
-        (when (fboundp 'mlscroll-mode) (mlscroll-mode -1))
-        (when (fboundp 'spacious-padding-mode) (spacious-padding-mode -1))
-        (when (fboundp 'nyan-mode) (nyan-mode -1))
-        ;; which-key-posframe-mode / transient-posframe-mode don't reliably
-        ;; restore their globals on disable -- put them back explicitly so the
-        ;; TTY frame's which-key / transient work again.
-        (setq which-key-popup-type 'side-window)
-        (setq transient-display-buffer-action
-              '(display-buffer-in-side-window
-                (side . bottom) (dedicated . t) (inhibit-same-window . t)
-                (window-parameters (no-other-window . t))))
-        (setq fenrir/gui-popups-enabled nil)
+        (fenrir/gui-popups--apply nil fenrir/gui-popups-posframe-modes)
+        (fenrir/gui-popups--apply nil fenrir/gui-popups-eyecandy-modes)
+        (setq fenrir/gui-popups-enabled nil
+              fenrir/gui-eyecandy-enabled nil)
         (message "GUI display modes OFF (which-key/transient restored to side-window)"))
     (unless (display-graphic-p)
       (user-error "Not a graphical frame -- TIER C modes would break this terminal"))
-    (require 'which-key-posframe nil t)
-    (require 'transient-posframe nil t)
-    (require 'good-scroll nil t)
-    (require 'mlscroll nil t)
-    (require 'spacious-padding nil t)
-    (require 'nyan-mode nil t)
-    (when (fboundp 'which-key-posframe-mode) (which-key-posframe-mode 1))
-    (when (fboundp 'transient-posframe-mode) (transient-posframe-mode 1))
-    (when (fboundp 'good-scroll-mode) (good-scroll-mode 1))
-    (when (fboundp 'mlscroll-mode) (mlscroll-mode 1))
-    (when (fboundp 'spacious-padding-mode) (spacious-padding-mode 1))
-    (when (fboundp 'nyan-mode) (nyan-mode 1))
-    (setq fenrir/gui-popups-enabled t)
-    (message "GUI display modes ON (turn OFF before using a TTY frame: C-c M-g)")))
+    (fenrir/gui-popups--apply t fenrir/gui-popups-posframe-modes)
+    (fenrir/gui-popups--apply t fenrir/gui-popups-eyecandy-modes)
+    (setq fenrir/gui-popups-enabled t
+          fenrir/gui-eyecandy-enabled t)
+    (message "GUI display modes ON (auto-off again if a TTY frame connects)")))
 
 (global-set-key (kbd "C-c M-g") #'fenrir/gui-popups-toggle)  ; "Gui popups"
+
+;; --- automatic TIER C, gated on "this daemon serves NO terminal frame" ------
+;;
+;; The TIER C commentary at the top of this file says auto-enabling was tried
+;; and reverted.  That is still true of the NAIVE version -- a
+;; `server-after-make-frame-hook' that only checks `(display-graphic-p)' of the
+;; new frame.  It broke the coexisting TTY frame because these modes are
+;; GLOBAL: `which-key-popup-type' went to `custom' and
+;; `transient-display-buffer-action' to the posframe show fn for the whole
+;; process, and the terminal frame then showed nothing / errored.
+;;
+;; What makes it safe now is the extra condition: enable them only while NO
+;; real terminal frame exists, and switch them back off the moment one
+;; connects.  So the old warning is not ignored, it is *satisfied* -- the
+;; mixed-frame state that broke is exactly the state that now disables them.
+;; The conditional retirement of Tier C is the GUI-only dividend from
+;; [tasks/keybinding-strategy.md](../tasks/keybinding-strategy.md): centred
+;; popups make the `<f5>' hub and which-key legible instead of a bottom strip.
+(defvar fenrir/gui-popups-auto-enable t
+  "When non-nil, drive the TIER C modes from frame create/delete events.
+See `fenrir/gui-popups-auto'.  Set to nil to go back to purely manual
+control via `fenrir/gui-popups-toggle' (`C-c M-g').")
+
+(defun fenrir/gui--real-tty-frame-p (frame)
+  "Non-nil if FRAME is a REAL terminal frame served by this daemon.
+The daemon's own bootstrap frame is also non-graphical (its terminal is
+`initial_terminal') but nobody ever looks at it, so it must not veto the
+GUI popups.  Client TTY frames carry a `tty' frame parameter naming their
+device (`/dev/pts/N'); the bootstrap frame's is nil -- that is the
+distinguishing test, verified on this daemon."
+  (and (not (display-graphic-p frame))
+       (frame-parameter frame 'tty)))
+
+(defun fenrir/gui-popups-auto (&optional _frame)
+  "Enable the TIER C posframe popups iff this daemon serves GUI frames ONLY.
+Called on frame creation and deletion.  Any live `emacsclient -nw' frame
+switches them off, because they are global modes with no TTY fallback.
+
+Deliberately ASYMMETRIC: the ON path touches only
+`fenrir/gui-popups-posframe-modes' (a legibility win, safe to assume you
+want), while the OFF path also drops
+`fenrir/gui-popups-eyecandy-modes' -- if `C-c M-g' had switched the
+nyan cat / graphical scrollbar on and a terminal frame then connects,
+leaving those running would render as broken text there.  Switching off is
+a safety action, switching on is a taste one."
+  (when fenrir/gui-popups-auto-enable
+    (let ((want (and (display-graphic-p)
+                     (not (seq-some #'fenrir/gui--real-tty-frame-p (frame-list))))))
+      (cond
+       ((and want (not fenrir/gui-popups-enabled))
+        (fenrir/gui-popups--apply t fenrir/gui-popups-posframe-modes)
+        (setq fenrir/gui-popups-enabled t)
+        (message "GUI-only session: posframe popups ON (C-c M-g for the rest)"))
+       ((and (not want) (or fenrir/gui-popups-enabled fenrir/gui-eyecandy-enabled))
+        (fenrir/gui-popups--apply nil fenrir/gui-popups-posframe-modes)
+        (fenrir/gui-popups--apply nil fenrir/gui-popups-eyecandy-modes)
+        (setq fenrir/gui-popups-enabled nil
+              fenrir/gui-eyecandy-enabled nil)
+        (message "Terminal frame present: GUI display modes OFF (TTY safety)"))))))
+
+;; Two hooks, because both directions matter: a new frame can introduce a TTY
+;; (switch off) and closing the last TTY frame can leave GUI-only (switch on).
+;; `after-delete-frame-functions' runs AFTER the frame leaves `frame-list', so
+;; the scan above sees the post-deletion state.
+(add-hook 'server-after-make-frame-hook #'fenrir/gui-popups-auto)
+(add-hook 'after-delete-frame-functions #'fenrir/gui-popups-auto)
 
 (provide 'init-gui)
 ;;; init-gui.el ends here

@@ -16,6 +16,136 @@ Language-specific guides (architecture, workflows, troubleshooting):
 
 ---
 
+## 0. Keybinding policy — three tiers and the `<f5>` hub ([`init-keys.el`](lisp/init-keys.el))
+
+**Read this before memorising anything below.** The rest of this file is ~1000 lines of
+bindings; nobody holds that. The policy, implemented in
+[`init-keys.el`](lisp/init-keys.el) (rationale:
+[`tasks/keybinding-strategy.md`](tasks/keybinding-strategy.md)), is to decide per command
+which of three tiers it lives in, so only one tier needs memory:
+
+| tier | what earns it | how you reach it |
+|---|---|---|
+| **1 — muscle memory** | used many times per *hour*. Hard cap ~15 chords, chosen from measured usage | the chord itself |
+| **2 — one key** | everything you use but don't press constantly | **`<f5>`** (or `C-c ?`) → scenario menu; `C-o` inside built-in modes |
+| **3 — no key** | fires less than once a day | `M-x <part of the name>`, or `C-h B` to search every live binding |
+
+### The `<f5>` scenario hub (Tier 2)
+
+One key, then a letter, then a letter. Grouped by *what you're trying to do*, not by
+which package provides it. Every command in the hub is **also** still on its own `C-c`
+chord — the hub duplicates, it never replaces, so Tier-1 habits keep working.
+
+| key | scenario | contains |
+|---|---|---|
+| `<f5> n` | **Navigate** | definition / references / xref back, LSP symbols, imenu (buffer + project), consult-line, avy menu, last change, global mark ring, breadcrumb jump, ripgrep, project find-file |
+| `<f5> b` | **Back** | the merged history (`<f6>`/`<f7>`), plus the four native "backs" listed *by intent* — this file / the file before / where I jumped from / where I last edited — and the two list pickers (see [below](#going-back-where-you-were)) |
+| `<f5> d` | **Diagnose** | flymake list (buffer + project), hover card, eldoc buffer, DevDocs, TODOs (buffer + project), gtags index check |
+| `<f5> g` | **Git** | magit status / dispatch / file-dispatch, blame, inline blame, file log, time machine, hunk next/prev/show (repeats in place), copy permalink |
+| `<f5> r` | **Refactor** | eglot rename / code actions / organize-imports / extract, case-style cycle, format buffer, occurrences menu, combobulate, fold toggle, edit comment block |
+| `<f5> w` | **Workspace** | tabspaces switch/open/buffer, file sidebar, imenu sidebar, popup toggle, ace-window, vterm toggle, docker, GUI popup toggle |
+| `<f5> a` | **AI** | copilot (this buffer), claude jobs, aidermacs, gptel, question queue ask / set dir |
+| `<f5> e` / `p` | Edit kit / Project kit | `casual-editkit` menus — the generic "what can I do here" fallbacks |
+| `<f5> ?` | Search all bindings | `embark-bindings` (same as `C-h B`) |
+| `<f5> k` | Key frequency report | `fenrir/keyfreq-report` — the Tier-1 review (below) |
+
+`C-c ?` is the same hub, for terminals that swallow function keys. `q` closes any of the
+menus; `C-g` also works.
+
+### `C-o` — casual menus inside built-in modes (Tier 2)
+
+`casual-suite` supplies ready-made transient menus for modes whose native keys are
+unmemorable. Bound to **`C-o` in the mode's own map only** (`open-line` in a normal
+buffer is untouched): `dired`, `ibuffer`, `isearch`, `Info`, `re-builder`,
+`bookmark-bmenu`, `org-agenda`, `calc`, `compilation`, `eww`, `image-mode`, `Man`.
+It displaces `dired-display-file` and `ibuffer-visit-buffer-other-window-noselect`, both
+still reachable from inside the menu.
+
+### Going back where you were
+
+**One gesture: `<f6>` back, `<f7>` forward** (`M-g b` / `M-g B` in a terminal that eats
+function keys). Then bare `b` / `f` keep walking (repeat map). It is a browser Back button:
+one merged history of every far jump — searches, `M-.`, `M-<`/`M->`, the `consult-*`
+family, buffer switches that push a mark — with no ring-vs-stack decision to make first.
+A new jump truncates the forward branch, as in every IDE.
+
+The reason it exists: Emacs ships **four** unrelated back-histories, and the cost was never
+the chord, it was having to classify *which kind of back you meant* before any key was
+correct. The distinction is still worth knowing for the ~10% of presses where `<f6>` lands
+somewhere you didn't mean — that's what `<f5> b` is for, worded by intent:
+
+| what you want | native key | `<f5> b` | store | ring or stack? |
+|---|---|---|---|---|
+| earlier position in **this** buffer | `C-u C-SPC`, then bare `C-SPC` | `b` | buffer-local `mark-ring` (max 16) | **ring** — cycles, never empties |
+| the **file** I was in before | `C-x C-SPC` | `f` | `global-mark-ring`, one slot per *buffer* | **ring** (max 16) |
+| where I jumped **from** (`M-.`) | `M-,` (forward: `C-M-,`) | `d` | xref marker stack | **stack** — does empty |
+| where I last **edited** | `C-c ;` (reverse: `C-c '`) | `e` | undo records | linear, edit-only |
+| pick from a list, this file / all files | `M-g m` / `M-g k` | `l` / `L` | `consult-mark` / `consult-global-mark`, with preview | — |
+| **delete** a mark from those lists | `C-. d` on the candidate | — | embark action `fenrir/mark-ring-delete` ([`init-completion.el`](lisp/init-completion.el)) — drops it from both rings; reopen the list to see the result | — |
+| flip between two points | `C-x C-x` | `x` | point ↔ mark | not a history |
+
+Implementation: [`init-keys.el`](lisp/init-keys.el) advises `push-mark` once (every far jump
+funnels through it) and keeps a 32-entry marker ring. `fenrir/back-forward-enable` → nil is
+the one-line off switch; strategy and the rejected alternatives are in
+[`tasks/back-navigation-strategy.md`](tasks/back-navigation-strategy.md).
+
+### Tier 1 is measured, not chosen
+
+`keyfreq` records every command (per major mode) from startup and flushes to
+`var/keyfreq.el`. `M-x fenrir/keyfreq-report` (or `<f5> k`) saves the current window and
+shows the ranking.
+
+- `self-insert-command`, single-char motion, mouse/wheel events are **excluded** — they'd
+  be ~90% of the table and they're never eviction candidates anyway.
+- **Monthly ritual**: read the top of the report, keep ≤15 chords as muscle memory,
+  mentally demote the rest to Tier 2/3, then refresh the card below.
+
+### Daily card — top keys
+
+> **Status: not yet measured.** `keyfreq` was enabled 2026-07-30; this list is the
+> *provisional* Tier-1 candidate set from the strategy doc, **not** frequency data.
+> Replace it with the real top-15 after ~2 weeks of collection (`<f5> k`).
+
+| key | command |
+|---|---|
+| `M-.` / `M-?` / `M-,` | definition / references / back (then bare `,` `.` keep walking the stack) |
+| `<f6>` / `<f7>` | back / forward across **all** jump histories (then bare `b` `f`); `M-g b` / `M-g B` on a terminal |
+| `M-x` | run anything by name (Tier 3's entire mechanism) |
+| `C-.` | embark act on the thing at point |
+| `C-s` | `consult-line` search this buffer |
+| `M-s r` | `consult-ripgrep` search the project |
+| `C-x B` | fuzzy buffer switcher (`C-x b` is ibuffer) |
+| `C-x g` | magit status |
+| `M-o` | ace-window |
+| `C-x C-s` | save |
+| `<f5>` | the hub — everything else |
+| `C-b` (tmux) | tmux prefix; `prefix + ?` is the tmux cheat sheet |
+
+### Repeat maps — chords you don't need to re-type
+
+`repeat-mode` is on globally. After the first invocation, the **bare** last key repeats
+until you press something else or 3 s pass (`repeat-exit-timeout`, set in
+[`init-keys.el`](lisp/init-keys.el) so punctuation repeat keys can't ambush you later).
+
+| after | bare repeat keys | where |
+|---|---|---|
+| `<f6>` / `<f7>` (merged jump history) | `b` back, `f` forward | [`init-keys.el`](lisp/init-keys.el) |
+| `M-,` / `M-?` (xref) | `,` back, `.` forward | [`init-keys.el`](lisp/init-keys.el) |
+| `C-c s n` / `p` (symbol-overlay) | `n` / `p` | [`init-keys.el`](lisp/init-keys.el) |
+| `C-c v n` (diff-hl hunks) | `n` `p` `s` `r` | [`init-git.el`](lisp/init-git.el) |
+| `C-c m n` / `p` (smerge conflicts) | `n` / `p` | [`init-git.el`](lisp/init-git.el) |
+| `M-n` / `M-p` (flymake errors) | `n` / `p` | [`init-languages.el`](lisp/init-languages.el) |
+| `C-x o`, `C-x ^`/`{`/`}`, tab-bar switch/move, `winner-undo`, `undo`, `next-error` | Emacs 30 built-ins, already live — nothing added here | built-in |
+
+### One prefix per layer (cross-tool)
+
+keyd does **physical remapping only** (no leader layer), tmux owns `C-b`, Emacs owns
+`C-c` plus `<f5>`. A fourth namespace is the disease, not the cure. The tmux layer has
+its own curated sheet on **`prefix + ?`** (`~/.tmux/cheat.txt`; the full `list-keys` dump
+moved to `prefix + M-?`).
+
+---
+
 ## 1. Minibuffer: finding things (Vertico ecosystem — [`init-completion.el`](lisp/init-completion.el))
 
 Five small orthogonal packages replace Helm/Ivy/ido: **vertico** (vertical candidate
@@ -56,9 +186,11 @@ a candidate).
   automatically.
 - **History**: `savehist` **(built-in)** persists minibuffer history across sessions and
   floats recent picks to the top.
-- **Cursor back-navigation (mark ring, built-in)** — the `M-g m` / `M-g k` pickers above
-  are the nice preview front-end, but the raw keys are worth knowing for quick "flip back
-  and forth" reading:
+- **Cursor back-navigation (mark ring, built-in)** — for the everyday "just go back" case
+  use `<f6>` / `<f7>`, which merge all four histories into one gesture
+  ([§0](#going-back-where-you-were)). The `M-g m` / `M-g k` pickers above are the nice
+  preview front-end; the raw keys below are worth knowing for quick "flip back and forth"
+  reading and for the times you specifically want *this* ring:
   - Drop a manual anchor at point with `C-SPC C-SPC` (set mark, then deactivate the region).
   - Step back through *this buffer's* recent positions with `C-u C-SPC`; step back *across
     buffers* with `C-x C-SPC` (`pop-global-mark`).
@@ -328,11 +460,20 @@ behave on a terminal frame:
 | `C-c M-r` | `fenrir/prism-toggle` | Toggle `prism` depth-based ("rainbow") code colouring in this buffer — opt-in per buffer (striking on a truecolor GUI, noisy on an 8-colour TTY) |
 | `C-c M-d` | `dashboard-open` | Open the graphical startup dashboard (logo banner + recents/projects/bookmarks) |
 
-**Tier C — GUI-only global display-replacing modes, NOT auto-enabled (no TTY fallback):**
+**Tier C — GUI-only global display-replacing modes (no TTY fallback):**
+
+The two **posframe popups** (`which-key-posframe`, `transient-posframe`) are now enabled
+**automatically** while this daemon serves graphical frames *only* — that's what makes
+which-key and the `<f5>` hub (§0) render as centred popups instead of a bottom strip. The instant an `emacsclient -nw`
+frame connects they switch straight back off (together with anything `C-c M-g` had
+turned on), because they are process-global modes and would otherwise leave the terminal
+frame showing nothing. Driven by `fenrir/gui-popups-auto` on
+`server-after-make-frame-hook` / `after-delete-frame-functions`; set
+`fenrir/gui-popups-auto-enable` to nil for purely manual control.
 
 | Key | Command | What it does |
 |---|---|---|
-| `C-c M-g` | `fenrir/gui-popups-toggle` | Toggle the **GUI-only** global display modes in one switch: posframe popups (`which-key-posframe`, `transient-posframe`), `pixel-scroll-precision-mode`, `good-scroll` (animated smooth scroll), `mlscroll` (graphical mode-line scrollbar), `spacious-padding` (frame borders/padding), `nyan-mode` (mode-line image). ⚠️ Only for a **GUI-only** session — turn them **off** before using a TTY frame of the same daemon, or which-key/transient break there |
+| `C-c M-g` | `fenrir/gui-popups-toggle` | Manual override / the rest of the batch: the posframe popups **plus** `good-scroll` (animated smooth scroll), `mlscroll` (graphical mode-line scrollbar), `spacious-padding` (frame borders/padding), `nyan-mode` (mode-line image). Those four are never automatic — a nyan cat appearing by itself is a surprise, not a feature. ⚠️ Turn them **off** before using a TTY frame of the same daemon; the frame hook also does it for you. (`pixel-scroll-precision-mode` is *not* part of this toggle — [`init-defaults.el`](lisp/init-defaults.el) enables it globally and it no-ops on TTY) |
 | `C-c M-m` | `fenrir/minimap-toggle-dwim` | Toggle the `minimap` code-overview side window; refuses on TTY |
 | `C-c M-t` | `centaur-tabs-mode` | Toggle the `centaur-tabs` graphical buffer tab bar (VSCode-style file tabs; distinct from the `C-c W` tab-bar/tabspaces workspaces) |
 
@@ -399,59 +540,31 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
   (this file) and `consult-imenu-multi` (open buffers of the same major mode). Same
   vertico + orderless + marginalia UI as the rest of §1.
-- **ggtags / GNU Global — the non-LSP xref fallback** (`init-languages.el`): `ggtags-mode`
-  is hooked onto **C/C++, Python, Go, and JS/TS/TSX** buffers, so when no language server is
-  attached (a server that failed to start, or a repo with no `go.mod` / `package.json` at the
-  resolved root — e.g. `~/code/coinsasia/` with a prebuilt `GTAGS`), `M-.` / `M-?` query an
-  existing `GTAGS` index directly instead of cryptically prompting `Visit tags table (default
-  TAGS): …` (or hanging while etags tries to parse the binary `GTAGS` as a plaintext table).
-  **`C-c g g`** (`fenrir/gtags-create-or-update`) builds or refreshes the index for the current
-  project (`C-u` forces a full rebuild); in a mode with no `ggtags-mode` hook and no index, the
-  etags fallback instead *offers* to build one (`Build a GNU Global (GTAGS) index now?`).
-  **Eglot-safe by construction** — `ggtags-mode`'s own `ggtags-mode-map` rebinds `M-.` →
-  `ggtags-find-tag-dwim` (which shells out to `global` and bypasses xref entirely); that grab
-  (plus `C-M-.`) is *neutralized* in `init-languages.el`, so `M-.` stays the global
-  `xref-find-definitions` and dispatches over `xref-backend-functions` — where Eglot prepends
-  and **wins whenever a server is live**, with `ggtags--xref-backend` answering only as the
-  no-server fallback. (The build-offer path can likewise only fire after xref already chose
-  etags, i.e. no LSP was attached.) The build runs **async** off a `make-process`
-  (the daemon stays responsive on a big repo; you get a `✓ GTAGS built` message when it
-  finishes, then re-run `M-.` / `M-?`). The index is built with `GTAGSLABEL=native-pygments`
-  (`fenrir/gtags-label`; built-in parser for C/C++/Java/PHP plus pygments for the rest —
-  Go/Python/TS/JS/Vue/Rust — switch to `new-ctags` for speed at the cost of TypeScript),
-  mirroring the [`tags-symbol-lookup` skill](~/.claude/plugins/cache/fenrir-claude-public-skills/tags-symbol-lookup/0.1.0/skills/tags-symbol-lookup/gtags.sh)'s
-  proven recipe: the build subprocess also gets `GTAGSCONF` pointed at the **tracked**
-  [`gtags.conf`](gtags.conf) (`fenrir/gtags-conf`) — a self-contained copy of the system
-  config whose skip list additionally drops `node_modules/ vendor/ venv/ dist/ build/
-  target/ …`, so neither a build nor an update indexes dependency trees (the stock conf
-  skips none of those — `~/code/coinsasia` measured **2.5 MB of real symbols vs 3.8 GB**
-  with the junk) — and, on a box without `python-is-python3`, a throwaway
-  `python`→`python3` PATH shim so the pygments parser can't crash into a corrupt index.
-  The result is **validated** (a failed / 0-byte build is deleted, never left as a corrupt
-  stub), and an existing corrupt / 0-byte index is recovered with a wipe-and-rebuild offer
-  instead of the raw `gtags: … seems corrupted` error. For a
-  Go-dominant repo with `gopls` on `PATH` it first steers you to gopls — the real fix is
-  usually a missing `go.mod` at the project root. Needs `global` + `universal-ctags` +
+- **gtags / GNU Global — the non-LSP xref fallback** ([`lisp/init-tags.el`](lisp/init-tags.el),
+  rebuilt 2026-07-30 around the maintained GNU-ELPA **`gtags-mode`**; full story in
+  [_doc/TAGS.md](_doc/TAGS.md)): one *global* minor mode contributes a gtags xref backend
+  that answers only in buffers under an indexed root and declines silently elsewhere — no
+  per-language hooks, no keymap grabs. When no language server is attached (a failed
+  server, or a repo with no `go.mod` / `package.json` at the resolved root — e.g.
+  `~/code/coinsasia/` with a prebuilt `GTAGS`), `M-.` / `M-?` / `M-,` work off the index;
+  when Eglot is attached it registers its backend buffer-locally ahead of gtags and **wins
+  automatically**. **The index stays fresh by itself**: every save runs an async
+  `global --single-update <file>` (per-file, no re-traversal). `GTAGSCONF` (the tracked
+  [`gtags.conf`](gtags.conf) with the extended skip list) and `GTAGSLABEL=native-pygments`
+  (Go/Python/TS coverage) are exported **daemon-wide**, so create, update, on-save refresh
+  and every query all inherit them — no per-call env plumbing to forget. In an un-indexed
+  buffer with no LSP, `M-.` gives a one-line `No tags here -- C-c g g builds a gtags index`
+  instead of etags' 1990s `Visit tags table` prompt. Needs `global` + `universal-ctags` +
   `python3-pygments` (installed by [`shell/install-root.sh`](shell/install-root.sh)).
-- **GTAGS nested-index hygiene** — **`C-c g d`** (`fenrir/gtags-diagnose-duplicates`):
-  GNU Global resolves a lookup to the *nearest ancestor* `GTAGS`, so a `GTAGS` in a
-  subdirectory silently **shadows** the root index for every file beneath it (the bug where
-  `~/code/coinsasia/backend/GTAGS` hid the top-level `GTAGS` and xref answered from the
-  stale sub-index). Every (re)build auto-sweeps nested indexes (`fenrir/gtags-sweep-nested`,
-  default on) so the fresh root is the only resolvable one; `C-c g d` is the on-suspicion
-  command — lists every `GTAGS` in the subtree (`[root]`/`[nested]`, size+mtime) and offers
-  to delete the shadows. A `C-c g g` *update* also warns when the buffer's own index is
-  shadowed by a higher one.
-- **GTAGS search commands on the `C-c g` prefix** — gtags is a stateless CLI over the
-  on-disk index (no daemon to keep "resident"), so fast access = keeping the searches one
-  chord away. The explicit ggtags searches (which hit `global` directly, bypassing xref, so
-  they work even where Eglot owns `M-.`): **`C-c g .`** find-tag-dwim (def↔ref), **`C-c g r`**
-  references, **`C-c g s`** symbols with no definition (macros/externs), **`C-c g f`** find
-  file by name, **`C-c g /`** full-text grep over indexed files. (Build/maintain: `C-c g g`
-  build·update, `C-c g d` diagnose shadows.) **`C-c g p`** (`fenrir/gtags-prefer-here`) toggles
-  *this buffer* to consult ggtags **before** the LSP on `M-.` / `M-?` — buffer-local, off by
-  default; handy for a fast whole-repo sweep, at the cost of gtags' text-based imprecision
-  (a common name returns every textual definition, not the one scope-correct target).
+- **`C-c g` — index management** (navigation itself has no keys here; it's plain xref):
+  **`C-c g g`** (`fenrir/gtags-build`) builds the index async at the project root —
+  refuses `$HOME` / filesystem roots, wipes a pre-existing 0-byte stub, and **validates
+  the result** (a failed or corrupt build is deleted, never left as the stub every later
+  `global -u` rejects with `seems corrupted`). **`C-c g u`** (`gtags-mode-update`) is the
+  bulk async `global -u` for after a branch switch / pull. **`C-c g d`**
+  (`fenrir/gtags-diagnose`) lists every `GTAGS` in the subtree (`[root]`/`[nested]`) and
+  offers to delete the nested ones — GNU Global resolves to the *nearest ancestor* index,
+  so `backend/GTAGS` silently shadows the root index for everything beneath it.
 - **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
   for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
   Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls
