@@ -2,9 +2,11 @@
 
 ;;; Commentary:
 ;; C / C++ language support, split out of the monolithic init-languages.el.
-;; The language-agnostic Eglot / ggtags infrastructure lives in
+;; The language-agnostic Eglot infrastructure lives in
 ;; [`lisp/init-languages.el'](../init-languages.el); this module adds the
-;; C / C++ mode hooks plus one explicit clangd flag (see below).
+;; C / C++ mode hooks plus one explicit clangd flag (see below).  The gtags
+;; xref fallback needs no per-language hook -- `gtags-mode' in
+;; [`lisp/init-tags.el'](../init-tags.el) is global and self-scoping.
 ;;
 ;; combobulate is deliberately NOT hooked: it has no C / C++ support.
 
@@ -79,16 +81,6 @@
   :after eglot
   :custom (eglot-inactive-regions-style 'shadow-face)
   :config (eglot-inactive-regions-mode 1))
-
-;; ggtags: GTAGS xref backend for buffers without a live language server (when
-;; Eglot is up it prepends itself to `xref-backend-functions' and wins).  Both
-;; the regex and tree-sitter modes are hooked so a machine without the C / C++
-;; grammars still gets GTAGS.  `ggtags-mode' is autoloaded from the ggtags
-;; declaration in init-languages.el; requires the `gtags' / `global' CLIs.
-(add-hook 'c-mode-hook      #'ggtags-mode)
-(add-hook 'c-ts-mode-hook   #'ggtags-mode)
-(add-hook 'c++-mode-hook    #'ggtags-mode)
-(add-hook 'c++-ts-mode-hook #'ggtags-mode)
 
 ;; Brace-hop dwim (vim `%'-style), bound to `C-c %' in C / C++ buffers only.
 ;; combobulate has no C / C++ support (see header), so structural motion here is

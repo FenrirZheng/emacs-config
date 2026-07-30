@@ -16,8 +16,9 @@
 ;; mode hook and the server registration, exactly like the sibling language
 ;; modules (e.g. [`init-rust.el'](init-rust.el)).
 ;;
-;; combobulate / ggtags are deliberately NOT hooked: combobulate has no TOML
-;; support, and TOML has no cross-file symbol graph worth a GTAGS index.
+;; combobulate is deliberately NOT hooked: it has no TOML support.  (TOML has
+;; no cross-file symbol graph worth a GTAGS index either, but the global
+;; `gtags-mode' backend simply declines here -- nothing to opt out of.)
 ;;
 ;; taplo is NOT on apt -- install with
 ;;   cargo install taplo-cli --locked --features lsp

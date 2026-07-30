@@ -121,7 +121,7 @@ LSP-driven via xref. Eglot's xref backend prepends itself to `xref-backend-funct
 
 (Full key list, including `C-c x` extract and `C-c h s` semantic tokens, is in [FEATURES.md §7](../FEATURES.md).)
 
-`ggtags` is in the config (see [init.el's ggtags block](../init.el)) but only takes over in buffers without an active LSP session — for Go, eglot always wins. Useful as a fallback in modes without an LSP server hooked.
+`gtags-mode` is in the config (see [lisp/init-tags.el](../lisp/init-tags.el)) but only answers in buffers without an active LSP session — for Go, eglot always wins. Useful as a fallback when gopls declines to attach (e.g. no `go.mod` at the resolved root) but a `GTAGS` index exists.
 
 ## Diagnostics
 

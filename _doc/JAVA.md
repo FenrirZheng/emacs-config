@@ -268,7 +268,7 @@ the minibuffer, so there is no per-keystroke completion request to slow down.
 
 ### `M-?` says "Visit tags table" / falls back to gtags
 
-Eglot isn't attached to the buffer, so xref drops to the etags/ggtags
+Eglot isn't attached to the buffer, so xref drops to the gtags/etags
 fallback. Check `M-: (eglot-current-server)` — if nil, the most common causes
 are (1) no project root resolved (`M-: (project-current)` is nil — drop a
 marker or check there's a pom above), or (2) jdtls failed to start (see below).

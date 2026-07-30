@@ -16,14 +16,6 @@
 (add-hook 'go-ts-mode-hook #'eglot-ensure)
 (add-hook 'go-ts-mode-hook #'combobulate-mode)
 
-;; ggtags: GTAGS xref backend for Go buffers without a live gopls (e.g. a repo
-;; with no go.mod at the resolved project root, where gopls declines to attach
-;; but a GNU Global index exists -- e.g. ~/code/coinsasia/GTAGS).  Mirrors the
-;; C/C++ and Python hooks; `ggtags-mode' is autoloaded from the declaration in
-;; init-languages.el, where its M-. / C-M-. keymap takeover is also neutralized
-;; so this only adds an xref backend and gopls keeps winning M-. when attached.
-(add-hook 'go-ts-mode-hook #'ggtags-mode)
-
 ;; gopls: extra static analyses + the full inlay-hint set VSCode's Go
 ;; extension enables by default.  `staticcheck' folds the standalone tool's
 ;; checks into LSP diagnostics; `gofumpt' is stricter `gofmt' (apheleia /

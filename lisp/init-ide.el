@@ -129,7 +129,7 @@
 ;; server or tags DB -- the universal fallback for the long tail of files where
 ;; neither Eglot nor a prebuilt GTAGS exists (shell, config DSLs, a quick clone
 ;; you haven't set up LSP for).  Registered as the LAST xref backend so it only
-;; answers when Eglot (front of the list when attached) and ggtags (the
+;; answers when Eglot (front of the list when attached) and gtags-mode (the
 ;; no-server tags fallback) both decline -- it never shadows a real LSP `M-.'.
 ;; rg is already a hard dependency of this config (consult-ripgrep), so prefer
 ;; it over plain grep for speed.
@@ -137,8 +137,8 @@
   :defer t
   :custom (dumb-jump-prefer-searcher 'rg)
   :init
-  ;; Append (not prepend) so eglot-xref-backend / ggtags--xref-backend win when
-  ;; present; see the xref layering note in init-languages.el.  `dumb-jump-xref-
+  ;; Append (not prepend) so eglot-xref-backend / gtags-mode's backend win when
+  ;; present; see the xref layering note in init-tags.el.  `dumb-jump-xref-
   ;; activate' is autoloaded, so `:defer t' keeps the package itself unloaded
   ;; until xref actually falls through to it.
   (add-hook 'xref-backend-functions #'dumb-jump-xref-activate 90))

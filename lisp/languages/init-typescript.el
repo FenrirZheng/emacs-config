@@ -26,15 +26,12 @@
 
 ;; Eglot + combobulate attach on all three modes.  treesit-auto opens .ts in
 ;; typescript-ts-mode, .tsx / .jsx in tsx-ts-mode, .js in js-ts-mode.  The
-;; commands are autoloaded from declarations in init-languages.el.  `ggtags-mode'
-;; adds the GTAGS xref backend used when no tsserver/vtsls attaches but a GNU
-;; Global index covers the buffer (e.g. ~/code/coinsasia/GTAGS over the TS
-;; frontend) -- its M-. / C-M-. keymap takeover is neutralized in
-;; init-languages.el so Eglot keeps winning M-. whenever a server is live.
+;; commands are autoloaded from declarations in init-languages.el.  (The gtags
+;; xref fallback -- e.g. ~/code/coinsasia/GTAGS over the TS frontend when no
+;; tsserver attaches -- is global; see [`lisp/init-tags.el'](../init-tags.el).)
 (dolist (hook '(js-ts-mode-hook typescript-ts-mode-hook tsx-ts-mode-hook))
   (add-hook hook #'eglot-ensure)
-  (add-hook hook #'combobulate-mode)
-  (add-hook hook #'ggtags-mode))
+  (add-hook hook #'combobulate-mode))
 
 ;; typescript-language-server / vtsls: parameter + return-type + variable type
 ;; hints all on.  Servers default these to "none" -- without this block

@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 ;; Python language support, split out of the monolithic init-languages.el.
-;; The language-agnostic Eglot / tree-sitter / combobulate / ggtags
+;; The language-agnostic Eglot / tree-sitter / combobulate
 ;; infrastructure lives in [`lisp/init-languages.el'](../init-languages.el);
 ;; this module adds the Python mode hooks, pyright's per-server workspace
 ;; configuration, the zero-config project-`.venv' detection, and a pure-elisp
@@ -12,13 +12,11 @@
 ;;; Code:
 
 ;; Eglot (gopls-style autoload) attaches on `python-ts-mode'.  combobulate adds
-;; tree-sitter structural editing; ggtags is the GTAGS xref backend used only
-;; in buffers without a live language server (Eglot, when up, wins xref).  All
-;; three commands are autoloaded from declarations in init-languages.el.
+;; tree-sitter structural editing.  Both commands are autoloaded from
+;; declarations in init-languages.el.  (The gtags xref fallback is global --
+;; see [`lisp/init-tags.el'](../init-tags.el) -- no per-mode hook needed.)
 (add-hook 'python-ts-mode-hook #'eglot-ensure)
 (add-hook 'python-ts-mode-hook #'combobulate-mode)
-(add-hook 'python-mode-hook    #'ggtags-mode)
-(add-hook 'python-ts-mode-hook #'ggtags-mode)
 
 ;; ---------------------------------------------------------------------------
 ;; Zero-config project-venv detection.

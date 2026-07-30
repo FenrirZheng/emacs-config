@@ -165,6 +165,7 @@ up new or changed files.  Progress and warnings land in the
         init-editing
         init-ide                ; modern-IDE conveniences (guides, sidebar, REST, ...)
         init-languages          ; shared LSP / tree-sitter / editing infra
+        init-tags               ; GNU Global: gtags-mode xref fallback + C-c g
         ;; Per-language modules (lisp/languages/), loaded AFTER init-languages:
         ;; each attaches its own eglot-ensure hook + eglot-workspace-configuration
         ;; entry onto the shared eglot setup declared above.
@@ -191,6 +192,10 @@ up new or changed files.  Progress and warnings land in the
         init-ai
         init-aidermacs
         init-tmux-claude
-        init-alacritty-claude))
+        init-alacritty-claude
+        ;; LAST on purpose: init-keys is a routing layer OVER the modules above
+        ;; (the `<f5>' scenario hub, keyfreq measurement, extra repeat maps).
+        ;; It reads the rest of the config; nothing reads it.
+        init-keys))
 
 ;;; init.el ends here

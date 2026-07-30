@@ -10,19 +10,19 @@
  '(eglot-confirm-server-edits nil nil nil "Customized with use-package eglot")
  '(package-selected-packages
    '(ace-link ace-window aidermacs apheleia avy-zap bash-completion
-              beacon blamer breadcrumb cape centaur-tabs cmake-mode
-              colorful-mode combobulate consult-dir consult-eglot
-              consult-todo copilot corfu-terminal dape dashboard
-              devdocs diff-hl difftastic dimmer dired-collapse
-              dired-narrow dired-sidebar diredfl docker
+              beacon blamer breadcrumb cape casual-suite centaur-tabs
+              cmake-mode colorful-mode combobulate consult-dir
+              consult-eglot consult-todo copilot corfu-terminal dape
+              dashboard devdocs diff-hl difftastic dimmer
+              dired-collapse dired-narrow dired-sidebar diredfl docker
               dockerfile-mode doom-modeline doom-themes dumb-jump
               ef-themes eglot-booster eglot-inactive-regions eglot-x
               eldoc-box embark-consult envrc exec-path-from-shell
               expand-region expreg flymake-eslint fontaine forge
-              frog-jump-buffer gcmh ggtags git-link git-timemachine
-              goggles good-scroll goto-chg gptel helpful
-              highlight-numbers imenu-list indent-bars jinx ligature
-              lin lua-mode magit-delta magit-todos marginalia
+              frog-jump-buffer gcmh git-link git-timemachine goggles
+              good-scroll goto-chg gptel gtags-mode helpful
+              highlight-numbers imenu-list indent-bars jinx keyfreq
+              ligature lin lua-mode magit-delta magit-todos marginalia
               mermaid-mode minimap mixed-pitch mlscroll move-text
               multiple-cursors nerd-icons-completion nerd-icons-corfu
               nerd-icons-dired nerd-icons-ibuffer no-littering
