@@ -71,27 +71,30 @@ Java pushes `java.inlayHints.parameterNames=all` and C/C++ registers clangd with
 `--inlay-hints` (belt-and-suspenders — clangd ≥ 14 defaults them on; per-hint-kind tuning
 lives in clangd's `~/.config/clangd/config.yaml`, not the launch flags).
 
-## Java runs on Eglot + jdtls
+## Java has no language server — on purpose
 
-All Java code lives in [`init-java.el`](../lisp/languages/init-java.el); the full workflow,
-the two-tier project-root resolution, the `.eglot-java-workspace` container marker, the
-`~/.m2/settings-public.xml` Nexus workaround, the Gradle-importer caveat and the `jdt://`
-URI handler are documented in [JAVA.md](JAVA.md).
+Java is the one language with a [`lisp/languages/`](../lisp/languages/) module that does
+**not** attach Eglot. jdtls was removed 2026-08-10; the full rationale, what capabilities
+that costs, and the gtags-based replacement are in [JAVA.md](JAVA.md).
 
 The parts that bite an editor who isn't reading that file:
 
-- The jdtls bundle at [`var/lsp-java/eclipse.jdt.ls/server/`](../var/lsp-java/) (~150 MB) is
-  inherited from the pre-migration lsp-java install and kept in place to avoid a
-  re-download. Workspace metadata lives at [`var/lsp-java/workspace/`](../var/lsp-java/) —
-  delete that subdir out-of-band to force a re-import of every project.
-- The launcher appends `:initializationOptions` (built by `fenrir/jdtls--java-settings`) so
-  the `:java` settings reach jdtls at the `initialize` request, not just the later
-  `workspace/didChangeConfiguration` — load-bearing for anything the initial project scan
-  reads (Maven user-settings, the Gradle disable).
-- The `jdt://` URI scheme handler is what makes `M-.` into a JDK / third-party-jar class
-  work at all; Eglot has no native handler.
-- `eglot--servers-by-project` is a hash-table — inspect with `maphash`, not
-  `cl-loop for … in`.
+- **Don't "fix" the missing `eglot-ensure` hook.** Its absence from
+  [`init-java.el`](../lisp/languages/init-java.el) is the feature. Adding it back does
+  nothing on its own anyway — the `eglot-server-programs` entry is gone too.
+- **Java's `M-.` is name-level, not type-level.** It answers from the gtags index, so an
+  overloaded or common name returns every same-named definition (`getId`: 75 in one real
+  project) and `M-?` mixes same-named locals in with real call sites. That is the expected
+  behaviour, not a broken index.
+- **`.java` is parsed by Universal Ctags, not gtags' built-in parser** — the `java-ctags`
+  label in [`gtags.conf`](../gtags.conf). The built-in Java parser indexes **no fields**.
+  An index built before the switch needs one `C-c g g`.
+- **`var/lsp-java/` (453 MB) is dead weight**, not a dependency. Nothing reads it. Delete
+  it once you're sure jdtls isn't coming back.
+- The deleted jdtls code — launcher, `jdt://` URI handler, and the five advices that kept
+  diff-hl / org-roam / breadcrumb / vc-refresh / consult-eglot from choking on synthetic
+  non-`file://` URIs — lives in git history at the removal commit. **Recover it from
+  there**, don't rewrite it.
 
 ## DAP debugging is `dape`
 

@@ -1,431 +1,225 @@
 # Java development
 
-How Java editing works in this Emacs configuration: which packages drive what,
-where they're configured, what to do when it breaks. Companion to the
-keybinding cheat sheet in [FEATURES.md](../FEATURES.md), and to the
-architecture notes in [CLAUDE.md](../CLAUDE.md) (the "Java on Eglot + jdtls"
-and "Java project roots" bullets).
+How Java editing works in this configuration: what drives it, where it's
+configured, and — since this is the one language here deliberately left without
+a language server — what you give up and what you use instead. Companion to the
+keybinding cheat sheet in [FEATURES.md](../FEATURES.md) and the index mechanics
+in [TAGS.md](TAGS.md).
 
-Java migrated from `lsp-mode` + `lsp-java` to **Eglot + jdtls** on the
-`try/java-on-eglot` branch. All Java-specific code lives in
-[`lisp/languages/init-java.el`](../lisp/languages/init-java.el); the
-language-agnostic Eglot core it builds on (the `eglot` block, `eglot-booster`,
-`consult-eglot`, `dape`, …) lives in
-[`lisp/init-languages.el`](../lisp/init-languages.el).
+All Java-specific code lives in
+[`lisp/languages/init-java.el`](../lisp/languages/init-java.el).
 
-## Stack
+## There is no language server
 
-| Layer | Component | Where it lives |
-|---|---|---|
-| JDK | `java` (Corretto 21 here) | `~/.sdkman/candidates/java/current/bin/java` — any JDK 17+ on PATH works |
-| LSP server | `eclipse.jdt.ls` (jdtls) | [`var/lsp-java/eclipse.jdt.ls/server/`](../var/lsp-java/) — ~150 MB bundle inherited from the old lsp-java install, kept to avoid a re-download |
-| Server launcher | `fenrir/jdtls-launch-command` | [`lisp/languages/init-java.el`](../lisp/languages/init-java.el) — builds the `java -jar org.eclipse.equinox.launcher_*.jar …` argv |
-| Major mode | `java-ts-mode` (falls back to `java-mode`) | Built-in; `treesit-auto` remaps `.java` when the grammar is installed |
-| LSP client | `eglot` | Built-in; `eglot-ensure` hooked on `java-mode` / `java-ts-mode` like every other language |
-| Client speedup | `emacs-lsp-booster` | `~/.cargo/bin/emacs-lsp-booster` — `eglot-booster` wraps the jdtls connection automatically |
-| Workspace metadata | Eclipse `-data` dir | [`var/lsp-java/workspace/`](../var/lsp-java/) — delete out-of-band to force a full re-import |
-| Diagnostics / hover / xref | `flymake` / `eldoc` / `xref` ← eglot ← jdtls | Built-in; `M-.` / `M-?` / `C-c d` |
-| Maven settings | [`~/.m2/settings-public.xml`](file:///home/fenrir/.m2/settings-public.xml) | Pointed at via `java.configuration.maven.userSettings` — see [Maven dependency resolution](#maven-dependency-resolution) |
+Java ran on `lsp-mode` + `lsp-java`, then on **Eglot + jdtls** (eclipse.jdt.ls).
+Both are gone; jdtls was removed 2026-08-10.
 
-The launcher's JVM args mirror the old lsp-java preset (`-Xmx3G`, ParallelGC),
-and the `:java` workspace config turns off decompiled-source/accessor matches
-and code-lens for faster references. Both are pushed two ways: at the
-`initialize` request (via the launcher's trailing `:initializationOptions`)
-**and** via `workspace/didChangeConfiguration`. The init-time copy is
-load-bearing for anything jdtls reads during its first project scan.
+**Why.** jdtls is an Eclipse OSGi application on the JVM. It was launched with
+`-Xmx3G` on a 15 GB machine and attached unconditionally from both
+`java-mode-hook` and `java-ts-mode-hook`, so merely opening a `.java` file
+kicked off a full Maven/Gradle workspace import — a multi-second-to-minutes
+stall with the whole editor unresponsive, then a resident 2–3 GB. On disk it
+cost another 453 MB (`var/lsp-java/`: a 127 MB server bundle plus 325 MB of
+workspace metadata).
 
-## Prerequisites
+**What replaced it.** Nothing, for the semantic layer. Java now gets:
 
-```bash
-# A JDK 17+ on PATH (jdtls 1.57 needs 17+; this machine uses Corretto 21).
-java -version
+| Capability | Provider |
+|---|---|
+| Fontification, indentation, imenu, structural motion | `java-ts-mode` (tree-sitter), in-process |
+| Cross-file `M-.` / `M-?` / `M-,` | gtags / GNU Global via the xref backend in [`init-tags.el`](../lisp/init-tags.el) |
+| Index rooting | `fenrir/project-find-java-build-root` (below) |
+| Running tests | JUnit runner on `C-c t …` (tree-sitter + `compile`) |
+| Snippets, structural editing | yasnippet, combobulate — never needed a server |
 
-# The jdtls bundle is already vendored under var/lsp-java/ (not in git).
-# To reinstall from scratch, download a jdtls release and unpack so that
-# var/lsp-java/eclipse.jdt.ls/server/plugins/org.eclipse.equinox.launcher_*.jar
-# exists; fenrir/jdtls-bundle-dir points there.
+## What you gave up
 
-# emacs-lsp-booster (shared with the Eglot side for every language):
-cargo install emacs-lsp-booster        # or grab a release binary onto PATH
+Be honest with yourself about this list before filing a bug:
 
-# Tree-sitter Java grammar — installed automatically on first .java open by
-# treesit-auto; lands in ~/.emacs.d/tree-sitter/.
-```
+- **Type-aware completion.** No member list after `.`; completion is
+  buffer/index-text-based (Cape / dabbrev), not semantic.
+- **Hover javadoc** and signature help.
+- **Live diagnostics.** No red squiggles, no unresolved-symbol warnings. The
+  compiler is the feedback loop — `C-c t t` or a terminal `mvn`.
+- **Refactors.** No rename, no extract-method. `M-x project-query-replace-regexp`
+  is the blunt substitute; it is textual and does not know scope.
+- **Find implementations / call hierarchy / type hierarchy.**
+- **Navigation into JDK or third-party jar sources.** The `jdt://` URI handler
+  that served this is gone. `M-.` on `ArrayList` finds nothing; the index
+  contains project source only.
 
-## Project resolution — the crux
+And the one that bites daily: **gtags answers at the NAME level.** `M-.` on an
+overloaded or common name offers every same-named definition in the project
+with no type information to discriminate them. Measured on `~/code/camhr/camhr`
+(1078 `.java` files): `getId` has **75** definitions. Narrow by reading the
+candidate list, not by expecting the right answer first.
 
-jdtls does cross-project find-references at the **Eclipse workspace** level:
-every Maven/Gradle project imported into the single `-data` workspace is
-searchable from any other. The hard part is making Eglot — which is
-single-root per server — put the right set of projects into one workspace.
+If any of the above turns out to be non-negotiable, the deleted jdtls code is
+recoverable from git history at the removal commit — restore it from there
+rather than rewriting the `jdt://` plumbing, which took several rounds to get
+the URI handler, read-only timing and `normal-mode` interaction right.
 
-Root resolution is `fenrir/project-find-java-build-root`, prepended to
-`project-find-functions` ahead of the built-in `project-try-vc`. It works in
-two tiers:
+## The index
+
+Java is parsed by **Universal Ctags**, not gtags' built-in Java parser, via the
+`java-ctags` label in [`gtags.conf`](../gtags.conf). The built-in parser indexes
+**no fields at all** and records call sites as definitions; see
+[Why Java is not on the built-in parser](TAGS.md#why-java-is-not-on-the-built-in-parser)
+for the measurements.
+
+Build with **`C-c g g`**, refresh in bulk with **`C-c g u`**, diagnose shadowing
+sub-indexes with **`C-c g d`**. Every save runs an incremental
+`global --single-update` automatically.
+
+Two things that will silently give you a worse index:
+
+- **Building at the wrong root.** GNU Global resolves each lookup to the
+  *nearest ancestor* `GTAGS`, so an index accidentally rooted at one Maven
+  module hides the reactor index for every file beneath it. That is what the
+  project-root finder below exists to prevent. `C-c g d` finds and deletes such
+  shadows.
+- **The wrong `GTAGSLABEL`.** It is re-read on *every* invocation and is not
+  recorded in the database, so any build or update run under a different label
+  re-parses with a different parser. `init-tags.el` exports `java-ctags`
+  daemon-wide precisely so no call site can forget.
+
+## Project resolution — where the index gets rooted
+
+`fenrir/project-find-java-build-root` is prepended to `project-find-functions`
+and claims Java buffers only. It ignores `.project` markers entirely — Eclipse
+m2e left one inside every Maven module it ever imported, and project.el's
+deepest-marker-wins logic would pin the root to a sub-module.
 
 ### Tier 1 — container marker (fuse many reactors)
 
-If any ancestor of the file holds a `.eglot-java-workspace` marker (filename
-in `fenrir/java-workspace-marker`), **that ancestor is the project root for
-every Java file beneath it**. Use this when one directory holds several
-*independent* Maven/Gradle reactors that you want to navigate as a unit —
-e.g. `~/code/hitok2/` containing `im-combined-api`, `im-combined-hitok`,
-`hitok-java-backend`. All of them resolve to `~/code/hitok2/`, so they share
-**one Eglot server → one jdtls workspace**, and opening a file in a sibling
-repo never spawns a second jdtls fighting over the shared `-data` dir.
+If any ancestor holds `.eglot-java-workspace` (`fenrir/java-workspace-marker`),
+that ancestor is the root for every Java file beneath it. Use it when several
+independent reactors sit under one container directory and you want **one index
+covering all of them**, so cross-reactor `M-.` / `M-?` resolve:
+
+```bash
+touch ~/code/hitok2/.eglot-java-workspace
+```
+
+Then `M-x fenrir/project-reset-cache`, and `C-c g g` from the container.
+
+The filename is a fossil of the jdtls era (it once fused Eclipse workspaces).
+Kept as-is so existing marker files keep working.
 
 ### Tier 2 — topmost-pom (standalone reactor)
 
-Otherwise the root is the **highest consecutive ancestor** that has
-`pom.xml` / `build.gradle` / `settings.gradle` (or the `.kts` variants). For a
-normal multi-module Maven project this is the aggregator/parent-pom dir, and
-jdtls auto-imports every module under it. No configuration needed.
-
-`.project` files are deliberately **ignored** for root detection: Eclipse m2e
-regenerates them inside every module on import, and the built-in
-deepest-marker-wins logic would then pin jdtls to a too-deep sub-module
-(symptom: `M-?` only returns hits inside that one sub-module).
-
-## Setting up a new Java project
-
-### Case A — a single reactor (one aggregator pom, nested modules)
-
-Nothing to do. Open any `.java` file; Tier 2 finds the topmost pom and jdtls
-imports the whole reactor. Cross-module references work immediately.
-
-### Case B — a container of multiple independent reactors
-
-```
-touch <container-dir>/.eglot-java-workspace
-M-x fenrir/project-reset-cache RET
-```
-
-This drops the `.eglot-java-workspace` marker by hand and clears the cached
-project root. Then open (or reopen) a `.java` file under the container — one
-server now covers every reactor beneath it. If a jdtls session is already
-running, shut it down (`M-x eglot-shutdown`) and reopen so it re-reads the
-layout.
-
-To undo: `rm <container-dir>/.eglot-java-workspace` then
-`M-x fenrir/project-reset-cache` (falls back to Tier 2).
-
-There is also `M-x fenrir/eglot-java-add-roots-under RET <dir> RET`, which adds
-Maven/Gradle roots to a *running* session via
-`workspace/didChangeWorkspaceFolders` — handy for a one-off, but it does **not**
-survive a restart and a sibling-repo buffer can still spawn a second server.
-The marker is the durable mechanism; prefer it.
+Otherwise the root is the **topmost consecutive** ancestor holding `pom.xml` /
+`build.gradle*` — the aggregator, not the module you happen to have open.
+Nothing to configure; open a `.java` file and `C-c g g`.
 
 ### Verify
 
-```elisp
-M-: (project-current) RET        ; should report the intended root
-M-: (eglot-current-server) RET   ; non-nil once connected
-M-x eglot-events-buffer          ; live JSON-RPC, or "No current Eglot" if unconnected
+```
+M-x fenrir/project-reset-cache      ; drop stale project.el roots
+C-c g g                             ; build (defaults to the covering root)
+C-c g d                             ; list every GTAGS in the subtree
 ```
 
-For a fused workspace, opening a file in each sub-repo should keep
-`eglot--servers-by-project` at a single key (one server). A cross-project
-`M-?` should list hits whose paths span more than one sub-repo.
-
-## Maven dependency resolution
-
-jdtls is pointed at [`~/.m2/settings-public.xml`](file:///home/fenrir/.m2/settings-public.xml)
-through `java.configuration.maven.userSettings`. The default `~/.m2/settings.xml`
-mirrors to an internal corporate Nexus (`nexus.mosainet.com:8081` /
-`192.168.130.170:8081`) that is unreachable off the corp network — Maven then
-hangs on TCP connect timeouts (75 s+ per uncached dependency), and because
-jdtls' import job blocks its main thread, **every** LSP request times out
-(even lightweight `workspace/symbol`). The public settings file shares the
-`~/.m2/repository` cache but skips the corp profile and mirror, so dependencies
-resolve from each pom's declared repositories + Maven Central, and anything
-genuinely unavailable simply fails to resolve instead of hanging.
-
-CLI `mvn` is unaffected — it still uses the default `~/.m2/settings.xml` unless
-invoked with `-s ~/.m2/settings-public.xml`.
-
-If a project needs deps that only live on a repo reachable from elsewhere
-(corp Nexus, etc.), either connect to that network (VPN) or pre-cache the
-deps into `~/.m2/repository` while you have access.
-
-## The Gradle importer in container workspaces
-
-`fenrir/jdtls--java-settings` sets `java.import.gradle.enabled = false` whenever
-the connecting buffer is inside a container-marker workspace. Reason:
-Buildship (jdtls' Gradle importer) **ignores `java.import.exclusions`**, so a
-non-Java Gradle subtree under the container — e.g. a React Native app's
-`android/` build referencing an absent `@react-native/gradle-plugin` — stalls
-or crashes the import. Container Java here is all Maven, so disabling Gradle
-costs nothing.
-
-**Limitation:** this is keyed on the container marker, not per-subdirectory. If
-you build a container that legitimately mixes Maven and Gradle *Java* projects,
-the current helper turns Gradle off for the whole workspace. To support that,
-edit `fenrir/jdtls--java-settings` to keep Gradle on and instead exclude the
-specific offending subtree (note that, per the above, `import.exclusions` alone
-won't stop Buildship — you'd need a sharper mechanism). Standalone Gradle
-projects (no marker → their own server) keep Gradle enabled and need no change.
+`C-c g d` labels each index `[root]` or `[nested]` and offers to delete the
+shadows. If `M-.` answers from stale data, this is the first thing to check.
 
 ## Navigation
 
 | Key | Command | Notes |
 |---|---|---|
-| `M-.` | `xref-find-definitions` | Into project source, or into JDK / jar classes via the `jdt://` handler (below) |
-| `M-,` | `xref-go-back` | Pop the marker stack |
-| `M-?` | `xref-find-references` | Cross-project across the whole fused workspace; results render in the consult minibuffer UI |
-| `M-g s` | `consult-eglot-symbols` | Workspace-symbol search across all imported projects |
-| `C-c .` | `eglot-code-actions` | Quick-fix / organize-imports / refactors transient |
-| `C-c r` | `eglot-rename` | Project-wide rename (jdtls); applies multi-file in one go |
-| `C-c i` | `eglot-code-action-organize-imports` | One-shot organize imports |
-| `C-c x` | `eglot-code-action-extract` | Extract method / variable (jdtls has rich support) |
-| `C-c h c` / `C-c h t` | call / type hierarchy | Callers/callees · super/sub-types |
-| `C-c h i` | `eglot-inlay-hints-mode` | Toggle inlay hints in this buffer |
-| `C-c d` | `eldoc-doc-buffer` | Full hover doc in a side window |
+| `M-.` | `xref-find-definitions` | Project source only. Overloads / common names return many candidates |
+| `M-?` | `xref-find-references` | Textual: same-named local variables and parameters appear alongside real call sites |
+| `M-,` | `xref-go-back` | |
+| `M-g s` | `consult-imenu` (tree-sitter) | Current buffer's types/methods/fields — precise, because it is parsed not indexed |
+| `<f6>` / `<f7>` | merged jump history | See [`init-keys.el`](../lisp/init-keys.el) |
 
-**Inlay hints**: globally on (`eglot-managed-mode` → `eglot-inlay-hints-mode`). jdtls
-defaults parameter-name hints to `"literals"` (only literal arguments); this config
-sets `java.inlayHints.parameterNames` to `"all"` (the `:inlayHints` entry in the
-`:java` `eglot-workspace-configuration` in [`init-java.el`](../lisp/languages/init-java.el)),
-so every argument is annotated. Toggle off per-buffer with `C-c h i`.
+`M-?` deserves a caveat. gtags' reference index is name-based, so
+`global -r publishJob` on a method returns the parameter `PublishJob
+publishJob`, every `publishJob.setX()` on that local, *and* the real
+`jobService.publishJob(...)` call — undifferentiated. Read the list.
 
-`M-.` into a JDK class (`java.lang.String`) or a third-party-jar class returns a
-`jdt://contents/…` URI, which Eglot has no native handler for. The handler
-registered in `file-name-handler-alist` (see `fenrir/eglot--jdt-uri-handler`)
-intercepts `jdt://`, finds the live jdtls server, requests source via the
-`java/classFileContents` LSP extension, and shows it read-only. The matching
-`extendedClientCapabilities.classFileContentsSupport` is sent in the launcher's
-`:initializationOptions`.
+## Running tests
 
-## Code completion
+`C-c t t` (dwim) / `C-c t m` (method at point) / `C-c t f` (file) /
+`C-c t b` (build the module). Backed by the `junit-core` dynamic module
+(`cpp/junit-core/`), which does tree-sitter JUnit discovery and constructs the
+Maven/Gradle command; the front-end runs it through `compile`. Build it once
+with `M-x junit-runner-build` — until then the commands degrade to a build hint.
 
-There is **no Java-specific completion code** anywhere in the config. jdtls
-completion rides the same generic Eglot capf path as gopls / pyright / rust-analyzer
-— swap `java-ts-mode` for `go-ts-mode` and the picture below is identical.
+## Debugging
 
-### The flow
-
-```
-M-TAB / C-M-i  (completion-at-point)
-      │
-      ▼
-completion-at-point-functions          ← buffer-local capf list
-  ├─ eglot-completion-at-point          (Eglot prepends this when managing the buffer)
-  │      │ textDocument/completion (JSON-RPC over stdio)
-  │      ▼
-  │   eglot-booster ──► jdtls ──► CompletionItem[]
-  └─ cape-dabbrev / cape-file / cape-elisp-block   (global fallback capfs)
-      │
-      ▼
-completion-in-region-function = consult-completion-in-region
-      │
-      ▼
-Vertico minibuffer + orderless + marginalia   ← where candidates actually render
-```
-
-### The three environments
-
-1. **jdtls (server).** Advertises `completionProvider` (and lazy
-   `completionItem/resolve`) at the `initialize` handshake — LSP standard, on by
-   default. This config pushes **no** `java.completion.*` settings, so completion
-   runs on jdtls' factory defaults (see [What's NOT configured](#whats-not-in-this-config)).
-
-2. **Eglot (client).** Once `eglot-ensure` (the `java-mode` / `java-ts-mode` hook
-   in [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)) attaches, Eglot adds
-   `eglot-completion-at-point` to the buffer-local
-   `completion-at-point-functions`. It sends `textDocument/completion`, turns the
-   `CompletionItem[]` into Emacs candidates, and resolves documentation/detail
-   lazily (only for the candidate you land on). Because `yas-global-mode` is on
-   ([`lisp/init-snippets.el`](../lisp/init-snippets.el)), Eglot advertises
-   `snippetSupport`, so completing a method expands its parameters into
-   Tab-navigable placeholders. None of this is Java-specific.
-
-3. **Frontend — Vertico minibuffer, not a Corfu popup.** The one non-default
-   decision. `completion-in-region-function` is bound to
-   `consult-completion-in-region` in
-   [`lisp/init-completion.el`](../lisp/init-completion.el) (`:init`, so it wins
-   before the first completion call), so candidates render **in the minibuffer**
-   with the same Vertico + orderless + marginalia stack as `M-x` / `C-x C-f` —
-   not in an at-point popup. `global-corfu-mode` is **deliberately off**
-   ([`lisp/init-corfu.el`](../lisp/init-corfu.el)): enabling it would set its own
-   buffer-local `completion-in-region-function` and silently override the consult
-   routing. Corfu stays installed (`:defer t`) so flipping back is a one-line edit.
-
-### Manual trigger — no type-as-you-go popup
-
-`corfu-auto` is nil and `global-corfu-mode` is off, so there is **no auto-popup**.
-Completion is manual: press `M-TAB` or `C-M-i` (`completion-at-point`). In a Java
-buffer you will not see IntelliJ-style suggestions appearing as you type — you ask
-for them.
-
-### eglot-booster caveat
-
-`eglot-booster` wraps the jdtls stdio (threaded I/O + JSON→bytecode pre-parse).
-Its header note in [`lisp/init-languages.el`](../lisp/init-languages.el) flags that
-tiny *per-keystroke* completion deltas may go marginally **slower** under the
-bytecode trick. That's a non-issue here: completion is manual and routed through
-the minibuffer, so there is no per-keystroke completion request to slow down.
+**Unsupported.** dape has no Java adapter, and dap-mode's fringe-bitmap
+breakpoints are invisible on a TTY frame. Use IntelliJ or VSCode. Do not
+reintroduce dap-mode.
 
 ## Troubleshooting
 
-### `M-?` says "Visit tags table" / falls back to gtags
+### `M-.` says "No tags here -- C-c g g builds a gtags index"
 
-Eglot isn't attached to the buffer, so xref drops to the gtags/etags
-fallback. Check `M-: (eglot-current-server)` — if nil, the most common causes
-are (1) no project root resolved (`M-: (project-current)` is nil — drop a
-marker or check there's a pom above), or (2) jdtls failed to start (see below).
+There is no index covering this file. Build one — but check the root first
+(`C-c g d`), or you will create a nested index that shadows a good one.
 
-### Every request times out ("jsonrpc-error … Timed out")
+### `M-.` finds nothing for a JDK or library class
 
-jdtls' import is blocked. Almost always the unreachable-Nexus hang — confirm
-with `ss -tnp | grep java` showing a `SYN-SENT` to a `:8081` host. The
-`settings-public.xml` wiring should prevent this; if it regressed, verify
-`M-: (fenrir/jdtls--java-settings)` includes the `userSettings` path. Otherwise
-the import is just slow on a cold cache — wait and retry.
+Expected. The index contains project source only; jar and JDK sources are not
+indexed and there is no server to decompile them. Read the source in your
+browser or open the sources jar manually.
 
-### jdtls crashes on restart (`DeltaDataTree` / workspace restore errors)
+### `M-.` finds nothing for a field
 
-The on-disk workspace got into a half-imported state. Reset it:
+If the index predates 2026-08-10 it was built with gtags' built-in Java parser,
+which indexes no fields. Rebuild with `C-c g g` — `init-tags.el` now exports
+`GTAGSLABEL=java-ctags`.
 
-```bash
-pkill -9 -f eclipse.jdt.ls.core.product
-rm -rf ~/.emacs.d/var/lsp-java/workspace
-```
-```elisp
-M-x fenrir/project-reset-cache
-;; then reopen a .java file
-```
+### Builds print `ctags-universal: Warning: Unknown language "…"`
 
-### `M-?` shows duplicate hits / "project already exists"
+Cosmetic. The plugin hands ctags the whole merged langmap and ctags does not
+recognise pygments' language names. Verified: the tag set produced for a Java
+file is byte-identical to a pure `new-ctags` build.
 
-The same Maven artifact is checked out twice under one container (e.g. a
-standalone `im-combined-hitok` plus a nested `im-combined-api/im-combined-hitok`).
-jdtls imports both as duplicate JDT projects. Keep one copy under the container.
+### The index misses a whole subtree
 
-### Root resolved too deep (only one sub-module's references show)
+Check [`gtags.conf`](../gtags.conf)'s `common:` skip list — it drops `target/`,
+`build/`, `node_modules/`, `.gradle/` and friends. That is deliberate (a bare
+`global -u` without it once re-bloated an index from 2.5 MB to 3.85 GB), but it
+does mean generated sources under `target/generated-sources/` are invisible.
 
-Project detection landed on a sub-module. Confirm with `M-: (project-current)`.
-If you want the whole container fused, drop a `.eglot-java-workspace` marker
-at the container (`touch <container>/.eglot-java-workspace`); if you want a
-single reactor, make sure no stray `.eglot-java-workspace` marker sits in a
-deeper dir.
-Run `M-x fenrir/project-reset-cache` after any marker change.
+### Java buffers resolve to the wrong project root
 
-### `M-g s` (type search) errors with "stringp, nil" / shows nothing
-
-`consult-eglot-symbols` (`M-g s`) drives **type search** via `workspace/symbol`.
-On Java it used to crash with `Wrong type argument: stringp, nil` for almost any
-query. Cause: jdtls returns JDK / jar types as `jdt://contents/…` URIs, and
-consult-eglot's `consult-eglot--transformer` builds each candidate's display
-label with `(file-relative-name (eglot-uri-to-path uri))` — `eglot-uri-to-path`
-leaves a `jdt://` URI unchanged (it is not a `file://` URI), so
-`file-relative-name` signals on the non-absolute path. The **same class of bug**
-guarded for diff-hl / breadcrumb / org-roam / vc-refresh (see the `jdt://` block
-in [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)), but worse: the
-transformer runs per candidate inside `consult--async-map`, so **one** throwing
-candidate aborts the whole async refresh — and nearly every type search returns
-at least one library type (even `Event` pulls in `java.util.EventListener`),
-so the command errored before showing anything.
-
-Fixed by a `:around` advice on `consult-eglot--transformer` (symbol
-`fenrir/jdt-consult-eglot-transformer`) that scopes a `jdt://`-safe
-`file-relative-name` to the transformer via `cl-letf` (for `jdt://` it returns
-the URI minus its giant `?…` query string as the label). The jump path is
-untouched — selecting a candidate goes through `eglot-uri-to-path` → `find-file`
-→ the `jdt://` handler, which never calls `file-relative-name`. If `M-g s`
-regresses to this error after a package upgrade, check the advice is still
-attached: `M-: (advice-member-p 'fenrir/jdt-consult-eglot-transformer 'consult-eglot--transformer)`.
-
-**Querying for types** (once the crash is fixed). The text you type after the
-auto-inserted `#` is sent to jdtls as the `workspace/symbol` query; jdtls /
-Eclipse matches it with **prefix + CamelCase + `*`/`?` wildcards**, case
--insensitive — **not** orderless (space-separated any-order tokens do *not* work
-in that part). Measured semantics:
-
-| Type after the `#` | Matches |
-|---|---|
-| `Event` / `Event*` | **starts** with `Event` (`EventListener`, `EventType`) |
-| `*Event` | closest to "**ends** with `Event`" (`PaintEvent`, `OrderCreatedEvent`) — plus some CamelCase/package noise, and JDK/jar types |
-| `*Event*` | **contains** `Event` |
-
-jdtls has no clean "ends-with" mode, so `*Event` is the closest and carries some
-noise. The text after a **second** `#` is an orderless filter applied
-client-side to the candidate label (which includes the full path) — it does
-**not** re-query jdtls. Use it to drop the JDK/jar noise and home in on your
-project (measured against a real `*Event` search — 1140 hits, 25 of them project
-types):
-
-| Full minibuffer input | → jdtls query | → client filter | Result |
-|---|---|---|---|
-| `#*Event#src` | `*Event` | `src` | 25 — **only your project's types**; library `jdt://` URIs have no `src` in their path (`#main` / `#<repo-name>` isolate the same way) |
-| `#*Event#src gcash` | `*Event` | `src gcash` | 7 — orderless tokens are **space-separated, any order, AND, case-insensitive** |
-| `#*Event#src gcash success` | `*Event` | `src gcash success` | 1 — `GCashPaySuccessCallbackEvent` |
-| `#*Event#src#gcash` | `*Event` | `src#gcash` | **0** — a *third* `#` is a literal char orderless can't match |
-
-So: at most **two** `#` are structural — the 1st is the auto-inserted separator,
-the 2nd is the jdtls-query ↔ filter boundary. Everything after the 2nd `#` is
-the orderless filter; add further conditions with **spaces, not more `#`**. You
-can also narrow by symbol kind with the consult narrow key (`< c` Class, `< i`
-Interface, `< e` Enum).
-
-**Where this syntax comes from** — `#*Event#src token token` is not one tool's
-language; it is three independent conventions stacked in one input box:
-
-1. **The `#…#` split → Consult.** This is consult's *async split*
-   (`consult-async-split-style`, default `perl`). The `#async#filter` form — and
-   the rule that the first punctuation char chooses the separator, so
-   `/async/filter` works too — is named after Perl's swappable regex delimiter
-   (`m#…#`). It shows up **only in consult's async commands**
-   (`consult-ripgrep`, `consult-eglot-symbols`, …); plain `M-x` / `C-x C-f` /
-   `C-s` (`consult-line`) have no `#` split, which is why this looks unfamiliar —
-   there the whole input is orderless.
-2. **The `*` / CamelCase in the query part → jdtls / Eclipse `SearchPattern`.**
-   Consult passes that part verbatim to the backend; for `M-g s` the backend is
-   jdtls' `workspace/symbol`. Nothing to do with consult or orderless — a
-   different backend (ripgrep, gopls) would parse that part in its own language.
-3. **The space-separated tokens in the filter part → orderless.** The filter is
-   matched client-side by `completion-styles` (`'(orderless basic)` in
-   [`lisp/init-completion.el`](../lisp/init-completion.el)); orderless splits on
-   spaces (`orderless-component-separator`) → any-order, AND, case-insensitive.
-
-Knobs: `(setq consult-async-split-style nil)` removes the `#` (whole input goes
-to the backend, no client-side filter); `'comma` switches the separator to `,`
-and stops auto-inserting it.
+`M-x fenrir/project-reset-cache`, then re-check with
+`M-: (project-root (project-current))`. If Tier 2 walked too far up, an
+unexpected `pom.xml` sits in a parent directory; if it stopped too low, add a
+Tier 1 marker at the level you want.
 
 ## Configuration map
 
-All symbols below live in [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)
-unless noted otherwise.
-
-| What | Symbol / file |
+| Concern | Symbol / file |
 |---|---|
-| `eglot-ensure` hooks | `add-hook` on `java-mode` / `java-ts-mode` in [`init-java.el`](../lisp/languages/init-java.el) |
-| jdtls launcher + JVM args + init options | `fenrir/jdtls-launch-command`, `fenrir/jdtls--java-settings` |
-| Bundle / workspace paths | `fenrir/jdtls-bundle-dir`, `fenrir/jdtls-workspace-dir` |
-| Project root resolution | `fenrir/project-find-java-build-root` (on `project-find-functions`) |
-| Container marker filename | `fenrir/java-workspace-marker` (`.eglot-java-workspace`) |
-| Set / unset container root | manual: `touch` / `rm` `.eglot-java-workspace`, then `M-x fenrir/project-reset-cache` |
-| Ad-hoc workspace folders | `fenrir/eglot-java-add-roots-under` |
-| `jdt://` source handler | `fenrir/eglot--jdt-uri-handler`, `fenrir/eglot--find-jdtls-server` |
-| Per-server `:java` settings | `:java` entry of `eglot-workspace-configuration` |
-| Maven settings | [`~/.m2/settings-public.xml`](file:///home/fenrir/.m2/settings-public.xml) |
+| Project root resolution | `fenrir/project-find-java-build-root`, `fenrir/java-workspace-marker` |
+| Container marker filename | `fenrir/java-workspace-marker` (default `.eglot-java-workspace`) |
+| Java parser routing | the `java-ctags` label + `universal-ctags-java` block in [`gtags.conf`](../gtags.conf) |
+| Index build / update / diagnose | [`init-tags.el`](../lisp/init-tags.el) — `C-c g g` / `C-c g u` / `C-c g d` |
+| JUnit runner | `junit-runner` elisp + `junit-core` module (`cpp/junit-core/`) |
+| `C-c t` key table | `fenrir/junit-bind-keys` |
 
 ## What's NOT in this config
 
-- **Debugging.** `dap-java` went away with lsp-mode, and `dape` has no Java
-  adapter. Use IntelliJ / VSCode for real Java debugging until either changes.
-  See [FEATURES.md §7](../FEATURES.md) for the dape-based debugging that does
-  work (Go, Python, etc.).
-- **Build/test runner UI.** `M-x compile RET mvn test RET` from the project
-  root; no integrated runner.
-- **Completion tuning.** No `java.completion.*` keys are pushed to jdtls
-  (`guessMethodArguments`, `maxResults`, `importOrder`, `favoriteStaticMembers`,
-  …) — jdtls runs its factory completion defaults. To change that, add a
-  `:completion (…)` entry to the `:java` plist in `eglot-workspace-configuration`
-  (the `(setf (alist-get :java …))` block in
-  [`lisp/languages/init-java.el`](../lisp/languages/init-java.el)). See
-  [Code completion](#code-completion) for the path that those settings would feed.
+- **Any Java language server.** No jdtls, no `java-language-server`, no
+  `lsp-java`. `init-java.el` adds no `eglot-ensure` hook and no
+  `eglot-server-programs` entry.
+- **`dap-mode` / Java debugging.** See above.
+- **Formatting on save for Java.** apheleia owns format-on-save globally; if it
+  has no Java formatter configured, Java simply isn't reformatted.
+- **`var/lsp-java/`.** The 453 MB jdtls bundle and workspace are no longer read
+  by anything. The directory is gitignored; delete it when you're confident you
+  won't reinstate jdtls:
+  ```bash
+  rm -rf ~/.emacs.d/var/lsp-java
+  ```
 
 ## References
 
-- [CLAUDE.md](../CLAUDE.md) — the "Java on Eglot + jdtls" and "Java project
-  roots" architecture bullets.
-- [_doc/GO.md](GO.md) — the sibling Go guide; same Eglot/xref/consult plumbing.
+- [TAGS.md](TAGS.md) — index creation, the `java-ctags` label, nested-index shadowing
+- [FEATURES.md](../FEATURES.md) — the `C-c g` and `C-c t` key tables
+- [GOTCHAS.md](GOTCHAS.md) — load-bearing oddities across the config
+- [`cpp/README.md`](../cpp/README.md) — the `junit-core` dynamic module

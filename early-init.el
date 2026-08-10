@@ -57,11 +57,15 @@
 ;; Restore by APPENDING the saved originals to whatever is current -- NOT a
 ;; plain overwrite.  A plain `(setq file-name-handler-alist saved)' would wipe
 ;; any handler a module registered DURING init (the list is nil while init
-;; runs, so an `add-to-list' lands in an otherwise-empty list).  The jdt://
-;; URI handler in `lisp/languages/init-java.el' is exactly such an addition; an overwrite
-;; here silently un-registers it, so jdt:// URIs fall through to the default
-;; handler, `expand-file-name' mangles them into `<cwd>/jdt:/contents/...', and
-;; navigating into a jar class errors with "make-directory" / "stringp, nil".
+;; runs, so an `add-to-list' lands in an otherwise-empty list).
+;;
+;; The bug that produced this rule: `lisp/languages/init-java.el' used to
+;; register a `jdt://' URI handler here, and a plain overwrite silently
+;; un-registered it -- `expand-file-name' then mangled `jdt://' into
+;; `<cwd>/jdt:/contents/...' and navigating into a jar class errored with
+;; "make-directory" / "stringp, nil".  That handler is gone (Java no longer
+;; runs a language server), but the rule is general: ANY module registering a
+;; handler during init depends on this being an append.
 ;; `copy-sequence' so `delete-dups' (which splices via `setcdr') can't mutate
 ;; the shared tail of the saved list.
 (add-hook 'emacs-startup-hook

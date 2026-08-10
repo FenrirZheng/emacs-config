@@ -47,16 +47,54 @@ the curated Corfu/Cape stack, `imenu` would replace the better tree-sitter/LSP i
   `/etc/gtags/gtags.conf` if missing): a self-contained copy of the system conf whose
   `common:` skip list additionally drops `node_modules/ vendor/ venv/ .venv/ dist/
   build/ target/ …`.
-- `GTAGSLABEL=native-pygments`: gtags' built-in parser is C/Java/PHP-only (Go/Python/TS
-  blind); pygments covers the rest. Only create consumes the label (gtags records it in
-  the DB and updates reuse it), but exporting it always is harmless — only the
-  gtags/global family reads these vars.
+- `GTAGSLABEL` — the parser routing. Upstream's `native-pygments` (built-in parser for
+  C/C++/Java/PHP, pygments for the Go/Python/TS the built-in is blind to) is the baseline;
+- `GTAGSLABEL=java-ctags` **(current)**: a fenrir-local label in the tracked
+  [`gtags.conf`](../gtags.conf). Same chain as `native-pygments` with `.java` lifted to
+  the front and routed to Universal Ctags; every other extension keeps the parser it had.
+  See [Why Java is not on the built-in parser](#why-java-is-not-on-the-built-in-parser).
+
+**The label is read on EVERY invocation, not just create.** The DB does *not* record it.
+Measured: with a `java-ctags` index in place, running `global --single-update` **or**
+`global -u` under `GTAGSLABEL=native-pygments` re-parses the touched file with the
+built-in parser and silently drops its fields — no error, no warning, the index just
+rots. This is why the label is one daemon-wide `setenv` rather than a per-project
+choice: per-project would mean injecting the right label at every update call site,
+which is the exact bug class the `setenv` was introduced to bury (below).
 
 Every `make-process` / `process-file` child inherits `process-environment`, so create,
 `global -u`, the on-save single-update and every xref query all see the skip list. This
 is what buries the old bug class where **one call site forgot the env**: `global -u`
 re-traverses the filesystem and re-adds anything not skipped — measured on coinsasia,
 2.5 MB → **3.85 GB** from a single bare `global -u`.
+
+## Why Java is not on the built-in parser
+
+gtags' built-in Java parser is lexer-level. Measured on `~/code/camhr/camhr`
+(1078 `.java` files, 153 MB), same tree, same sub-second build:
+
+| | built-in (`native-pygments`) | Universal Ctags (`java-ctags`) |
+|---|---|---|
+| distinct definition tags | 4904 | 7636 |
+| fields (`private JobMapper jobMapper;`) | **none indexed** | indexed |
+| `Constants.of(…)` inside an enum constant | recorded as a **definition** of `of` | not a definition |
+| `of` definitions | call sites + real decls, mixed | 28, all real `static X of(…)` |
+
+The `java-ctags` label is `native-pygments` with one language moved: its
+`universal-ctags-java` block declares exactly `langmap=Java\:.java`, chained *ahead* of
+`builtin-parser`, so `.java` is claimed before the built-in parser sees it and nothing
+else moves. Capitalisation is load-bearing — `builtin-parser` spells its entry
+`java\:.java` in lower case with no matching `gtags_parser` line, which is why plain
+`native-pygments` lands on the built-in parser even though pygments also declares `Java`.
+
+Not the stock `new-ctags` label: that is Universal Ctags *alone*, and this `gtags.conf`'s
+`universal-ctags` langmap (auto-generated from an older ctags) has no TypeScript entry —
+switching wholesale would silently drop `.ts` / `.tsx`, which pygments covers today.
+
+Builds emit `ctags-universal: Warning: Unknown language "…"` — the plugin hands ctags the
+whole *merged* langmap and ctags does not recognise pygments' language names. **Cosmetic**:
+the tag set `java-ctags` produces for a Java file is byte-identical to what pure
+`new-ctags` produces (verified by diff).
 
 ## Index hygiene
 
@@ -93,10 +131,17 @@ gtags walk there is runaway.
 
 ## CLI alignment (the `tags-symbol-lookup` skill)
 
-The Claude skill's `gtags.sh` builds with the same `GTAGSLABEL=native-pygments` but
-historically wrote the DB into a `./tags/` subdirectory; Emacs-side resolution
-(`global --print-dbpath` from the file's directory) expects it at the **project root**.
-An index at root serves both worlds — see the plan's D5 and the skill-side note.
+The Claude skill's `gtags.sh` historically wrote the DB into a `./tags/` subdirectory;
+Emacs-side resolution (`global --print-dbpath` from the file's directory) expects it at
+the **project root**. An index at root serves both worlds — see the plan's D5 and the
+skill-side note.
+
+**Label drift is now a live hazard.** `gtags.sh` still exports
+`GTAGSLABEL=native-pygments`, while Emacs exports `java-ctags`. Since the label is read
+per invocation and never recorded in the DB (above), a shared index alternates parsers:
+a `gtags.sh` build indexes Java without fields, and the next Emacs on-save update
+re-parses only the touched file *with* them. Nothing errors; the index is just
+inconsistent. Point `gtags.sh` at `java-ctags` too, or keep the two indexes separate.
 
 ## See also
 

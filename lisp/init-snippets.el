@@ -18,7 +18,7 @@
 ;;
 ;;   * YASnippet -- kept ONLY as Eglot's LSP snippet expander, NOT for
 ;;     hand-written snippets.  When a language server returns a snippet-style
-;;     completion (e.g. jdtls / gopls completing a call with parameter
+;;     completion (e.g. gopls / rust-analyzer completing a call with parameter
 ;;     placeholders), Eglot expands it via `yas-expand-snippet' IFF
 ;;     `yas-minor-mode' is live in the buffer (see `eglot--snippet-expansion-fn').
 ;;     So we enable it narrowly on `eglot-managed-mode-hook' instead of the old

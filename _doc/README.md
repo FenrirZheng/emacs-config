@@ -11,7 +11,7 @@ here and is read on demand.
 | [GOTCHAS.md](GOTCHAS.md) | Why is this odd-looking line load-bearing? (project.el at `$HOME`, Magit, Corfu-vs-Vertico, eglot-booster advice, Eglot key traps, dape, OSC 52) |
 | [TAGS.md](TAGS.md) | Why does `M-.` land in gtags instead of the LSP? Why did the GTAGS index balloon / go stale? |
 | [GO.md](GO.md) | Go workflow — go-ts-mode + Eglot + gopls + Vertico-driven symbol search |
-| [JAVA.md](JAVA.md) | Java workflow — java-ts-mode + Eglot + jdtls, container workspaces, Maven/Nexus, `jdt://` |
+| [JAVA.md](JAVA.md) | Java workflow — java-ts-mode + gtags, **no language server**: why jdtls went, what that costs, index rooting |
 | [SNIPPETS.md](SNIPPETS.md) | Templates — TempEl + YASnippet: triggers, catalog per mode, writing your own |
 
 Not in this directory:

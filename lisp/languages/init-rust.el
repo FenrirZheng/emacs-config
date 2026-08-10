@@ -63,10 +63,10 @@
 ;; servers ignore them).  All keys are ours, below.
 ;;
 ;; Server-agnostic caveat: `eglot-x-setup' is global, so its file-handling
-;; advice is live for every Eglot server (jdtls, gopls, ...), not just
+;; advice is live for every Eglot server (gopls, clangd, ...), not just
 ;; rust-analyzer.  Lives here (not the core) because its payoff and every
-;; binding are Rust; if Java navigation via the `jdt://' handler ever
-;; misbehaves, suspect an interaction and verify with `eglot-x--enabled'.
+;; binding are Rust; if another language's navigation ever misbehaves, suspect
+;; an interaction and verify with `eglot-x--enabled'.
 (use-package eglot-x
   :vc (:url "https://github.com/nemethf/eglot-x" :rev :newest)
   :after eglot
@@ -78,7 +78,7 @@
   ;;
   ;; LOAD-BEARING `with-eval-after-load': eglot-x is `:after eglot', so this
   ;; `:config' fires the first time ANY language starts Eglot -- e.g. opening a
-  ;; Java file launches jdtls -> loads `eglot' -> runs this block.  At that
+  ;; Go file launches gopls -> loads `eglot' -> runs this block.  At that
   ;; point `rust-ts-mode-map' is void (rust-ts-mode hasn't loaded), so a bare
   ;; `(define-key rust-ts-mode-map ...)' errors "void: rust-ts-mode-map" on the
   ;; first non-Rust Eglot session.  Defer the keymap wiring until rust-ts-mode

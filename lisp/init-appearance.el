@@ -29,10 +29,11 @@
   ;; LSP/Eglot segment.  `doom-modeline-lsp' is already t by default, so the
   ;; `lsp' segment is already in the 'main RHS -- but it only RENDERS once an
   ;; Eglot server actually manages the buffer.  That makes it the load-bearing
-  ;; "did the server connect?" signal: Java's jdtls can silently fail to start
-  ;; (the corp Nexus mirror in ~/.m2/settings.xml TCP-times-out on import), and
-  ;; without this segment there is NO other visual cue that gopls/clangd/jdtls
-  ;; never came up.  Stated explicitly here so the intent survives a future
+  ;; "did the server connect?" signal: a server can silently fail to start (a
+  ;; missing binary, an unreachable dependency mirror timing out on import), and
+  ;; without this segment there is NO other visual cue that gopls/clangd/
+  ;; rust-analyzer never came up.  It stays blank in Java buffers by design --
+  ;; Java runs no server (see [`languages/init-java.el'](languages/init-java.el)).  Stated explicitly here so the intent survives a future
   ;; doom-modeline default flip.
   (doom-modeline-lsp t)
   (doom-modeline-lsp-icon t)

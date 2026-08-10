@@ -33,14 +33,31 @@
 ;;                 extended common skip list (node_modules/ vendor/ dist/ ...).
 ;;                 Falls back to the Debian system conf if the tracked copy is
 ;;                 missing so a half-set-up checkout still works.
-;;   GTAGSLABEL -> native-pygments: gtags' built-in parser is C/Java/PHP-only
-;;                 (Go/Python/TS-blind), and plain ctags labels miss TS too.
-;;                 Only CREATE consumes the label (gtags records it in the DB;
-;;                 updates reuse the recorded one), but exporting it always is
-;;                 harmless -- only the gtags/global family reads these vars.
+;;   GTAGSLABEL -> java-ctags: a FENRIR-LOCAL label defined in that same
+;;                 gtags.conf.  It is `native-pygments' with `.java' lifted to
+;;                 the front of the parser chain and handed to Universal Ctags;
+;;                 every other extension keeps the parser it had (C/C++/PHP ->
+;;                 built-in, Go/Python/TypeScript/Rust -> pygments).  gtags'
+;;                 built-in Java parser is lexer-level: measured on
+;;                 ~/code/camhr/camhr it indexed ZERO fields and turned call
+;;                 sites into definitions.  See the label's comment block in
+;;                 gtags.conf for the numbers.
+;;
+;;                 EVERY path consumes the label, not just create.  Measured:
+;;                 `global --single-update' and `global -u' both re-parse with
+;;                 whatever GTAGSLABEL is in the environment AT THAT MOMENT --
+;;                 the DB does NOT record it.  Run either with the wrong label
+;;                 against a java-ctags index and the newly-written fields are
+;;                 silently dropped (no error, no warning).  That is precisely
+;;                 why this is ONE daemon-wide setenv and not a per-project
+;;                 choice: a per-project label would resurrect the
+;;                 "one call site forgot the env" bug class above.
 (let ((conf (expand-file-name "gtags.conf" user-emacs-directory)))
   (setenv "GTAGSCONF" (if (file-exists-p conf) conf "/etc/gtags/gtags.conf"))
-  (setenv "GTAGSLABEL" "native-pygments"))
+  ;; NOTE: `java-ctags' is defined ONLY in the tracked gtags.conf.  If the
+  ;; fallback system conf is in play (tracked copy missing) this label does not
+  ;; exist and gtags falls back to its `default' -- degraded, not broken.
+  (setenv "GTAGSLABEL" "java-ctags"))
 
 ;; --- gtags-mode: xref backend + on-save incremental update ------------------
 ;; Features trimmed to the two plan pillars:

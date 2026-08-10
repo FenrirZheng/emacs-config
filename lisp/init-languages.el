@@ -129,7 +129,7 @@ seems stuck on a stale answer."
 ;; release (`:ensure t', not `:ensure nil').  Why: native call hierarchy and
 ;; type hierarchy (`eglot-show-call-hierarchy' / `eglot-show-type-hierarchy',
 ;; bound below) only landed in Eglot 1.19 (2025-10); the bundled 30.1 copy has
-;; no client code for `callHierarchy/*' at all, so jdtls / gopls / rust-analyzer
+;; no client code for `callHierarchy/*' at all, so gopls / rust-analyzer / clangd
 ;; advertising those server-side was unreachable -- "server answers, client
 ;; never asks".  Gotcha: `:ensure t' ALONE cannot upgrade a built-in package --
 ;; use-package's ensure gates on `package-installed-p', which is already t for a
@@ -194,8 +194,8 @@ seems stuck on a stale answer."
   ;;               the single most-used code action for Java / Go / TS, lifted
   ;;               out of the `C-c .' transient onto its own key.
   ;;   `C-c x'  -- `eglot-code-action-extract': extract method / variable
-  ;;               (server-dependent -- rich in jdtls / rust-analyzer, sparse
-  ;;               in gopls).
+  ;;               (server-dependent -- rich in rust-analyzer, sparse in
+  ;;               gopls).
   ;;   `C-c f'  -- `eglot-format': format region (if active) else buffer, ON
   ;;               DEMAND only.  apheleia owns format-on-save (see the apheleia
   ;;               block below); this key is the manual escape hatch for buffers
@@ -210,8 +210,9 @@ seems stuck on a stale answer."
   ;;
   ;; Call / type hierarchy (native, Eglot 1.19+ -- see the `:ensure t' note at
   ;; the top of this block).  `C-c h c' = call hierarchy (callers / callees as an
-  ;; interactive tree), `C-c h t' = type hierarchy (super- / sub-types).  jdtls,
-  ;; gopls and rust-analyzer all implement these server-side.  Two per-buffer
+  ;; interactive tree), `C-c h t' = type hierarchy (super- / sub-types).  gopls,
+  ;; rust-analyzer and clangd implement these server-side; Java has no server
+  ;; here at all (see [`languages/init-java.el'](languages/init-java.el)).  Two per-buffer
   ;; display toggles share the `C-c h' ("hierarchy / hints") cluster:
   ;;   `C-c h i' -- `eglot-inlay-hints-mode': flip inlay hints off/on in this
   ;;                buffer.  Hints are globally default-on via the
@@ -358,8 +359,10 @@ seems stuck on a stale answer."
 ;; would shadow avy in every Eglot buffer instead of "a future major mode".
 ;; Needs an Eglot session live in the current buffer; in a buffer without
 ;; one, the command errors out clearly rather than silently returning
-;; nothing.  (`languages/init-java.el' advises `consult-eglot--transformer'
-;; to survive jdt:// results.)
+;; nothing.  (Java has no Eglot session at all -- see the LSP tombstone in
+;; [`languages/init-java.el'](languages/init-java.el).  The advice that once
+;; kept this command alive across jdtls' synthetic `jdt://' results went with
+;; it.)
 (use-package consult-eglot
   :after (consult eglot)
   :bind (:map eglot-mode-map
@@ -401,13 +404,14 @@ seems stuck on a stale answer."
 ;; Hooked on `prog-mode' only -- text-mode (org / markdown) has its own
 ;; heading-navigation surfaces (`org-mode' outline, `consult-outline')
 ;; and a redundant breadcrumb would clash visually in long org buffers.
-;; (`languages/init-java.el' advises `breadcrumb-project-crumbs' to skip
-;; jdt:// buffers.)
+;; (The `jdt://'-skipping advice this used to carry went out with jdtls --
+;; see the LSP tombstone in
+;; [`languages/init-java.el'](languages/init-java.el).)
 (use-package breadcrumb
   :hook (prog-mode . breadcrumb-local-mode))
 
-;; Eglot progress reporting -> echo area (rust-analyzer indexing, gopls, jdtls
-;; import, ...).  `eglot-report-progress' = `messages' routes every server's
+;; Eglot progress reporting -> echo area (rust-analyzer indexing, gopls,
+;; clangd, ...).  `eglot-report-progress' = `messages' routes every server's
 ;; `$/progress' work-done reports through a `progress-reporter', so each update
 ;; shows transiently in the echo area -- WITHOUT touching the header line
 ;; (breadcrumb keeps it) or the mode line.  (Verified: the spinner updates are

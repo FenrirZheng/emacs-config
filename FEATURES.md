@@ -532,8 +532,10 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   bundled copy had no client code for `callHierarchy/*`. Auto-starts when you open a file
   in a hooked mode **and** the language server binary is on `PATH`. Hooked modes:
   `python-ts-mode`, `go-ts-mode`, `rust-ts-mode`, `js-ts-mode`, `typescript-ts-mode`,
-  `c-ts-mode`, `c++-ts-mode`, `java-ts-mode` (so: pyright/pylsp, gopls, rust-analyzer,
-  typescript-language-server, clangd, jdtls). `eglot-autoshutdown t` kills the server when
+  `c-ts-mode`, `c++-ts-mode` (so: pyright/pylsp, gopls, rust-analyzer,
+  typescript-language-server, clangd). **`java-ts-mode` is deliberately absent** — Java
+  runs with no language server at all ([why](_doc/JAVA.md#there-is-no-language-server)).
+  `eglot-autoshutdown t` kills the server when
   its last buffer closes; the JSON-RPC events log is disabled.
 - **consult-eglot**: `M-g e` → `consult-eglot-symbols` (bound only in
   `eglot-mode-map`). Asks the language server's `workspace/symbol` index for **every**
@@ -550,9 +552,12 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   when Eglot is attached it registers its backend buffer-locally ahead of gtags and **wins
   automatically**. **The index stays fresh by itself**: every save runs an async
   `global --single-update <file>` (per-file, no re-traversal). `GTAGSCONF` (the tracked
-  [`gtags.conf`](gtags.conf) with the extended skip list) and `GTAGSLABEL=native-pygments`
-  (Go/Python/TS coverage) are exported **daemon-wide**, so create, update, on-save refresh
-  and every query all inherit them — no per-call env plumbing to forget. In an un-indexed
+  [`gtags.conf`](gtags.conf) with the extended skip list) and `GTAGSLABEL=java-ctags`
+  (built-in parser for C/C++, pygments for Go/Python/TS, **Universal Ctags for Java** — the
+  built-in Java parser indexes no fields) are exported **daemon-wide**, so create, update,
+  on-save refresh and every query all inherit them — no per-call env plumbing to forget.
+  The label is re-read on *every* invocation, so an update run under the wrong label
+  silently rots the index; see [TAGS.md](_doc/TAGS.md#env--one-setenv-every-subprocess). In an un-indexed
   buffer with no LSP, `M-.` gives a one-line `No tags here -- C-c g g builds a gtags index`
   instead of etags' 1990s `Visit tags table` prompt. Needs `global` + `universal-ctags` +
   `python3-pygments` (installed by [`shell/install-root.sh`](shell/install-root.sh)).
@@ -627,7 +632,7 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
     one go; review the aggregate in `git diff`).
   - `C-c i` — `eglot-code-action-organize-imports` (VSCode Shift-Alt-O).
   - `C-c x` — `eglot-code-action-extract`: extract method / variable (server-dependent —
-    rich in jdtls / rust-analyzer, sparse in gopls).
+    rich in rust-analyzer, sparse in gopls).
   - `C-c f` — `eglot-format`: format region (if active) else buffer, **on demand only**.
     apheleia owns format-on-save (§7's formatting notes); this is the manual escape
     hatch for buffers with no apheleia formatter and is deliberately never added to
@@ -636,11 +641,10 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   (`eglot-show-type-hierarchy`), both in `eglot-mode-map`. Native to Eglot ≥1.19 (the
   reason this config upgrades Eglot off the bundled 30.1 copy — see the Eglot bullet
   above). `C-c h c` opens an interactive tree of **callers / callees** of the symbol at
-  point; `C-c h t` opens **super- / sub-types**. Especially useful in Java (jdtls): trace
-  who calls a method, or walk an interface's implementors. gopls and rust-analyzer serve
-  these too. The tree buffer is navigable — `RET` jumps to a node's definition (into a
-  decompiled `jdt://` jar class when the caller lives in a dependency, via the URI handler
-  in §7's Java notes).
+  point; `C-c h t` opens **super- / sub-types** — trace who calls a function, or walk a
+  trait's implementors. Served by rust-analyzer, gopls and clangd. **Not available in
+  Java**, which has no server ([why](_doc/JAVA.md#there-is-no-language-server)). The tree
+  buffer is navigable — `RET` jumps to a node's definition.
 - **Inlay hints**: parameter names, inferred types, `&` reference markers etc.
   rendered inline by the LSP. Built-in in Emacs 30 — no external package. Enabled
   via `(eglot-managed-mode . eglot-inlay-hints-mode)` so it lights up on every
@@ -648,10 +652,8 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   after `let x = vec![…]`, …). Toggle per-buffer at runtime with `C-c h i`
   (`eglot-inlay-hints-mode`); disable for a noisy language by removing its
   hook in that language's [`lisp/languages/init-<lang>.el`](lisp/languages/) module
-  rather than touching the global setting. Java (jdtls) shows parameter-name hints
-  for **all** arguments, not just literals — `java.inlayHints.parameterNames` is set
-  to `"all"` in [`init-java.el`](lisp/languages/init-java.el) (jdtls defaults to
-  `"literals"`); C/C++ (clangd) emit hints by default.
+  rather than touching the global setting. C/C++ (clangd) emit hints by default. Java
+  gets none — no server ([why](_doc/JAVA.md#there-is-no-language-server)).
 - **Semantic-tokens highlighting** — `C-c h s` (`eglot-semantic-tokens-mode`, native
   Eglot ≥1.20). Server-driven highlighting that knows local vs. captured variable,
   type vs. value, etc., beyond what tree-sitter font-lock infers. **Per-buffer opt-in,
@@ -967,8 +969,8 @@ First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart 
   (`doom-modeline-check 'simple`), no buffer-encoding segment, `truncate-upto-project` file
   names, `vcs-max-length 18`. The **LSP/Eglot segment** is on (`doom-modeline-lsp`) — it
   renders only once an Eglot server manages the buffer, making it the load-bearing "did the
-  server connect?" signal (e.g. when jdtls silently fails to start because the corp Nexus
-  mirror times out on import, the missing segment is the tell).
+  server connect?" signal (e.g. when gopls or clangd silently fails to start, the missing
+  segment is the tell). It stays blank in Java buffers by design — no server there.
 - **nerd-icons** — glyph set used by doom-modeline, `nerd-icons-dired` (§12) and Corfu.
   Run `M-x nerd-icons-install-fonts` **once** after install to fetch the font. On a TTY the
   glyphs **display** only when the terminal emulator's own font is a Nerd Font (or has
