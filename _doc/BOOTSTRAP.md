@@ -99,8 +99,26 @@ which then shadows the built-in `flymake` even though its `use-package` block st
   `(require 'init-<area>)` has run at least once (otherwise `provide` hasn't registered).
 - **Stale `.elc` artefacts**: byte-compiled `*.elc` files sit next to their `.el` siblings
   in [`lisp/`](../lisp/) and are gitignored. `load-prefer-newer t` (set in `early-init.el`)
-  means a fresh `.el` wins, but if you suspect a stale `.elc` is preferred, delete it:
-  `fdfind -e elc -X rm` from the repo root.
+  means a fresh `.el` wins — but a `.elc` written *after* its `.el` wins instead, which is
+  exactly what an ad-hoc `byte-compile-file` produces. Delete them with:
+
+  ```bash
+  fdfind --no-ignore -e elc --exclude elpa --exclude eln-cache . -X rm
+  ```
+
+  **`--no-ignore` is load-bearing.** fd honours [`.gitignore`](../.gitignore), which ignores
+  `*.elc`, so the bare `fdfind -e elc -X rm` this doc used to recommend matches nothing and
+  silently reports success. `--exclude elpa` keeps the 644 package-installed `.elc` files,
+  which are legitimate and expensive to regenerate.
+
+  The failure mode this guards is worse than "stale": a module byte-compiled in a bare
+  `emacs -Q --batch` has none of its runtime dependencies loaded, so a macro needing them
+  expands **wrongly instead of erroring**. Observed 2026-08-10: `(setf
+  (treesit-auto-recipe-abi14-revision r) "v0.23.3")` in
+  [`init-rust.el`](../lisp/languages/init-rust.el) compiled — with no treesit-auto loaded —
+  into a call to the non-existent function `(setf treesit-auto-recipe-abi14-revision)`. The
+  daemon then loaded that `.elc` and aborted init with `Symbol's function definition is
+  void`. The `.el` was fine the whole time.
 - **Native compilation**: `M-x my/native-compile-config` pre-warms `elpa/` + `lisp/`
   asynchronously; it skips files whose `.eln` is current, so re-running is cheap.
 - Timestamped backups (`init.el.bak-YYYYMMDD-HHMM`) from ad-hoc edits are gitignored —

@@ -87,9 +87,20 @@ Operational how-to (fresh clone, the one-time Eglot upgrade, grammar ABI pinning
 ## Build / test / run
 
 Plain Elisp — there is no compile or test command. Reload with `M-x load-file RET init.el`,
-or per module once its `require` has run at least once. Suspect a stale `.elc`? `fdfind -e
-elc -X rm`. Details, native compilation and the tree-sitter grammar ABI table:
-[_doc/BOOTSTRAP.md](_doc/BOOTSTRAP.md).
+or per module once its `require` has run at least once. Details, native compilation and the
+tree-sitter grammar ABI table: [_doc/BOOTSTRAP.md](_doc/BOOTSTRAP.md).
+
+- **Never leave a `.elc` behind from an ad-hoc `byte-compile-file` syntax check.** A module
+  compiled in a bare `emacs -Q --batch` has none of its runtime deps loaded, so macros that
+  need them expand WRONG rather than erroring — `(setf (treesit-auto-recipe-abi14-revision
+  r) …)` in [`init-rust.el`](lisp/languages/init-rust.el) compiled to a call to the
+  non-existent function `(setf treesit-auto-recipe-abi14-revision)`, and because
+  `load-prefer-newer` then preferred that fresh `.elc`, the daemon died at startup with
+  `Symbol's function definition is void`. Delete the `.elc` in the same breath as creating it.
+- **Deleting stale `.elc` needs `--no-ignore`**: `fdfind --no-ignore -e elc --exclude elpa
+  --exclude eln-cache . -X rm`. Plain `fdfind -e elc -X rm` matches **nothing** — fd honours
+  [`.gitignore`](.gitignore), which ignores `*.elc`, so the cleanup silently no-ops. The
+  `--exclude elpa` matters too: those 644 `.elc` are package-installed and must stay.
 
 Native modules are built out-of-band and their output is gitignored: `cpp/build.sh` (or
 `M-x junit-runner-build`) → `cpp/lib/`; `make -C rust/<subproject>` (or `M-x
