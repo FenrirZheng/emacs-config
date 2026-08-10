@@ -61,8 +61,8 @@ the URI handler, read-only timing and `normal-mode` interaction right.
 
 ## The index
 
-Java is parsed by **Universal Ctags**, not gtags' built-in Java parser, via the
-`java-ctags` label in [`gtags.conf`](../gtags.conf). The built-in parser indexes
+Java is parsed by the **pygments plug-in**, not gtags' built-in Java parser, via the
+`java-pygments` label in [`gtags.conf`](../gtags.conf). The built-in parser indexes
 **no fields at all** and records call sites as definitions; see
 [Why Java is not on the built-in parser](TAGS.md#why-java-is-not-on-the-built-in-parser)
 for the measurements.
@@ -80,7 +80,7 @@ Two things that will silently give you a worse index:
   shadows.
 - **The wrong `GTAGSLABEL`.** It is re-read on *every* invocation and is not
   recorded in the database, so any build or update run under a different label
-  re-parses with a different parser. `init-tags.el` exports `java-ctags`
+  re-parses with a different parser. `init-tags.el` exports `java-pygments`
   daemon-wide precisely so no call site can forget.
 
 ## Project resolution — where the index gets rooted
@@ -169,13 +169,16 @@ browser or open the sources jar manually.
 
 If the index predates 2026-08-10 it was built with gtags' built-in Java parser,
 which indexes no fields. Rebuild with `C-c g g` — `init-tags.el` now exports
-`GTAGSLABEL=java-ctags`.
+`GTAGSLABEL=java-pygments`.
 
-### Builds print `ctags-universal: Warning: Unknown language "…"`
+### `M-?` on an annotation finds nothing
 
-Cosmetic. The plugin hands ctags the whole merged langmap and ctags does not
-recognise pygments' language names. Verified: the tag set produced for a Java
-file is byte-identical to a pure `new-ctags` build.
+Should not happen — [`init-tags.el`](../lisp/init-tags.el) retries `@SYMBOL`
+automatically. If it does, the retry is only wired for `java-mode` /
+`java-ts-mode` buffers; check `major-mode`. The underlying reason is that
+pygments indexes annotations *with* their sigil (`@Autowired`) while
+point-at-symbol yields the bare name — `C-u M-?` and typing `@Autowired` is the
+manual equivalent.
 
 ### The index misses a whole subtree
 
@@ -197,7 +200,8 @@ Tier 1 marker at the level you want.
 |---|---|
 | Project root resolution | `fenrir/project-find-java-build-root`, `fenrir/java-workspace-marker` |
 | Container marker filename | `fenrir/java-workspace-marker` (default `.eglot-java-workspace`) |
-| Java parser routing | the `java-ctags` label + `universal-ctags-java` block in [`gtags.conf`](../gtags.conf) |
+| Java parser routing | the `java-pygments` label + `pygments-java` block in [`gtags.conf`](../gtags.conf) |
+| Annotation `@` retry for `M-?` | `:around` on `xref-backend-references` in [`init-tags.el`](../lisp/init-tags.el) |
 | Index build / update / diagnose | [`init-tags.el`](../lisp/init-tags.el) — `C-c g g` / `C-c g u` / `C-c g d` |
 | JUnit runner | `junit-runner` elisp + `junit-core` module (`cpp/junit-core/`) |
 | `C-c t` key table | `fenrir/junit-bind-keys` |
@@ -219,7 +223,7 @@ Tier 1 marker at the level you want.
 
 ## References
 
-- [TAGS.md](TAGS.md) — index creation, the `java-ctags` label, nested-index shadowing
+- [TAGS.md](TAGS.md) — index creation, the `java-pygments` label, nested-index shadowing
 - [FEATURES.md](../FEATURES.md) — the `C-c g` and `C-c t` key tables
 - [GOTCHAS.md](GOTCHAS.md) — load-bearing oddities across the config
 - [`cpp/README.md`](../cpp/README.md) — the `junit-core` dynamic module

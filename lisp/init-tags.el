@@ -33,31 +33,38 @@
 ;;                 extended common skip list (node_modules/ vendor/ dist/ ...).
 ;;                 Falls back to the Debian system conf if the tracked copy is
 ;;                 missing so a half-set-up checkout still works.
-;;   GTAGSLABEL -> java-ctags: a FENRIR-LOCAL label defined in that same
+;;   GTAGSLABEL -> java-pygments: a FENRIR-LOCAL label defined in that same
 ;;                 gtags.conf.  It is `native-pygments' with `.java' lifted to
-;;                 the front of the parser chain and handed to Universal Ctags;
-;;                 every other extension keeps the parser it had (C/C++/PHP ->
-;;                 built-in, Go/Python/TypeScript/Rust -> pygments).  gtags'
-;;                 built-in Java parser is lexer-level: measured on
-;;                 ~/code/camhr/camhr it indexed ZERO fields and turned call
-;;                 sites into definitions.  See the label's comment block in
-;;                 gtags.conf for the numbers.
+;;                 the front of the parser chain and handed to the pygments
+;;                 plug-in; every other extension keeps the parser it had
+;;                 (C/C++/PHP -> built-in, Go/Python/TypeScript/Rust ->
+;;                 pygments).  gtags' built-in Java parser is lexer-level:
+;;                 measured on ~/code/camhr/camhr it indexed ZERO fields and
+;;                 turned call sites into definitions.
+;;
+;;                 Do NOT "simplify" this to Universal Ctags directly.  It
+;;                 yields a byte-identical DEFINITION set (pygments_parser.py
+;;                 merges ctags definitions with its own token stream), but
+;;                 ctags has no notion of references -- routing `.java' at it
+;;                 empties GRTAGS and `M-?' returns nothing.  Measured, same
+;;                 tree: -r publishJob 7 vs 0, -s ArrayList 37 vs 0.  Java has
+;;                 no language server here, so gtags IS its `M-?'.
 ;;
 ;;                 EVERY path consumes the label, not just create.  Measured:
 ;;                 `global --single-update' and `global -u' both re-parse with
 ;;                 whatever GTAGSLABEL is in the environment AT THAT MOMENT --
 ;;                 the DB does NOT record it.  Run either with the wrong label
-;;                 against a java-ctags index and the newly-written fields are
-;;                 silently dropped (no error, no warning).  That is precisely
+;;                 against a java-pygments index and the newly-written fields
+;;                 are silently dropped (no error, no warning).  That is
 ;;                 why this is ONE daemon-wide setenv and not a per-project
 ;;                 choice: a per-project label would resurrect the
 ;;                 "one call site forgot the env" bug class above.
 (let ((conf (expand-file-name "gtags.conf" user-emacs-directory)))
   (setenv "GTAGSCONF" (if (file-exists-p conf) conf "/etc/gtags/gtags.conf"))
-  ;; NOTE: `java-ctags' is defined ONLY in the tracked gtags.conf.  If the
+  ;; NOTE: `java-pygments' is defined ONLY in the tracked gtags.conf.  If the
   ;; fallback system conf is in play (tracked copy missing) this label does not
   ;; exist and gtags falls back to its `default' -- degraded, not broken.
-  (setenv "GTAGSLABEL" "java-ctags"))
+  (setenv "GTAGSLABEL" "java-pygments"))
 
 ;; --- gtags-mode: xref backend + on-save incremental update ------------------
 ;; Features trimmed to the two plan pillars:
@@ -76,6 +83,65 @@
   :demand t                     ; global mode: must be on before any M-. needs it
   :custom (gtags-mode-features '(xref hooks))   ; read at enable time, set first
   :config (gtags-mode 1))
+
+;; --- M-? must not prompt with the whole tag table ---------------------------
+;; `xref-prompt-for-identifier' ships as
+;;   (not xref-find-definitions xref-find-definitions-other-window
+;;        xref-find-definitions-other-frame)
+;; -- note `xref-find-references' is NOT in that exclusion list, so stock `M-?'
+;; ALWAYS prompts, even with a perfectly good symbol under point.  Harmless
+;; under Eglot (its completion table is small), actively hostile under gtags:
+;; `gtags-mode's `xref-backend-identifier-completion-table' returns EVERY tag
+;; in the index, so Vertico opens on thousands of unrelated symbols
+;; (`PATH', `CMS', `CG', `DG', ...) with the real answer sitting in the
+;; "(default ...)" text nobody reads.  Observed on a Java buffer: 8989
+;; candidates offered for a plain `M-?'.
+;;
+;; Add `xref-find-references' to the negated list so it uses the symbol at
+;; point directly.  The two escape hatches survive, because `xref--read-identifier'
+;; (xref.el, Emacs 30.1 line ~1557) prompts on
+;;   (or current-prefix-arg (not def) (xref--prompt-p this-command))
+;; -- so `C-u M-?' still prompts, and so does a `M-?' with no symbol under
+;; point.  Only the "symbol is right there and we asked anyway" case changes.
+(with-eval-after-load 'xref
+  (setq xref-prompt-for-identifier
+        '(not xref-find-definitions
+              xref-find-definitions-other-window
+              xref-find-definitions-other-frame
+              xref-find-references)))
+
+;; --- Java annotations: the index key carries the `@' ------------------------
+;; Under `java-pygments' the pygments lexer emits a Java annotation as ONE
+;; Name.Decorator token INCLUDING the sigil, so the index key is `@Autowired'.
+;; Emacs disagrees: `@' is punctuation, so `find-tag-default' / thing-at-point
+;; with point inside the name return the bare `Autowired'.  The bare form is
+;; not a key, so `M-?' on any annotation answers NOTHING -- silently, and in a
+;; Spring codebase that is most of the interesting call sites (measured on
+;; ~/code/camhr/camhr: 623 `@Autowired' occurrences, `-r -s Autowired' = 0,
+;; `-r -s @Autowired' = 261).
+;;
+;; The old built-in parser stored annotations under the bare name, so this is a
+;; regression of the parser switch, not a pre-existing gap -- hence a fix here
+;; rather than a documented caveat.
+;;
+;; Extends the generic instead of advising a package internal: an `:around'
+;; method on the `:gtagsroot' backend only.  It costs one extra `global' call,
+;; and only on the miss path -- if the bare symbol already resolved, or the
+;; user typed the `@' themselves, `cl-call-next-method's result is returned
+;; untouched.  Definitions deliberately not covered: an annotation's DEFINITION
+;; is its `public @interface Foo' declaration, which ctags records under the
+;; bare `Foo', so `M-.' already works.
+(require 'cl-lib)
+(with-eval-after-load 'gtags-mode
+  (cl-defmethod xref-backend-references :around ((backend (head :gtagsroot)) symbol)
+    "Retry SYMBOL as `@SYMBOL' when the bare form has no references.
+Java annotations are indexed with their sigil; point-at-symbol never
+includes it."
+    (or (cl-call-next-method)
+        (and (stringp symbol)
+             (not (string-prefix-p "@" symbol))
+             (derived-mode-p 'java-mode 'java-ts-mode)
+             (cl-call-next-method backend (concat "@" symbol))))))
 
 ;; Defensive: keep the etags fallback's globals empty so a stray
 ;; `visit-tags-table' can't seed them with a binary GTAGS file or a Java

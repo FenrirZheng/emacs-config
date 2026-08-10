@@ -552,9 +552,9 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   when Eglot is attached it registers its backend buffer-locally ahead of gtags and **wins
   automatically**. **The index stays fresh by itself**: every save runs an async
   `global --single-update <file>` (per-file, no re-traversal). `GTAGSCONF` (the tracked
-  [`gtags.conf`](gtags.conf) with the extended skip list) and `GTAGSLABEL=java-ctags`
-  (built-in parser for C/C++, pygments for Go/Python/TS, **Universal Ctags for Java** — the
-  built-in Java parser indexes no fields) are exported **daemon-wide**, so create, update,
+  [`gtags.conf`](gtags.conf) with the extended skip list) and `GTAGSLABEL=java-pygments`
+  (built-in parser for C/C++, pygments for Go/Python/TS **and Java** — the built-in Java
+  parser indexes no fields) are exported **daemon-wide**, so create, update,
   on-save refresh and every query all inherit them — no per-call env plumbing to forget.
   The label is re-read on *every* invocation, so an update run under the wrong label
   silently rots the index; see [TAGS.md](_doc/TAGS.md#env--one-setenv-every-subprocess). In an un-indexed

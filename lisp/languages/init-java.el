@@ -12,9 +12,12 @@
 ;;     zero-latency, all purely local to the buffer.
 ;;   * gtags / GNU Global for cross-file `M-.' / `M-?' via the global xref
 ;;     backend that [`lisp/init-tags.el'](../init-tags.el) installs.  The tag
-;;     database is built by `C-c g g'; `.java' is parsed by Universal Ctags
-;;     (the `java-ctags' label in [`gtags.conf'](../../gtags.conf)) because
-;;     gtags' built-in Java parser indexes no fields.
+;;     database is built by `C-c g g'; `.java' is parsed by the pygments
+;;     plug-in (the `java-pygments' label in [`gtags.conf'](../../gtags.conf))
+;;     rather than the built-in parser, because
+;;     gtags' built-in Java parser indexes no fields.  Annotations are indexed
+;;     WITH their sigil (`@Autowired'); [`init-tags.el'](../init-tags.el) adds
+;;     the `M-?' retry that hides that.
 ;;   * The two-tier project-root finder below, which decides where that index
 ;;     is rooted.
 ;;   * The JUnit runner (`C-c t ...'), a tree-sitter + `compile' front-end that

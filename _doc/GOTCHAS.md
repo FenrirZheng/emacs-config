@@ -86,9 +86,15 @@ The parts that bite an editor who isn't reading that file:
   overloaded or common name returns every same-named definition (`getId`: 75 in one real
   project) and `M-?` mixes same-named locals in with real call sites. That is the expected
   behaviour, not a broken index.
-- **`.java` is parsed by Universal Ctags, not gtags' built-in parser** — the `java-ctags`
-  label in [`gtags.conf`](../gtags.conf). The built-in Java parser indexes **no fields**.
-  An index built before the switch needs one `C-c g g`.
+- **`.java` is parsed by the pygments plug-in, not gtags' built-in parser** — the
+  `java-pygments` label in [`gtags.conf`](../gtags.conf). The built-in Java parser indexes
+  **no fields**. An index built before the switch needs one `C-c g g`.
+- **Don't "simplify" that label to Universal Ctags.** It gives an identical definition set
+  and empties `GRTAGS` — ctags has no notion of references, so `M-?` goes silently dead.
+  Measured both ways; the numbers are in [TAGS.md](TAGS.md#why-java-is-not-on-the-built-in-parser).
+- **Annotations are indexed as `@Autowired`, not `Autowired`** — pygments keeps the sigil.
+  `init-tags.el` carries an `:around` method that retries `@SYMBOL` in Java buffers; don't
+  delete it or `M-?` on every Spring annotation returns nothing.
 - **`var/lsp-java/` (453 MB) is dead weight**, not a dependency. Nothing reads it. Delete
   it once you're sure jdtls isn't coming back.
 - The deleted jdtls code — launcher, `jdt://` URI handler, and the five advices that kept

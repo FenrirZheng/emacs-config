@@ -132,7 +132,7 @@ One line each; the evidence is in [_doc/GOTCHAS.md](_doc/GOTCHAS.md) and
 - **Java deliberately runs with NO language server** — [`init-java.el`](lisp/languages/init-java.el)
   attaches no `eglot-ensure` and registers no `eglot-server-programs` entry; jdtls was
   removed for its startup stall and 3 GB heap. `M-.` is gtags (name-level, no types), and
-  `.java` is parsed by Universal Ctags via the `java-ctags` label. Don't "restore" the
+  `.java` is parsed by the pygments plug-in via the `java-pygments` label. Don't "restore" the
   missing hook. ([why + what it costs](_doc/JAVA.md#there-is-no-language-server))
 - **Java debugging is unsupported** (dape has no Java adapter) — use IntelliJ/VSCode; don't
   reintroduce `dap-mode`, whose fringe-bitmap breakpoints are invisible on TTY.
