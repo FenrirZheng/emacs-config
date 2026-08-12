@@ -1,11 +1,56 @@
 #!/usr/bin/env bash
-# Pre-commit guard for ~/.emacs.d — scan staged content for leaked credentials.
+# Pre-commit guard for ~/.emacs.d — secret scan + "does this config still boot?".
 # Wired per-clone via:  git config core.hooksPath .githooks
 # (core.hooksPath is local config, not tracked — re-run after a fresh clone.)
 set -euo pipefail
 
+repo_root="$(git rev-parse --show-toplevel)"
+
+# ---------------------------------------------------------------- secrets ---
 if command -v gitleaks >/dev/null 2>&1; then
     gitleaks git --staged --no-banner
 else
     echo "pre-commit: gitleaks not found on PATH — skipping secret scan" >&2
+fi
+
+if ! command -v emacs >/dev/null 2>&1; then
+    echo "pre-commit: emacs not found on PATH — skipping the load checks" >&2
+    exit 0
+fi
+
+# ------------------------------------------------------------ check-parens ---
+# Cheap (~0.1 s): a syntax sweep over every hand-authored module.  `check-parens'
+# needs `emacs-lisp-mode' syntax — in a fundamental-mode temp buffer an
+# apostrophe inside a comment reads as an unmatched quote and every rich-comment
+# module in this repo false-positives.  `delay-mode-hooks' keeps it side-effect
+# free.  It runs BEFORE the load test because it names the offending file, while
+# a paren error surfaces from the loader as a confusing end-of-file backtrace.
+emacs -Q --batch --eval '
+(let ((default-directory (car command-line-args-left))
+      (bad 0))
+  (dolist (f (append (file-expand-wildcards "lisp/*.el")
+                     (file-expand-wildcards "lisp/languages/*.el")
+                     (list "init.el" "early-init.el" "custom.el")))
+    (with-temp-buffer
+      (delay-mode-hooks (emacs-lisp-mode))
+      (insert-file-contents f)
+      (condition-case err
+          (check-parens)
+        (error (setq bad (1+ bad))
+               (message "pre-commit: unbalanced parens: %s: %S" f err)))))
+  (when (> bad 0) (kill-emacs 1)))' "$repo_root"
+
+# --------------------------------------------------------- startup smoke ---
+# ~1 s: load the real init.el in batch with `debug-on-error' so a broken module
+# fails here rather than at the next daemon restart (the .elc trap in
+# _doc/GOTCHAS.md cost exactly that).  Caveats, deliberate:
+#   * it tests the WORKING TREE, not the staged content — good enough as a
+#     "did I just break the config" tripwire, and much faster than a stash;
+#   * `-Q' skips site-start.d (noisy, unrelated) but NOT early-init.el, which
+#     batch never loads anyway; GUI/daemon-only code is guarded by
+#     `noninteractive' / display predicates in the modules themselves.
+if ! emacs -Q --batch --eval '(setq debug-on-error t)' \
+        -l "$repo_root/init.el" --eval '(message "pre-commit: init OK")'; then
+    echo "pre-commit: init.el failed to load in batch — fix it before committing" >&2
+    exit 1
 fi
