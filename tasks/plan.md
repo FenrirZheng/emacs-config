@@ -2,7 +2,7 @@
 
 ## Context
 
-[`tasks/20260521-tmux-create-claude/SPEC.md`](20260521-tmux-create-claude/SPEC.md)
+[`tasks/done/20260521-tmux-create-claude/SPEC.md`](done/20260521-tmux-create-claude/SPEC.md)
 asks for an interactive Emacs command that drives `tmux` from inside Emacs: it
 should make a vertical (left/right) split of the current pane — the equivalent
 of tmux's `Prefix %` — launch the `claude` CLI in the new pane, and name the

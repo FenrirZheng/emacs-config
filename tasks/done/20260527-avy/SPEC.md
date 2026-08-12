@@ -4,7 +4,7 @@
 場景：TTY-first（tmux + emacsclient -nw）、中英混用、常開 helpful/magit/eww/compile/org。
 
 ────────────────────────────────────────────────────────
-完成狀態（2026-05-27 落地於 [lisp/init-editing.el](../../lisp/init-editing.el)，commit 7340843）
+完成狀態（2026-05-27 落地於 [lisp/init-editing.el](../../../lisp/init-editing.el)，commit 7340843）
 ────────────────────────────────────────────────────────
 
 Tier A 全套：A1 ✓ A2 ✓ A3 ✓ A4 ✓ A5 ✓

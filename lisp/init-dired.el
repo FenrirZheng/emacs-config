@@ -25,7 +25,7 @@
 ;;     spare the width).  Re-enable via `(use-package dired-preview :hook
 ;;     (dired-mode . dired-preview-mode))' if you want it back.
 ;;   * `dirvish-side' (the treemacs-like sidebar) -- already retired from
-;;     Tier 1 in tasks/20260525-1808-vscode-parity-tier1/TASKS.md.
+;;     Tier 1 in tasks/done/20260525-1808-vscode-parity-tier1/TASKS.md.
 ;;   * the `?' dispatch transient + setup-menu / ls-switches-menu /
 ;;     quicksort -- which-key (init-defaults.el) covers discoverability,
 ;;     and `dired-listing-switches' is pinned anyway.

@@ -3,7 +3,7 @@
 Working tree: `/home/fenrir/.emacs.d` on branch `main`.
 Spec: [`SPEC.md`](../SPEC.md) — read that first; this plan refers back to it.
 
-Parent dotfiles repo guidance: [`/home/fenrir/CLAUDE.md`](../../CLAUDE.md).
+Parent dotfiles repo guidance: [`/home/fenrir/CLAUDE.md`](../../../CLAUDE.md).
 Distinct from the in-flight Lua work tracked in [`plan.md`](plan.md) /
 [`todo.md`](todo.md) — these two task streams touch disjoint files and can
 proceed independently.
@@ -307,7 +307,7 @@ so the README describes shipping behaviour).
 - [ ] Pre-existing dirty files ([`custom.el`](../custom.el),
       [`_doc/GO.md`](../_doc/GO.md), [`FEATURES.md`](../FEATURES.md), and
       the Lua-work [`tasks/`](.) directory) stay out of this commit.
-- [ ] Commit per [repo commit conventions](../../CLAUDE.md):
+- [ ] Commit per [repo commit conventions](../../../CLAUDE.md):
       `install: split into root (apt) and user (cargo/go/rustup/npm) scopes`
       — single commit bundling the four-file refactor + the README update,
       matching the `<area>: <verb> <thing>` style of recent commits.

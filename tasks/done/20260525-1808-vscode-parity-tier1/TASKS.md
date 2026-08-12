@@ -10,17 +10,17 @@
 
 | # | VSCode 對應 | 套件 | 目標模組 |
 |---|---|---|---|
-| 1 | Error Lens (inline diagnostic) | `sideline` + `sideline-flymake` | [`lisp/init-languages.el`](../../lisp/init-languages.el) |
-| 2 | Inlay hints | 內建 `eglot-inlay-hints-mode` | [`lisp/init-languages.el`](../../lisp/init-languages.el) |
-| 3 | Quick Fix 燈泡 (Ctrl+.) | 內建 `eglot-code-actions` 綁鍵 | [`lisp/init-languages.el`](../../lisp/init-languages.el) |
-| 4 | GitHub PR Reviewer | `forge` | [`lisp/init-git.el`](../../lisp/init-git.el) |
+| 1 | Error Lens (inline diagnostic) | `sideline` + `sideline-flymake` | [`lisp/init-languages.el`](../../../lisp/init-languages.el) |
+| 2 | Inlay hints | 內建 `eglot-inlay-hints-mode` | [`lisp/init-languages.el`](../../../lisp/init-languages.el) |
+| 3 | Quick Fix 燈泡 (Ctrl+.) | 內建 `eglot-code-actions` 綁鍵 | [`lisp/init-languages.el`](../../../lisp/init-languages.el) |
+| 4 | GitHub PR Reviewer | `forge` | [`lisp/init-git.el`](../../../lisp/init-git.el) |
 
 > T5（常駐左側檔案樹 / dirvish-side）已於 2026-05-25 從 Tier 1 移除，理由：daemon 啟動就跳 sidebar 在 TTY 多 frame 場景會搶版面、手動 toggle 又跟既有 `C-x C-d` / dired 重複。
 
 ## Implementation
 
 - ☑ **T1** Error Lens via sideline
-  - 在 [`init-languages.el`](../../lisp/init-languages.el) `flymake` block 後新增
+  - 在 [`init-languages.el`](../../../lisp/init-languages.el) `flymake` block 後新增
     `use-package sideline` + `use-package sideline-flymake`。
   - `:hook (flymake-mode . sideline-mode)`；`sideline-backends-right '(sideline-flymake)`。
   - `sideline-flymake-display-mode 'point`（只顯示當前行，避免整 buffer 雜訊）。
@@ -29,7 +29,7 @@
     `M-n` / `M-p` 跳到下個錯誤時 sideline 跟著移動。
 
 - ☑ **T2** Inlay hints 開關
-  - 在 [`init-languages.el`](../../lisp/init-languages.el) `(use-package eglot)`
+  - 在 [`init-languages.el`](../../../lisp/init-languages.el) `(use-package eglot)`
     的 `:hook` 裡加一行 `(eglot-managed-mode . eglot-inlay-hints-mode)`。
   - 不需要新套件 — Emacs 30 內建。
   - 驗收：開一個 Go 檔案，呼叫帶多參數的 function，參數名稱以 dim face inline
@@ -37,7 +37,7 @@
   - 若覺得太吵：`(setq eglot-inlay-hints-mode-map ...)` 可綁 `C-c C-i` 來 toggle。
 
 - ☑ **T3** Code Actions keybinding（VSCode `Ctrl+.` 等價）
-  - 在 [`init-languages.el`](../../lisp/init-languages.el) `(use-package eglot)`
+  - 在 [`init-languages.el`](../../../lisp/init-languages.el) `(use-package eglot)`
     末尾加 `:bind (:map eglot-mode-map ("C-c ." . eglot-code-actions))`。
   - 為什麼是 `C-c .`：呼應 VSCode 的 `Ctrl+.`，且不與既有任何 binding 衝突
     （`C-.` 已給 embark-act，所以走 `C-c` prefix）。
@@ -47,7 +47,7 @@
     也可以另外綁鍵，但先不加 — 先看 `C-c .` 列表夠不夠用。
 
 - ☑ **T4** Forge — Magit 內 GitHub PR / issue
-  - 在 [`init-git.el`](../../lisp/init-git.el) `(use-package magit-todos)` 之前
+  - 在 [`init-git.el`](../../../lisp/init-git.el) `(use-package magit-todos)` 之前
     加 `(use-package forge :after magit)`。
   - 不在 elpa/，先 `M-x my/package-refresh` 再重啟。
   - 首次使用：`M-x forge-add-repository` 在當前 repo 啟用；token 走 `auth-source`
@@ -82,7 +82,7 @@
 
 ## Out of scope（明確不做）
 
-- ❌ 重新啟用 `global-corfu-mode`（user 已刻意關掉，需獨立決策 — 見 [`init-corfu.el`](../../lisp/init-corfu.el) 頭部註解）。
+- ❌ 重新啟用 `global-corfu-mode`（user 已刻意關掉，需獨立決策 — 見 [`init-corfu.el`](../../../lisp/init-corfu.el) 頭部註解）。
 - ❌ 換 `lsp-mode`（為了 code lens）。Eglot 投入過深，遷移成本大於收益。
 - ❌ `eldoc-box` / `lsp-ui` / 任何 child-frame 套件 — TTY-only 環境直接消失。
 - ❌ T5 / 常駐左側檔案樹（dirvish-side）— 拆出 Tier 1，理由如 Scope 註解。
@@ -92,7 +92,7 @@
 
 | doc | why |
 |-----|-----|
-| [`init-languages.el`](../../lisp/init-languages.el) | T1–T3 改動點：Eglot、Flymake、sideline |
-| [`init-git.el`](../../lisp/init-git.el) | T4 改動點：Forge 嵌進 magit block 之間 |
-| [`init-corfu.el`](../../lisp/init-corfu.el) | 為什麼 Out of scope 不重啟 corfu popup（同一決策的歷史） |
-| [`FEATURES.md`](../../FEATURES.md) | 完成後同步：新 keybinding (`C-c .`) 與 forge prefix (`'@'`) |
+| [`init-languages.el`](../../../lisp/init-languages.el) | T1–T3 改動點：Eglot、Flymake、sideline |
+| [`init-git.el`](../../../lisp/init-git.el) | T4 改動點：Forge 嵌進 magit block 之間 |
+| [`init-corfu.el`](../../../lisp/init-corfu.el) | 為什麼 Out of scope 不重啟 corfu popup（同一決策的歷史） |
+| [`FEATURES.md`](../../../FEATURES.md) | 完成後同步：新 keybinding (`C-c .`) 與 forge prefix (`'@'`) |

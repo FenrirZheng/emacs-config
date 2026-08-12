@@ -13,7 +13,7 @@ package install with no commit; Phase 3 is a deferred follow-up.
     - `(package-installed-p 'dirvish)` returns `t` in the running daemon.
     - `(executable-find "fdfind")` returns a non-nil path
       (Debian's `fd` binary — already required by global
-      [`~/.claude/CLAUDE.md`](../../.claude/CLAUDE.md)).
+      [`~/.claude/CLAUDE.md`](../../../.claude/CLAUDE.md)).
   - Verify:
     ```bash
     emacsclient -e '(my/package-refresh)'
@@ -157,7 +157,7 @@ package install with no commit; Phase 3 is a deferred follow-up.
       [`SPEC.md` Code Style](../SPEC.md#code-style)'s `:bind` form.
     - Cross-link points back to
       [`lisp/init-dirvish.el`](../lisp/init-dirvish.el) per the [global
-      cross-references rule](../../.claude/CLAUDE.md#cross-references-in-documentation).
+      cross-references rule](../../../.claude/CLAUDE.md#cross-references-in-documentation).
   - Verify: read the rendered section in a markdown viewer; check that
     keybindings match the actual `init-dirvish.el` body.
   - Files: [`../FEATURES.md`](../FEATURES.md).

@@ -8,19 +8,19 @@
 2. 視窗背景改為透明 — TTY 與 GUI 各自處理。
 3. 增量搜尋失配時的 `isearch-fail` face,由 doom-themes 預設的紅色改為 Tokyo Night 黃色。
 
-涉及檔案:[`lisp/init-appearance.el`](../../lisp/init-appearance.el)、[`custom.el`](../../custom.el)。
+涉及檔案:[`lisp/init-appearance.el`](../../../lisp/init-appearance.el)、[`custom.el`](../../../custom.el)。
 
 ## 2. 功能需求 (Functional Requirements)
 
 ### 2.1 佈景主題切換
 
-* 檔案:[`lisp/init-appearance.el`](../../lisp/init-appearance.el)
+* 檔案:[`lisp/init-appearance.el`](../../../lisp/init-appearance.el)
 * 變更:`use-package doom-themes` 的 `:config` 中,`(load-theme 'doom-one t)` → `(load-theme 'doom-tokyo-night t)`。
 * `doom-tokyo-night` 已隨 `doom-themes` 套件附帶,無需額外安裝。
 
 ### 2.2 透明背景
 
-* 檔案:[`lisp/init-appearance.el`](../../lisp/init-appearance.el)
+* 檔案:[`lisp/init-appearance.el`](../../../lisp/init-appearance.el)
 * 透明背景屬「逐 frame」設定 — daemon 每開一個 `emacsclient` frame 都必須重跑,因此實作於既有的 `fenrir/setup-frame`(掛在 `server-after-make-frame-hook`)。
 * 行為依 frame 類型分流:
   * **TTY**:將 `default` face 的背景設為魔術值 `"unspecified-bg"`,使 Emacs 不再自行塗背景,讓終端機 / compositor 的透明透出。
@@ -29,7 +29,7 @@
 
 ### 2.3 isearch-fail 配色
 
-* 檔案:[`custom.el`](../../custom.el)
+* 檔案:[`custom.el`](../../../custom.el)
 * 於 `custom-set-faces` 區塊新增 `isearch-fail` override:
   * 背景:`#e0af68`(Tokyo Night 黃 — 主題的 `warning` 警告色,語義上對應「搜尋失敗」)
   * 前景:`#414868`(Tokyo Night `base0`,深色,確保黃底上對比足夠)

@@ -13,8 +13,8 @@
 - ☑ **T2** Register the module in `init.el` — add `init-tmux-claude` to the
   header-comment module list and to the `(mapc #'require …)` list, appended
   after `init-aidermacs`. Depends on T1.
-- ☑ **T3** Update docs — add the module/command to [`FEATURES.md`](../../FEATURES.md)
-  §14 and bump the module count (16 → 17) + list in [`CLAUDE.md`](../../CLAUDE.md).
+- ☑ **T3** Update docs — add the module/command to [`FEATURES.md`](../../../FEATURES.md)
+  §14 and bump the module count (16 → 17) + list in [`CLAUDE.md`](../../../CLAUDE.md).
   Depends on T1.
 - ☑ **T5** Fix tmux detection under an Emacs daemon — follow-up from the user's
   acceptance test (`getenv "TMUX"` is nil in a daemon started outside tmux).

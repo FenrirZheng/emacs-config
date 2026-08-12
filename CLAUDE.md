@@ -23,7 +23,7 @@ knowable trigger lives in [`_doc/`](_doc/README.md) and is read on demand.
 | `M-.` went to gtags / the GTAGS index is wrong | [_doc/TAGS.md](_doc/TAGS.md) |
 | per-language workflow | [_doc/GO.md](_doc/GO.md), [_doc/JAVA.md](_doc/JAVA.md), [_doc/SNIPPETS.md](_doc/SNIPPETS.md) |
 | everything above, indexed | [_doc/README.md](_doc/README.md) |
-| plans / strategy for in-flight work | [`tasks/`](tasks/) |
+| plans / strategy for in-flight work | [`tasks/`](tasks/) — landed folders are archived under [`tasks/done/`](tasks/done/README.md) |
 | native modules | [`cpp/README.md`](cpp/README.md), [`rust/README.md`](rust/README.md) |
 
 ## Architecture rules

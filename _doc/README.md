@@ -19,7 +19,9 @@ Not in this directory:
 - [FEATURES.md](../FEATURES.md) — the "what keys do I press" cheat sheet.
 - [`tasks/`](../tasks/) — plans and strategy documents for work in progress, e.g.
   [keybinding-strategy.md](../tasks/keybinding-strategy.md),
-  [back-navigation-strategy.md](../tasks/back-navigation-strategy.md).
+  [back-navigation-strategy.md](../tasks/back-navigation-strategy.md). Finished task
+  folders move to [`tasks/done/`](../tasks/done/README.md), which records each one's
+  outcome.
 - [`cpp/README.md`](../cpp/README.md), [`rust/README.md`](../rust/README.md) — the native
   module workspaces, with a README per module.
 

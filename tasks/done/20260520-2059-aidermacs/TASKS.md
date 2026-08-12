@@ -66,7 +66,7 @@
   `gemini/gemini-2.5-pro`).
 - architect mode + dual `aidermacs-architect-model` /
   `aidermacs-editor-model` split.
-- Fold the `pipx` + `aider-chat` install into [`shell/install-user.sh`](../../shell/install-user.sh).
+- Fold the `pipx` + `aider-chat` install into [`shell/install-user.sh`](../../../shell/install-user.sh).
 - `aidermacs-project-read-only-files` for pinned convention files.
 - `vterm` flicker risk in TTY-inside-tmux (resolve only if observed during T9).
 
@@ -76,7 +76,7 @@
 |-----|-----|
 | [SPEC.md](./SPEC.md) | plan of record — objective, code, boundaries, success criteria |
 | [TODO.md](./TODO.md) | live progress log + append-only decisions/notes |
-| [`init.el`](../../init.el) | loader the new module is registered in (T6) |
-| [`lisp/init-ai.el`](../../lisp/init-ai.el) | sibling AI module (gptel, claude-code-ide); aidermacs is kept separate from it |
-| [`CLAUDE.md`](../../CLAUDE.md) | repo guide updated in the T10 follow-up |
-| [`FEATURES.md`](../../FEATURES.md) | key cheat-sheet updated in the T11 follow-up |
+| [`init.el`](../../../init.el) | loader the new module is registered in (T6) |
+| [`lisp/init-ai.el`](../../../lisp/init-ai.el) | sibling AI module (gptel, claude-code-ide); aidermacs is kept separate from it |
+| [`CLAUDE.md`](../../../CLAUDE.md) | repo guide updated in the T10 follow-up |
+| [`FEATURES.md`](../../../FEATURES.md) | key cheat-sheet updated in the T11 follow-up |
