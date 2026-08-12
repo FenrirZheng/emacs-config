@@ -30,9 +30,11 @@
 /eshell/
 
 # Package state that doesn't go through no-littering (lands at the repo root):
-# treesit-auto's downloaded tree-sitter grammars (.so) and elgrep's last-search
-# cache — both regenerated on demand.
+# treesit-auto's downloaded tree-sitter grammars (.so), regenerated on demand.
 /tree-sitter/
+# elgrep IS redirected by no-littering (var/elgrep-data.el); the root copy is a
+# pre-no-littering orphan that was deleted 2026-08 — the rule stays as a guard
+# in case an elgrep version ever writes to the default location again.
 /elgrep-data.el
 
 # Backups Emacs / our own scripts leave behind
