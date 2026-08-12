@@ -120,6 +120,38 @@ it has nothing to move over)."
     (combobulate-mode 1))
   (call-interactively #'combobulate))
 
+;; Same problem, eight more commands, so it gets a macro instead of eight
+;; near-identical wrappers.  Checked in the autoload files: `dape' itself is
+;; autoloaded but `dape-breakpoint-toggle' / `-remove-all' / `dape-info' /
+;; `dape-repl' are NOT (dape-autoloads.el only cookies `dape' and
+;; `dape-breakpoint-global-mode'); eglot's session commands
+;; (`eglot-reconnect', `eglot-shutdown', `eglot-events-buffer') live behind
+;; the package's own `require' and are void until a server has been started;
+;; `envrc-reload' is void until envrc loads.  Naming a void symbol in a
+;; transient is exactly the "fresh session gets void-function" trap the hub
+;; rule warns about, so every one of them is routed through a wrapper that
+;; `require's the feature first.
+(defmacro fenrir/hub--defwrapper (feature command)
+  "Define `fenrir/hub-COMMAND', calling COMMAND with FEATURE loaded first.
+Only for hub entries: COMMAND is a real command that is NOT autoloaded, so
+naming it directly in a `transient' would break in a fresh session."
+  (let ((name (intern (format "fenrir/hub-%s" command))))
+    `(defun ,name ()
+       ,(format "Call `%s' (loads `%s' first).\nWrapper for the `<f5>' hub -- `%s' is not autoloaded."
+                command feature command)
+       (interactive)
+       (require ',feature)
+       (call-interactively #',command))))
+
+(fenrir/hub--defwrapper dape  dape-breakpoint-toggle)
+(fenrir/hub--defwrapper dape  dape-breakpoint-remove-all)
+(fenrir/hub--defwrapper dape  dape-info)
+(fenrir/hub--defwrapper dape  dape-repl)
+(fenrir/hub--defwrapper eglot eglot-reconnect)
+(fenrir/hub--defwrapper eglot eglot-shutdown)
+(fenrir/hub--defwrapper eglot eglot-events-buffer)
+(fenrir/hub--defwrapper envrc envrc-reload)
+
 ;; The hub itself.  `transient' is an `elpa/' package pulled in by magit /
 ;; gptel, but nothing loads it at STARTUP (magit is deferred behind `C-x g'),
 ;; so defining the prefixes at top level here would drag transient into every
@@ -168,7 +200,17 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("b" "Breadcrumb jump"     breadcrumb-jump)]
      ["Project"
       ("r" "Ripgrep"             consult-ripgrep)
-      ("f" "Find file"           project-find-file)
+      ("f" "Find file"           project-find-file)]
+     ;; "Get somewhere" is not only code positions: keyfreq records 35 uses of
+     ;; `dired-jump' (a Tier-1 candidate in its own right) and the three
+     ;; pickers below are the same intent one level out -- the file/buffer I
+     ;; had, not the definition I had.  Letters dodge the ones already taken in
+     ;; this menu (`r' = ripgrep, `b' = breadcrumb, `l' = consult-line).
+     ["Files & buffers"
+      ("d" "Dired here"          dired-jump)
+      ("R" "Recent files"        recentf-open)
+      ("B" "Switch buffer"       consult-buffer)
+      ("D" "Switch directory"    consult-dir)
       ("q" "Quit"                transient-quit-one)]])
 
   ;; The "back" menu is worded by INTENT, never by the store's name: at the
@@ -177,6 +219,13 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
   ;; real keys so the menu teaches its own obsolescence; the four native
   ;; mechanisms below it are the ~10% escape hatch.  `:transient t' on the
   ;; steppers so a second press keeps walking instead of reopening the menu.
+  ;;
+  ;; DEMOTED (kept, moved).  It taught its obsolescence too well: keyfreq shows
+  ;; `fenrir/back' at 136 direct `<f6>' presses against a hub path that is
+  ;; effectively unused, so this prefix no longer holds a prime first-column
+  ;; slot in `fenrir/hub--dispatch' -- it moved to the bottom of the second
+  ;; column, and `x' (Run/Debug) and `o' (Org/Notes), which have no chord at
+  ;; all, took the prominent slots.  Still on `<f5> b', unchanged.
   (transient-define-prefix fenrir/hub-back ()
     "Go back where I was -- by intent, not by which ring stores it."
     [["One merged history (recommended)"
@@ -206,7 +255,18 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
      ["Codebase"
       ("t" "TODOs (buffer)"      consult-todo)
       ("T" "TODOs (project)"     consult-todo-all)
-      ("g" "gtags index check"   fenrir/gtags-diagnose)
+      ("g" "gtags index check"   fenrir/gtags-diagnose)]
+     ;; "Completion stopped working / the server went quiet" is a diagnose
+     ;; scenario with no chord anywhere in the config -- these four were pure
+     ;; `M-x' before.  All of them are void until their package loads, hence
+     ;; the `fenrir/hub-*' wrappers defined above.  `envrc-reload' is here
+     ;; because the usual cause of "eglot cannot find the binary" is a stale
+     ;; direnv environment, not eglot.
+     ["LSP / env health"
+      ("R" "Reconnect server"    fenrir/hub-eglot-reconnect)
+      ("S" "Shutdown server"     fenrir/hub-eglot-shutdown)
+      ("l" "LSP events log"      fenrir/hub-eglot-events-buffer)
+      ("n" "Reload direnv"       fenrir/hub-envrc-reload)
       ("q" "Quit"                transient-quit-one)]])
 
   (transient-define-prefix fenrir/hub-git ()
@@ -214,7 +274,8 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
     [["Repo"
       ("g" "Magit status"        magit-status)
       ("d" "Magit dispatch"      magit-dispatch)
-      ("f" "File dispatch"       magit-file-dispatch)]
+      ("f" "File dispatch"       magit-file-dispatch)
+      ("D" "Difftastic diff"     difftastic-magit-diff)]
      ["History of this file"
       ("b" "Blame"               magit-blame)
       ("B" "Inline blame toggle" blamer-mode)
@@ -226,7 +287,18 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("n" "Next hunk"           diff-hl-next-hunk     :transient t)
       ("p" "Prev hunk"           diff-hl-previous-hunk :transient t)
       ("s" "Show hunk"           diff-hl-show-hunk)
-      ("y" "Copy permalink"      git-link)
+      ("y" "Copy permalink"      git-link)]
+     ;; Merge conflicts.  `smerge-mode' is loaded at startup (init-git.el's
+     ;; `:custom smerge-command-prefix' plus the `find-file-hook' auto-enable),
+     ;; so these five need no wrapper -- verified with the fboundp batch check.
+     ;; `m'/`M' step (`:transient t', same reason as the hunk pair above);
+     ;; `l' was already the file log, hence `L' for keep-lower.
+     ["Merge conflicts (smerge)"
+      ("m" "Next conflict"       smerge-next  :transient t)
+      ("M" "Prev conflict"       smerge-prev  :transient t)
+      ("u" "Keep upper (ours)"   smerge-keep-upper)
+      ("L" "Keep lower (theirs)" smerge-keep-lower)
+      ("a" "Keep all"            smerge-keep-all)
       ("q" "Quit"                transient-quit-one)]])
 
   (transient-define-prefix fenrir/hub-refactor ()
@@ -239,11 +311,18 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
      ["Text"
       ("c" "Cycle case style"    string-inflection-all-cycle)
       ("f" "Format buffer"       apheleia-format-buffer)
-      ("o" "Occurrences menu"    casual-symbol-overlay-tmenu)]
+      ("o" "Occurrences menu"    casual-symbol-overlay-tmenu)
+      ;; `$' mirrors jinx's own `M-$' chord; `t' is free here (tempel's own
+      ;; chord lives in init-snippets.el).  Both autoloaded -- verified.
+      ("$" "Spell correct"       jinx-correct)
+      ("t" "Insert template"     tempel-insert)]
      ["Structure"
       ("s" "Combobulate"         fenrir/combobulate-dwim)
       ("z" "Fold toggle"         treesit-fold-toggle)
       ("e" "Edit comment block"  separedit)
+      ;; Undoing a bad refactor is part of the same scenario as doing it;
+      ;; `u' was free, and `vundo' is autoloaded.
+      ("u" "Undo tree (vundo)"   vundo)
       ("q" "Quit"                transient-quit-one)]])
 
   (transient-define-prefix fenrir/hub-workspace ()
@@ -276,17 +355,64 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("D" "Set queue dir"       question-queue-set-dir)
       ("q" "Quit"                transient-quit-one)]])
 
+  ;; Run/Debug.  This menu exists because of a measurement, not a wish:
+  ;; keyfreq records ZERO uses of `dape' and zero of `compile'/`recompile',
+  ;; despite ~80 lines of dape configuration in init-languages.el and a working
+  ;; junit runner.  That is not "I don't debug", it is the discoverability gap
+  ;; Tier 2 was built for -- the commands have no chord and no scenario, so
+  ;; they are never recalled at the moment they are wanted.
+  ;; `restclient-http-send-current' only does anything inside a
+  ;; `restclient-mode' buffer; it is listed anyway (the hub duplicates, it
+  ;; never gates) and it IS autoloaded, checked in restclient-autoloads.el.
+  (transient-define-prefix fenrir/hub-run ()
+    "Run it, build it, or stop inside it: compile, test, debug."
+    [["Debug (dape)"
+      ("d" "Start / continue"    dape)
+      ("b" "Toggle breakpoint"   fenrir/hub-dape-breakpoint-toggle)
+      ("B" "Remove all bkpts"    fenrir/hub-dape-breakpoint-remove-all)
+      ("i" "Info panels"         fenrir/hub-dape-info)
+      ("R" "REPL"                fenrir/hub-dape-repl)]
+     ["Run / build"
+      ("c" "Compile"             compile)
+      ("r" "Recompile"           recompile)
+      ("p" "Project compile"     project-compile)
+      ("j" "JUnit at point"      junit-run-dwim)
+      ("s" "Send HTTP request"   restclient-http-send-current)
+      ("q" "Quit"                transient-quit-one)]])
+
+  ;; Org/Notes.  Org capture/agenda and org-roam are the one daily workflow the
+  ;; hub had no door for -- every entry was a coding scenario.  All six are
+  ;; autoloaded (org, consult-org, org-roam-autoloads.el -- including
+  ;; `org-roam-buffer-toggle', which is cookied in org-roam-mode.el), so no
+  ;; wrapper is needed here.
+  (transient-define-prefix fenrir/hub-org ()
+    "Write it down: capture, agenda, and the roam graph."
+    [["Capture & agenda"
+      ("c" "Capture"             org-capture)
+      ("a" "Agenda"              org-agenda)
+      ("h" "Heading in buffer"   consult-org-heading)]
+     ["Roam"
+      ("f" "Find node"           org-roam-node-find)
+      ("i" "Insert link"         org-roam-node-insert)
+      ("b" "Backlinks buffer"    org-roam-buffer-toggle)
+      ("q" "Quit"                transient-quit-one)]])
+
   (transient-define-prefix fenrir/hub--dispatch ()
     "Scenario hub -- see `fenrir/hub'."
     [["I want to..."
       ("n" "Navigate   jump, symbols, search" fenrir/hub-navigate)
-      ("b" "Back       where was I?"          fenrir/hub-back)
       ("d" "Diagnose   errors, docs, TODOs"   fenrir/hub-diagnose)
-      ("g" "Git        status, blame, hunks"  fenrir/hub-git)]
+      ("g" "Git        status, blame, hunks"  fenrir/hub-git)
+      ("x" "Run/Debug  compile, dape, tests"  fenrir/hub-run)]
      [""
       ("r" "Refactor   rename, format, fold"  fenrir/hub-refactor)
       ("w" "Workspace  tabs, panels, shells"  fenrir/hub-workspace)
-      ("a" "AI         copilot, claude, aider" fenrir/hub-ai)]
+      ("a" "AI         copilot, claude, aider" fenrir/hub-ai)
+      ("o" "Org/Notes  capture, agenda, roam" fenrir/hub-org)
+      ;; Demoted out of the prime first-column slot (see the comment above
+      ;; `fenrir/hub-back'): the merged history is pressed directly on `<f6>',
+      ;; so this entry is the rare escape hatch, not a top-four scenario.
+      ("b" "Back       where was I?"          fenrir/hub-back)]
      ["Escape hatches"
       ;; TIER 3 lives here: when even the scenario is unclear, search the
       ;; bindings (`embark-bindings', also on `C-h B') or the edit-kit menu.
@@ -298,6 +424,14 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ;; here rather than costing a chord.
       ("F" "FEATURES.md drift"   fenrir/features-audit)
       ("U" "Package usage audit" fenrir/package-usage-audit)
+      ;; Config maintenance (init.el).  `R' and `N' are the two commands a
+      ;; fresh `use-package' block needs (refresh the archive, then re-compile
+      ;; natively); `T' pairs with the `EMACS_PROFILE_INIT=1' toggle in
+      ;; init.el -- set the variable, restart, then read the report here.
+      ;; `p', `F' and `U' were taken, hence these letters.
+      ("R" "Refresh package archive" my/package-refresh)
+      ("N" "Native-compile config"   my/native-compile-config)
+      ("T" "use-package timings"     use-package-report)
       ("q" "Quit"                transient-quit-all)]]))
 
 ;; ------------------------------------------------- BACK-NAVIGATION (L1) ---
