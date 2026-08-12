@@ -159,5 +159,116 @@ before gptel is loaded, to seed the key first."
   (setq gptel-backend (gptel-get-backend "Gemini")
         gptel-model   'gemini-pro-latest))
 
+;; ---------------------------------------------------------------------------
+;; gptel tools -- expose the two local workflows above to the LLM
+;; ---------------------------------------------------------------------------
+;; gptel 20260519 registers tools with `gptel-make-tool' into `gptel--known-tools';
+;; the user then picks them per-request from `gptel-menu' (`-t'), so registering
+;; here does NOT arm them behind your back.  All of this sits inside
+;; `with-eval-after-load' so nothing drags gptel into startup.
+;;
+;; Deliberately conservative:
+;;   * three READ-ONLY tools (list jobs, inspect one session, show the queue
+;;     state) and exactly one writer, `question_queue_ask', which carries
+;;     `:confirm t' so a tool call always waits for a human keypress;
+;;   * they call the same helpers the interactive commands do, so behaviour
+;;     cannot drift from what `C-c j' / `C-c q' show;
+;;   * NOTHING here requires the native `question-queue-core' module or a
+;;     running `jobctl'.  Both front-ends degrade to an actionable error
+;;     (`M-x question-queue-build', "jobctl list failed") -- the tools catch
+;;     it and return that text as the tool RESULT rather than signalling, so a
+;;     missing binary reads as information to the model, not as a broken tool.
+(with-eval-after-load 'gptel
+  (defun fenrir/gptel--safely (thunk)
+    "Run THUNK, returning its value or the error text as a string.
+A tool that signals aborts the whole gptel request; a tool that returns
+\"jobctl: not built/installed\" lets the model explain the situation."
+    (condition-case err (funcall thunk)
+      (error (format "error: %s" (error-message-string err)))))
+
+  (gptel-make-tool
+   :name "claude_jobs_list"
+   :category "fenrir"
+   :description "List the persistent Claude Code background sessions and daemon \
+jobs known to the local `jobctl' CLI.  Returns `jobctl list' output verbatim \
+(sessions with uuid, state, pid, last-update and intent).  Read-only."
+   :args nil
+   :function
+   (lambda ()
+     (fenrir/gptel--safely
+      (lambda ()
+        (require 'claude-jobs-view)
+        (claude-jobs-view--run-list)))))
+
+  (gptel-make-tool
+   :name "claude_job_info"
+   :category "fenrir"
+   :description "Describe one Claude Code background session: its transcript \
+path, its working directory and the first user message of the transcript.  \
+Takes the session uuid as printed by claude_jobs_list.  Read-only."
+   :args (list '(:name "uuid"
+                 :type string
+                 :description "Full session uuid from claude_jobs_list"))
+   :function
+   (lambda (uuid)
+     (fenrir/gptel--safely
+      (lambda ()
+        (require 'claude-jobs-view)
+        (format "uuid:       %s\ncwd:        %s\ntranscript: %s\nfirst user message:\n%s"
+                uuid
+                (or (claude-jobs-view--resolve-cwd uuid) "(not resolved)")
+                (or (ignore-errors (claude-jobs-view--jobctl-string "path" uuid))
+                    "(unresolved)")
+                (or (claude-jobs-view--transcript-first-user-text uuid)
+                    "(none)"))))))
+
+  (gptel-make-tool
+   :name "question_queue_status"
+   :category "fenrir"
+   :description "Report the state of the file-based question queue: its root \
+directory, whether the native question-queue-core module is loaded, and the \
+questions still awaiting an answer in this Emacs session.  Read-only."
+   :args nil
+   :function
+   (lambda ()
+     (fenrir/gptel--safely
+      (lambda ()
+        (require 'question-queue)
+        (let ((root (condition-case nil (question-queue--root)
+                      (error "(unset -- M-x question-queue-set-dir)")))
+              (pending '()))
+          (maphash (lambda (name entry)
+                     (push (format "  %s: %s" name (plist-get entry :question))
+                           pending))
+                   question-queue--pending)
+          (concat (format "root: %s\nnative module loaded: %s\npending: %d\n"
+                          root (if (question-queue--loaded-p) "yes" "no")
+                          (length pending))
+                  (string-join (nreverse pending) "\n")))))))
+
+  (gptel-make-tool
+   :name "question_queue_ask"
+   :category "fenrir"
+   :description "Submit a question (optionally with a code snippet as context) \
+to the file-based question queue; the answer arrives asynchronously in the \
+*question-queue* buffer.  Requires the native question-queue-core module and a \
+queue directory to have been set."
+   :confirm t                           ; the only writer here -- always ask
+   :args (list '(:name "question"
+                 :type string
+                 :description "The question text")
+               '(:name "context"
+                 :type string
+                 :optional t
+                 :description "Optional code snippet sent as context"))
+   :function
+   (lambda (question &optional context)
+     (fenrir/gptel--safely
+      (lambda ()
+        (require 'question-queue)
+        (question-queue-ask (and context (not (string-empty-p context)) context)
+                            question)
+        "submitted; the answer will appear in *question-queue*")))))
+
 (provide 'init-ai)
 ;;; init-ai.el ends here

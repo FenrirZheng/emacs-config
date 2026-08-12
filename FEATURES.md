@@ -1135,6 +1135,14 @@ the side-window `org-roam-buffer` shows the backlinks of whatever you're viewing
 `M-x fenrir/gptel-set-api-key` (writes `~/.authinfo`, mode `0600`). Entry points: `M-x gptel`
 (open chat), `M-x gptel-send` (send region/buffer).
 
+Four local **tools** are registered in the `fenrir` category ([`init-ai.el`](lisp/init-ai.el))
+— pick them per request from `gptel-menu` (`-t`), they are not armed by default:
+`claude_jobs_list` and `claude_job_info` (read-only views over the `jobctl` sessions behind
+`C-c j`), `question_queue_status` (read-only), and `question_queue_ask`, the one writer,
+which carries `:confirm t` so every call waits for a keypress. None of them needs the
+native `question-queue-core` module or a working `jobctl`: the failure text is returned as
+the tool result instead of aborting the request.
+
 [`aidermacs`](https://github.com/MatthewZMD/aidermacs) — Emacs front-end for the `aider`
 AI pair-programmer, in its own module [`init-aidermacs.el`](lisp/init-aidermacs.el). Runs
 `aider` in a `vterm` buffer, driven by a Magit-style transient; AI edits land through
