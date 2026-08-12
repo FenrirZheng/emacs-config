@@ -48,6 +48,8 @@ chord — the hub duplicates, it never replaces, so Tier-1 habits keep working.
 | `<f5> e` / `p` | Edit kit / Project kit | `casual-editkit` menus — the generic "what can I do here" fallbacks |
 | `<f5> ?` | Search all bindings | `embark-bindings` (same as `C-h B`) |
 | `<f5> k` | Key frequency report | `fenrir/keyfreq-report` — the Tier-1 review (below) |
+| `<f5> F` | FEATURES.md drift audit | `fenrir/features-audit` — commands routed in [`init-keys.el`](lisp/init-keys.el) but missing from this file, and vice versa ([`init-audit.el`](lisp/init-audit.el)) |
+| `<f5> U` | Package usage audit | `fenrir/package-usage-audit` — declared packages with zero keyfreq-recorded command use; false-positive-prone by design, read the report header |
 
 `C-c ?` is the same hub, for terminals that swallow function keys. `q` closes any of the
 menus; `C-g` also works.

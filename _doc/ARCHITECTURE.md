@@ -46,6 +46,7 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-ai` | `claude-jobs-view`, `gptel`, GitHub Copilot (opt-in per buffer on `C-c M-c`), `question-queue` |
 | `init-aidermacs` | aidermacs (aider pair-programmer, vterm, Gemini) |
 | `init-tmux-claude` / `init-alacritty-claude` | split a tmux pane / launch an external alacritty running the `claude` CLI |
+| `init-audit` | config self-audit commands: `fenrir/features-audit` (FEATURES.md drift vs. the routing layer) and `fenrir/package-usage-audit` (keyfreq-backed prune candidates) |
 | `init-keys` | the keybinding **routing layer** — required LAST (below) |
 
 Most of these correspond to one section of the pre-split monolith (`git log --oneline`

@@ -294,6 +294,10 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("p" "Project kit"         casual-editkit-project-tmenu)
       ("?" "Search all bindings" embark-bindings)
       ("k" "Key frequency report" fenrir/keyfreq-report)
+      ;; Config self-audits (init-audit.el) -- rarely pressed, so they live
+      ;; here rather than costing a chord.
+      ("F" "FEATURES.md drift"   fenrir/features-audit)
+      ("U" "Package usage audit" fenrir/package-usage-audit)
       ("q" "Quit"                transient-quit-all)]]))
 
 ;; ------------------------------------------------- BACK-NAVIGATION (L1) ---
