@@ -708,6 +708,12 @@ seems stuck on a stale answer."
   (dape-buffer-window-arrangement 'right)  ; info + REPL docked right
   (dape-info-hide-mode-line t)             ; reclaim modeline in info buffers
   (dape-inlay-hints t)                     ; variable values shown inline
+  ;; dape defaults its breakpoint store to (locate-user-emacs-file
+  ;; "dape-breakpoints"), i.e. the REPO ROOT -- no-littering has no theft
+  ;; rule for it, so the file shows up as untracked config-tree noise.
+  ;; Redirect it into var/ by hand, like every other piece of runtime state.
+  (dape-default-breakpoints-file
+   (no-littering-expand-var-file-name "dape-breakpoints"))
   :hook
   ;; Persist breakpoints across Emacs sessions.
   (kill-emacs . dape-breakpoint-save)
