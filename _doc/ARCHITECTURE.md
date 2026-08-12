@@ -58,7 +58,9 @@ Local Elisp (not on MELPA), all lazily autoloaded from their owning module:
 the external `jobctl` CLI, `M-x claude-jobs-view`),
 [`lisp/junit-runner.el`](../lisp/junit-runner.el) (front-end for the `junit-core` C++
 module), [`lisp/question-queue.el`](../lisp/question-queue.el) (front-end for the
-`question-queue-core` Rust module).
+`question-queue-core` Rust module),
+[`lisp/fenrir-back-forward.el`](../lisp/fenrir-back-forward.el) (the merged jump history
+behind `<f6>` / `<f7>`, `require`d by `init-keys`).
 
 ## `init-ide.el` — the modern-IDE layer
 
@@ -184,8 +186,10 @@ four unrelated stores (buffer `mark-ring`, `global-mark-ring`, the xref stack,
 assignment fixes that, so the mechanisms were merged instead: a single `:after` advice on
 `push-mark` feeds one 32-marker ring, walked by `fenrir/back` / `fenrir/forward`
 (`<f6>` / `<f7>`, `M-g b` / `M-g B`, then bare `b` / `f`), with the four native mechanisms
-still reachable *by intent* from `<f5> b`. `fenrir/back-forward-enable` → nil is the whole
-off switch. The MELPA package `backward-forward` was read and rejected (two latent bugs, a
+still reachable *by intent* from `<f5> b`. The feature itself lives in the standalone
+library [`lisp/fenrir-back-forward.el`](../lisp/fenrir-back-forward.el) (extracted 2026-08
+so the routing layer keeps adding no features); `init-keys` only `require`s it and binds
+the keys. `fenrir/back-forward-enable` → nil is the whole off switch. The MELPA package `backward-forward` was read and rejected (two latent bugs, a
 keymap that collides with keyd's word-jump layer) — rationale and the alternatives
 evaluated: [`tasks/back-navigation-strategy.md`](../tasks/back-navigation-strategy.md).
 

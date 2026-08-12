@@ -147,8 +147,9 @@ One line each; the evidence is in [_doc/GOTCHAS.md](_doc/GOTCHAS.md) and
   missing hook. ([why + what it costs](_doc/JAVA.md#there-is-no-language-server))
 - **Java debugging is unsupported** (dape has no Java adapter) — use IntelliJ/VSCode; don't
   reintroduce `dap-mode`, whose fringe-bitmap breakpoints are invisible on TTY.
-- **`push-mark` carries a global `:after` advice** — [`init-keys.el`](lisp/init-keys.el)'s
-  merged jump history (`<f6>` / `<f7>`). Anything that pushes a mark feeds it; turn it off
+- **`push-mark` carries a global `:after` advice** — the merged jump history (`<f6>` /
+  `<f7>`) in [`lisp/fenrir-back-forward.el`](lisp/fenrir-back-forward.el), which
+  [`init-keys.el`](lisp/init-keys.el) merely requires and binds. Anything that pushes a mark feeds it; turn it off
   with `fenrir/back-forward-enable` / `M-x fenrir/back-forward-mode`, not by hand-removing
   the advice.
 - **Don't override `interprogram-cut-function`** anywhere else — [`init-defaults.el`](lisp/init-defaults.el)

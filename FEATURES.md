@@ -84,8 +84,9 @@ somewhere you didn't mean — that's what `<f5> b` is for, worded by intent:
 | **delete** a mark from those lists | `C-. d` on the candidate | — | embark action `fenrir/mark-ring-delete` ([`init-completion.el`](lisp/init-completion.el)) — drops it from both rings; reopen the list to see the result | — |
 | flip between two points | `C-x C-x` | `x` | point ↔ mark | not a history |
 
-Implementation: [`init-keys.el`](lisp/init-keys.el) advises `push-mark` once (every far jump
-funnels through it) and keeps a 32-entry marker ring. `fenrir/back-forward-enable` → nil is
+Implementation: [`fenrir-back-forward.el`](lisp/fenrir-back-forward.el) advises `push-mark`
+once (every far jump funnels through it) and keeps a 32-entry marker ring;
+[`init-keys.el`](lisp/init-keys.el) only loads it and assigns the keys. `fenrir/back-forward-enable` → nil is
 the one-line off switch; strategy and the rejected alternatives are in
 [`tasks/back-navigation-strategy.md`](tasks/back-navigation-strategy.md).
 
