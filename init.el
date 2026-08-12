@@ -100,6 +100,24 @@ up new or changed files.  Progress and warnings land in the
 ;; Use `:ensure nil' for packages that are part of Emacs itself.
 (setq use-package-always-ensure t)
 
+;; Startup profiling, OFF by default.  `use-package-compute-statistics' makes
+;; every `use-package' form record its load/config timings for
+;; `M-x use-package-report' -- but it only sees forms expanded AFTER it is set,
+;; so it has to live here, before the first `use-package' below and long before
+;; the `lisp/' modules are required.  It is not free (a hash entry and timer
+;; call per keyword per package), hence the gate rather than leaving it on:
+;;
+;;   EMACS_PROFILE_INIT=1 emacs ...        # or emacsclient's daemon
+;;
+;; then `M-x use-package-report' in that session.  Setting the defvar in a
+;; scratch session does nothing -- the statistics have to be armed before init.
+(defvar fenrir/profile-init (and (getenv "EMACS_PROFILE_INIT") t)
+  "Non-nil arms `use-package-compute-statistics' for `M-x use-package-report'.
+Set by the EMACS_PROFILE_INIT environment variable; edit the default here
+only for a throwaway experiment -- it costs a little on every startup.")
+(when fenrir/profile-init
+  (setq use-package-compute-statistics t))
+
 ;; Let `package-install' / `package-upgrade' REPLACE a package bundled with
 ;; Emacs with its GNU ELPA release -- needed to upgrade the built-in Eglot to
 ;; >=1.19 for native call/type hierarchy (see `init-languages.el').  Without
