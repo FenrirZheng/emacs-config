@@ -58,14 +58,20 @@
   :custom
   (ob-mermaid-cli-path (or (executable-find "mmdc") "mmdc")))
 
-;; Wire both into org-babel.  No prior `org-babel-load-languages' customisation
+;; Wire them into org-babel.  No prior `org-babel-load-languages' customisation
 ;; exists in this config (default is just emacs-lisp), so extend that default.
+;; `dot' rides along here rather than in init-org.el because it's a diagram
+;; language: ob-dot ships with org (no package), needs only the system
+;; Graphviz binary this file already depends on for PlantUML class/state
+;; diagrams -- and the graph-context plan format (~/.claude/plans/
+;; graph-context-template.org) renders its dependency graph through it.
 (with-eval-after-load 'org
   (org-babel-do-load-languages
    'org-babel-load-languages
    (append org-babel-load-languages
            '((plantuml . t)
-             (mermaid . t)))))
+             (mermaid . t)
+             (dot . t)))))
 
 (provide 'init-diagrams)
 ;;; init-diagrams.el ends here

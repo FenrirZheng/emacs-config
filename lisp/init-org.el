@@ -75,6 +75,29 @@
   ;; wraps an active region.
   (require 'org-tempo))
 
+;; `M-x fenrir/org-id-index-directory' -- teach org-id about every `:ID:' under
+;; a directory tree.  `[[id:...]]' links resolve through the `org-id-locations'
+;; hash (persisted by no-littering in var/org/id-locations.el), which is only
+;; ever fed from `org-agenda-files' (deliberately inbox-only here, see above),
+;; open org buffers, and files it already knows -- an org KB living anywhere
+;; else (e.g. a project's kb/ tree, first hit: ~/code/camhr/infra) is invisible,
+;; so following its links dies with "Cannot find entry with ID".  Run this once
+;; per such tree.  Safe to repeat: `org-id-update-id-locations' MERGES -- it
+;; re-scans everything already in the table plus FILES -- so runs on different
+;; trees accumulate rather than clobber.  Re-run after adding new nodes; org-id
+;; also self-heals single misses for files it already tracks.
+(defun fenrir/org-id-index-directory (dir)
+  "Index the :ID: of every .org file under DIR into `org-id-locations'."
+  (interactive (list (read-directory-name "Index org IDs under: ")))
+  (require 'org-id)
+  (let ((files (directory-files-recursively (expand-file-name dir) "\\.org\\'")))
+    (unless files
+      (user-error "No .org files under %s" dir))
+    (org-id-update-id-locations files)
+    (message "org-id: scanned %d files under %s; %d IDs known"
+             (length files) (abbreviate-file-name dir)
+             (hash-table-count org-id-locations))))
+
 ;; org-modern: restyle headings, lists, checkboxes, tables, blocks and
 ;; timestamps for a cleaner look.  Pure display -- it never edits your files.
 (use-package org-modern

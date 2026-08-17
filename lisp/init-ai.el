@@ -18,6 +18,22 @@
   :bind ("C-c j" . claude-jobs-view)
   :commands (claude-jobs-view))
 
+;; claude-open -- open files a Claude Code session mentions (rg hits, stack
+;; frames, compiler errors) in THIS daemon at the right line, preferring the GUI
+;; frame.  Source: lisp/claude-open.el, distributed by the `emacs-open' skill
+;; (~/.claude/skills/emacs-open/references/claude-open.el is upstream; the
+;; skill probes `claude-open-version' for drift).
+;; `:demand t' rather than the lazy `:commands' used above ON PURPOSE: the entry
+;; point is reached by `emacsclient -e (claude-open-from-file ...)', a
+;; non-interactive eval, and the skill's probe reads `claude-open-version' --
+;; under an autoload that variable is unbound and the probe reads the helper as
+;; being SHADOWED by an unrelated definition, so it refuses to dispatch.
+;; No keybinding here: `claude-open-setup-keys' is shipped but deliberately not
+;; called -- binding `claude-open-goto-last' is the user's choice.
+(use-package claude-open
+  :ensure nil
+  :demand t)
+
 ;; question-queue -- ship the highlighted region + a typed question into the
 ;; external file-queue (~/code/question-queue/input/) via the Rust
 ;; `question-queue-core' dynamic module, watch output/ with file-notify, and

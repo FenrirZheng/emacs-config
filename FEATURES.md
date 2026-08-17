@@ -1103,6 +1103,11 @@ source — narrow to them with `< q`. To get a preview side panel back, add
   noise for nothing). The agenda is legitimately empty until the first `C-c c` capture
   creates `inbox.org`; expanding `org-agenda-files` to more of the vault later is a
   deliberate choice, not an oversight.
+- **`M-x fenrir/org-id-index-directory`** (Tier 3, no key): recursively indexes every
+  `:ID:` under a chosen directory into `org-id-locations`, so `[[id:...]]` links in org
+  files **outside** the agenda/roam scope resolve instead of dying with "Cannot find entry
+  with ID" — needed for project-local org KBs (e.g. `~/code/camhr/infra/.../kb/`). Merges
+  with the existing table; safe to re-run after adding nodes.
 - **`C-c M-o` — `olivetti-mode`** ([`init-gui.el`](lisp/init-gui.el), Tier B): centered
   prose margins for long-form reading/writing. Manual toggle (no org-mode hook — light
   touch); works fine on TTY.
