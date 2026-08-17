@@ -52,7 +52,28 @@
    '(("t" "Todo"  entry (file+headline "inbox.org" "Tasks")
       "* TODO %?\n  %U\n  %a" :empty-lines 1)
      ("n" "Note"  entry (file+headline "inbox.org" "Notes")
-      "* %?\n  %U" :empty-lines 1))))
+      "* %?\n  %U" :empty-lines 1)))
+  :config
+  ;; `<s' TAB -> `#+begin_src ... #+end_src'.  Org 9.2 (Emacs 27) moved the old
+  ;; "easy templates" out of org core into this separate library, so the gesture
+  ;; is DEAD until something requires it -- `:ensure nil' + core org alone does
+  ;; not bring it in.  Loading the file is the whole install: org-tempo.el ends
+  ;; with two top-level `add-hook' calls (`org-mode-hook' -> `org-tempo-setup',
+  ;; `org-tab-before-tab-emulation-hook' -> `org-tempo-complete-tag'), so no
+  ;; further wiring is needed.  Sits in `:config' rather than at top level so it
+  ;; stays inside org's deferred load; the eval-after-load body runs while `org'
+  ;; is still loading its autoloaded `org-mode', i.e. before `org-mode-hook'
+  ;; fires, so even the very first .org buffer of a session gets the tags.
+  ;; Tags come from `org-structure-template-alist' (10 block tags: `s' src, `q'
+  ;; quote, `e' example, `E' export, `c' center, `C' comment, `v' verse, and
+  ;; `a'/`h'/`l' for `#+begin_export ascii|html|latex') plus
+  ;; `org-tempo-keywords-alist' (4 keyword tags: `L' `H' `A' `i' -> `#+latex: '
+  ;; `#+html: ' `#+ascii: ' `#+index: ').  Note there is NO `<title' tag by
+  ;; default -- add one by extending `org-tempo-keywords-alist' and re-running
+  ;; `org-tempo-add-keyword'.  The non-tempo route -- `C-c C-,'
+  ;; (`org-insert-structure-template') -- works with or without this and also
+  ;; wraps an active region.
+  (require 'org-tempo))
 
 ;; org-modern: restyle headings, lists, checkboxes, tables, blocks and
 ;; timestamps for a cleaner look.  Pure display -- it never edits your files.

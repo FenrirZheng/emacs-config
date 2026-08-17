@@ -1085,6 +1085,15 @@ source — narrow to them with `< q`. To get a preview side panel back, add
   is a flat, unlinked inbox for later refiling; the captured entry has no `:ID:` so org-roam
   ignores it as a non-node. The `t` template stamps a back-link (`%a`) to the buffer you
   captured from.
+- **org-tempo — `<s` then `TAB`** expands to a `#+begin_src`/`#+end_src` pair (point on the
+  language line). Org 9.2 moved these "easy templates" out of org core into `org-tempo`,
+  which [`init-org.el`](lisp/init-org.el) now `require`s in org's `:config` — without that
+  `require` the gesture silently does nothing. 10 block tags (`s` src, `q` quote,
+  `e` example, `E` export, `c` center, `C` comment, `v` verse, `a`/`h`/`l` →
+  `#+begin_export ascii|html|latex`) + 4 keyword tags (`L` `H` `A` `i` → `#+latex: `
+  `#+html: ` `#+ascii: ` `#+index: `). There is **no** `<title` tag by default. The region-aware
+  alternative, **`C-c C-,` (`org-insert-structure-template`)**, is built in and needs no
+  package — it prompts for the block type and wraps an active region.
 - **org-babel** evaluates `#+begin_src` blocks in `emacs-lisp`, `python`, and `shell` (plus
   `plantuml` / `mermaid` from [`init-diagrams.el`](lisp/init-diagrams.el) — both use the same
   additive `org-babel-do-load-languages`). `org-confirm-babel-evaluate` stays at its default
