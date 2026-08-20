@@ -28,6 +28,27 @@
 (use-package org-roam
   :custom
   (org-roam-directory (file-truename "~/code/org-roam"))
+  ;; What org-roam refuses to scan.  Two entries, and they are NOT equivalent.
+  ;;
+  ;; "data/" is org-roam's own default (`org-attach-id-dir'), pinned literally
+  ;; here so this list reads without a second lookup.  Matching is
+  ;; `string-match-p' against the path RELATIVE to `org-roam-directory' and is
+  ;; UNANCHORED, so it drops every `data/' segment anywhere in the tree -- not
+  ;; just a vault-root attachment dir.  Measured 2026-08-20: that silently hides
+  ;; 139 .org files which all carry an :ID: (77 under codeVault/spring/data/, 40
+  ;; under 日本/data/, plus 8 smaller dirs).  They exist on disk but are not
+  ;; org-roam nodes, and that is exactly the gap between kb_sweep's 1505 atoms
+  ;; and this DB's 1366 nodes.  Left unnarrowed deliberately: changing it to
+  ;; "\\`data/" would add 139 nodes to the graph in one step, which is a vault
+  ;; decision rather than a side effect of the records/ line below.
+  ;;
+  ;; "\\`records/" IS anchored, so it matches only the vault's own top-level
+  ;; records/ dir -- the wayfinder effort maps, grill snapshots and assets.
+  ;; Those are project bookkeeping, not knowledge; and because that effort's
+  ;; working repo IS this vault, leaving them scannable would register effort
+  ;; files as roam nodes (the graph pollution the effort's destination grill
+  ;; ruled out when it rejected an in-vault docs/adr/).
+  (org-roam-file-exclude-regexp '("data/" "\\`records/"))
   ;; New note from `C-c r f' / `C-c r c': timestamp-${slug}.org with a #+title:
   ;; and a tag prompt.  `%(my/org-roam-prompt-filetags)' (defined in :config)
   ;; runs `completing-read-multiple' against the tags already in the roam DB --
