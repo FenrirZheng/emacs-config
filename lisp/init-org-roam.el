@@ -28,19 +28,24 @@
 (use-package org-roam
   :custom
   (org-roam-directory (file-truename "~/code/org-roam"))
-  ;; What org-roam refuses to scan.  Two entries, and they are NOT equivalent.
+  ;; What org-roam refuses to scan.  This deliberately REPLACES org-roam's
+  ;; default rather than extending it.
   ;;
-  ;; "data/" is org-roam's own default (`org-attach-id-dir'), pinned literally
-  ;; here so this list reads without a second lookup.  Matching is
-  ;; `string-match-p' against the path RELATIVE to `org-roam-directory' and is
-  ;; UNANCHORED, so it drops every `data/' segment anywhere in the tree -- not
-  ;; just a vault-root attachment dir.  Measured 2026-08-20: that silently hides
-  ;; 139 .org files which all carry an :ID: (77 under codeVault/spring/data/, 40
-  ;; under 日本/data/, plus 8 smaller dirs).  They exist on disk but are not
-  ;; org-roam nodes, and that is exactly the gap between kb_sweep's 1505 atoms
-  ;; and this DB's 1366 nodes.  Left unnarrowed deliberately: changing it to
-  ;; "\\`data/" would add 139 nodes to the graph in one step, which is a vault
-  ;; decision rather than a side effect of the records/ line below.
+  ;; The default is `(list org-attach-id-dir)', i.e. "data/", meant to hide an
+  ;; org-attach attachment store.  Matching is `string-match-p' against the path
+  ;; RELATIVE to `org-roam-directory' and is UNANCHORED, so it drops every
+  ;; `data/' segment anywhere in the tree.  In this vault `data/' is an ordinary
+  ;; content directory name (a leftover of the Obsidian conversion), and that
+  ;; default was silently hiding 138 .org files which all carry an :ID: -- 76
+  ;; under codeVault/spring/data/, 40 under 日本/data/, plus 8 smaller dirs.
+  ;; They existed on disk but were absent from `org-roam-node-find' and every DB
+  ;; query, which is what made the node count trail kb_sweep's atom count by 9%.
+  ;; Dropping the entry is safe here: verified 2026-08-20 that nothing in
+  ;; ~/.emacs.d configures org-attach, no note carries :ATTACH_DIR: or an
+  ;; `attachment:' link, and every */data/ dir holds ordinary titled notes
+  ;; rather than a UUID-sharded attachment store.  Restore "data/" if org-attach
+  ;; is ever adopted -- but anchor it as "\\`data/" so it hides only a
+  ;; vault-root store.
   ;;
   ;; "\\`records/" IS anchored, so it matches only the vault's own top-level
   ;; records/ dir -- the wayfinder effort maps, grill snapshots and assets.
@@ -48,7 +53,7 @@
   ;; working repo IS this vault, leaving them scannable would register effort
   ;; files as roam nodes (the graph pollution the effort's destination grill
   ;; ruled out when it rejected an in-vault docs/adr/).
-  (org-roam-file-exclude-regexp '("data/" "\\`records/"))
+  (org-roam-file-exclude-regexp '("\\`records/"))
   ;; New note from `C-c r f' / `C-c r c': timestamp-${slug}.org with a #+title:
   ;; and a tag prompt.  `%(my/org-roam-prompt-filetags)' (defined in :config)
   ;; runs `completing-read-multiple' against the tags already in the roam DB --
