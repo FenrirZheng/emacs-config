@@ -98,6 +98,180 @@
              (length files) (abbreviate-file-name dir)
              (hash-table-count org-id-locations))))
 
+;; --- org-index: the GNU Global :ID:/[[id:]] index -----------------------------
+;;
+;; A SECOND, unrelated ID mechanism from `org-id-locations' above.  Any
+;; directory carrying `.org-index/' is an "org-index root": that dir holds a
+;; GNU Global db (GTAGS/GRTAGS/GPATH) mapping every `:ID:' line (definition)
+;; and `[[id:' link (reference) in the `.org' files under the root, queryable
+;; with `global -d/-r/-c'.  Roots are created and queried by the CLI at
+;; ~/.claude/bin/org-index; Claude Code keeps them fresh via a PostToolUse
+;; hook.  What follows is the elisp twin of `org-index rebuild', so edits made
+;; IN EMACS also keep the index fresh: `M-x fenrir/org-index-rebuild' plus an
+;; `after-save-hook' that incrementally updates in the background (measured
+;; 0.02 s on the 1503-node vault).
+;;
+;; Environment: gtags/global read GTAGSCONF/GTAGSLABEL/GTAGSROOT/GTAGSDBPATH
+;; at subprocess spawn time.  init-tags.el deliberately setenv's the first two
+;; DAEMON-WIDE for code indexing (~/.emacs.d/gtags.conf, java-pygments) -- the
+;; org index uses a different conf (~/.claude/org-index/gtags.conf, label
+;; `org-roam') that must never leak into code runs, and vice versa.  So the
+;; quartet here is prepended to a LET-BOUND `process-environment' (earlier
+;; entries shadow later duplicates) around each `make-process' -- no `setenv',
+;; the daemon values stay untouched.
+;;
+;; Concurrency: the CLI (and its Claude hook) takes a non-blocking flock(2) on
+;; <root>/.org-index/.lock and skips when held -- a concurrent run picks up
+;; the edit anyway.  We take the SAME lock the same way, by wrapping the
+;; command in flock(1) with -E 200, so an exit of 200 means "lock held
+;; elsewhere, skipped" and is distinguishable from a real gtags failure.
+
+(defconst fenrir/org-index--conf
+  (expand-file-name "~/.claude/org-index/gtags.conf")
+  "GTAGSCONF for the org ID index.
+DELIBERATELY not ~/.emacs.d/gtags.conf -- the two are kept separate so the
+OrgRoam ctags language can't leak into code-indexing runs (and refreshing the
+Emacs conf from upstream can't clobber the org label).")
+
+(defconst fenrir/org-index--dir ".org-index"
+  "Marker/db subdirectory that makes its parent an org-index root.")
+
+(defvar fenrir/org-index--procs nil
+  "Alist of root -> live rebuild process, guarding against redundant spawns.
+Rapid successive saves need no debounce: a running `global -u' re-reads the
+files, so it already covers the newest write.")
+
+(defvar fenrir/org-index--warned nil
+  "Non-nil once the save hook has warned about missing binaries this session.")
+
+(defun fenrir/org-index--root (path)
+  "Innermost ancestor of PATH containing an `.org-index/' directory, or nil.
+Mirrors the CLI's root discovery: truename first (readlink -f), a file
+resolves to its directory, then walk up.  The marker must be a DIRECTORY --
+the string form of `locate-dominating-file' would also match a stray plain
+file named .org-index and invent a phantom root."
+  (when-let* ((true (ignore-errors (file-truename (expand-file-name path))))
+              (dir (if (file-directory-p true) true (file-name-directory true)))
+              (root (locate-dominating-file
+                     dir
+                     (lambda (d)
+                       (file-directory-p
+                        (expand-file-name fenrir/org-index--dir d))))))
+    (file-name-as-directory (expand-file-name root))))
+
+(defun fenrir/org-index--environment (root)
+  "Process environment for one gtags/global run at ROOT.
+Prepends the org-index quartet to `process-environment'; callers let-bind the
+result around `make-process' so the daemon-wide code-indexing values from
+init-tags.el are shadowed for this one subprocess and untouched everywhere
+else."
+  (append (list (concat "GTAGSCONF=" fenrir/org-index--conf)
+                "GTAGSLABEL=org-roam"
+                (concat "GTAGSROOT=" (directory-file-name root))
+                (concat "GTAGSDBPATH="
+                        (expand-file-name fenrir/org-index--dir root)))
+          process-environment))
+
+(defun fenrir/org-index--sentinel (root buf quiet)
+  "Sentinel closure for the rebuild process at ROOT with output BUF.
+QUIET silences success and lock-skip; a real failure always messages -- the
+save hook must never fail silently (and a sentinel must never `user-error')."
+  (lambda (proc _event)
+    (unless (process-live-p proc)
+      (setf (alist-get root fenrir/org-index--procs nil 'remove #'equal) nil)
+      (let ((code (process-exit-status proc))
+            (out (when (buffer-live-p buf)
+                   (with-current-buffer buf (string-trim (buffer-string))))))
+        (when (buffer-live-p buf) (kill-buffer buf))
+        (cond
+         ((eq code 0)
+          (unless quiet
+            (message "org-index: updated %s" (abbreviate-file-name root))))
+         ;; flock -E 200: lock held by a concurrent rebuild (e.g. the Claude
+         ;; PostToolUse hook) -- that run re-reads the files, so it covers
+         ;; this edit.  Silent by design, matching the CLI.
+         ((eq code 200) nil)
+         (t
+          (message "org-index: rebuild failed in %s (exit %d): %s"
+                   (abbreviate-file-name root) code
+                   (or (car (last (string-lines (or out "") t))) ""))))))))
+
+(defun fenrir/org-index--rebuild (root &optional quiet)
+  "Start an async index rebuild at ROOT (incremental, or full when no GTAGS).
+QUIET is the save-hook mode: silent on success and lock-skip."
+  (unless (process-live-p (cdr (assoc root fenrir/org-index--procs)))
+    (let* ((db (expand-file-name fenrir/org-index--dir root))
+           (gtags (expand-file-name "GTAGS" db))
+           (size (and (file-exists-p gtags)
+                      (file-attribute-size (file-attributes gtags)))))
+      ;; A 0-byte GTAGS is a corrupt stub: `global -u' fails against it
+      ;; forever, and gtags refuses to overwrite it.  Wipe and rebuild from
+      ;; scratch (same policy as `fenrir/gtags-build').
+      (when (eql size 0)
+        (dolist (f '("GTAGS" "GRTAGS" "GPATH"))
+          (ignore-errors (delete-file (expand-file-name f db))))
+        (setq size nil))
+      (let ((cmd (append (list "flock" "-n" "-E" "200"
+                               (expand-file-name ".lock" db))
+                         (if size
+                             (list "global" "-u")
+                           (list "gtags" db))))
+            (default-directory root) ; gtags/global demand cwd = the root
+            (process-environment (fenrir/org-index--environment root))
+            (buf (generate-new-buffer " *fenrir-org-index*")))
+        (setf (alist-get root fenrir/org-index--procs nil nil #'equal)
+              (make-process :name "fenrir-org-index"
+                            :buffer buf
+                            :command cmd
+                            :sentinel (fenrir/org-index--sentinel
+                                       root buf quiet)))
+        (unless quiet
+          (message "org-index: %s rebuild in %s ..."
+                   (if size "incremental" "full")
+                   (abbreviate-file-name root)))))))
+
+(defun fenrir/org-index-rebuild (path)
+  "Rebuild the GNU Global org-ID index for the root owning PATH.
+Defaults to the current file (or `default-directory');
+\\[universal-argument] prompts for a directory."
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "org-index rebuild for: "
+                                  default-directory nil t)
+           (or buffer-file-name default-directory))))
+  (unless (and (executable-find "global") (executable-find "gtags")
+               (executable-find "flock"))
+    (user-error "org-index needs global, gtags and flock (apt install global)"))
+  (unless (file-exists-p fenrir/org-index--conf)
+    (user-error "org-index: %s missing -- is ~/.claude/org-index set up?"
+                (abbreviate-file-name fenrir/org-index--conf)))
+  (let ((root (fenrir/org-index--root path)))
+    (unless root
+      (user-error "No org-index root for %s -- no ancestor has %s/ (run: org-index init <dir>)"
+                  (abbreviate-file-name path) fenrir/org-index--dir))
+    (fenrir/org-index--rebuild root)))
+
+(defun fenrir/org-index--after-save ()
+  "Incrementally rebuild the org-ID index when saving a `.org' under a root.
+Gates ordered cheapest-first: a non-.org save costs one string compare and
+nothing else runs; a `.org' outside any root walks a few directories and
+no-ops silently.  TRAMP files are skipped.  Coexists with gtags-mode's own
+on-save single-update (init-tags.el), which only fires for buffers under a
+CODE GTAGS root and inherits the daemon env -- disjoint roots, disjoint env."
+  (let ((file buffer-file-name))
+    (when (and file
+               (string-suffix-p ".org" file)
+               (not (file-remote-p file)))
+      (if (not (and (executable-find "global") (executable-find "gtags")
+                    (executable-find "flock")))
+          (unless fenrir/org-index--warned
+            (setq fenrir/org-index--warned t)
+            (message "org-index: global/gtags/flock not found -- on-save indexing disabled"))
+        (when-let* ((root (fenrir/org-index--root file)))
+          (fenrir/org-index--rebuild root 'quiet))))))
+
+(add-hook 'after-save-hook #'fenrir/org-index--after-save)
+
 ;; org-modern: restyle headings, lists, checkboxes, tables, blocks and
 ;; timestamps for a cleaner look.  Pure display -- it never edits your files.
 (use-package org-modern

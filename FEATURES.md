@@ -1108,6 +1108,13 @@ source — narrow to them with `< q`. To get a preview side panel back, add
   files **outside** the agenda/roam scope resolve instead of dying with "Cannot find entry
   with ID" — needed for project-local org KBs (e.g. `~/code/camhr/infra/.../kb/`). Merges
   with the existing table; safe to re-run after adding nodes.
+- **`M-x fenrir/org-index-rebuild`** (Tier 3, no key): rebuilds the **GNU Global**
+  `:ID:`/`[[id:]]` index (`.org-index/` — a different mechanism from `org-id-locations`
+  above) for the root owning the current file; `C-u` prompts for a path. Elisp twin of
+  the `org-index rebuild` CLI — same conf/label/lock, so the two stay interchangeable.
+  You rarely need it manually: **saving any `.org` file under an `.org-index/` root
+  auto-refreshes the index in the background** (silent; ~0.02 s incremental; real
+  failures still message). No root → the save is a silent no-op.
 - **`C-c M-o` — `olivetti-mode`** ([`init-gui.el`](lisp/init-gui.el), Tier B): centered
   prose margins for long-form reading/writing. Manual toggle (no org-mode hook — light
   touch); works fine on TTY.

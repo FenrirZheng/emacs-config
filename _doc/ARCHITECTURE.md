@@ -42,7 +42,7 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-appearance` | doom-themes, doom-modeline, nerd-icons |
 | `init-gui` | GUI-frame-only eye-candy, TTY-gated (below) |
 | `init-dired` | dired + diredfl, nerd-icons-dired, dired-subtree, dired-narrow, consult-dir |
-| `init-org` / `init-org-roam` | Org (light touch) + the org-roam Zettelkasten at `~/code/org-roam/` |
+| `init-org` / `init-org-roam` | Org (light touch) + the org-roam Zettelkasten at `~/code/org-roam/`; `init-org` also carries the elisp side of the GNU Global org-ID index (`fenrir/org-index-rebuild` + on-save auto-refresh of `.org-index/` roots — see [TAGS.md](TAGS.md#the-second-gtags-universe-the-org-id-index)) |
 | `init-ai` | `claude-jobs-view`, `gptel`, GitHub Copilot (opt-in per buffer on `C-c M-c`), `question-queue` |
 | `init-aidermacs` | aidermacs (aider pair-programmer, vterm, Gemini) |
 | `init-tmux-claude` / `init-alacritty-claude` | split a tmux pane / launch an external alacritty running the `claude` CLI |

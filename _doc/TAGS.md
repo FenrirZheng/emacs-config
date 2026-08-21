@@ -165,6 +165,34 @@ a `gtags.sh` build indexes Java without fields, and the next Emacs on-save updat
 re-parses only the touched file *with* them. Nothing errors; the index is just
 inconsistent. Point `gtags.sh` at `java-pygments` too, or keep the two indexes separate.
 
+## The second gtags universe: the org-ID index
+
+Everything above is the **code** index. There is a second, fully disjoint GNU Global
+deployment on this machine — the **org-ID index**: any directory carrying `.org-index/`
+(currently `~/code/org-roam` and `~/code/pg`) holds a db mapping `:ID:` lines
+(definitions) and `[[id:` links (references) in `.org` files. When gtags behaves oddly,
+first establish which universe you're in:
+
+| | code index (this doc) | org-ID index |
+|---|---|---|
+| conf | [`~/.emacs.d/gtags.conf`](../gtags.conf) | `~/.claude/org-index/gtags.conf` |
+| label | `java-pygments` | `org-roam` |
+| env delivery | `setenv`, **daemon-wide** | let-bound `process-environment`, **per-process** |
+| db location | project root | `<root>/.org-index/` |
+| owners | `gtags-mode` + `fenrir/gtags-build` ([`init-tags.el`](../lisp/init-tags.el)) | `fenrir/org-index-rebuild` + save hook ([`init-org.el`](../lisp/init-org.el)), the `~/.claude/bin/org-index` CLI, and Claude Code's PostToolUse hook |
+
+The two confs are deliberately **never merged** (each file's header says so): merging
+would let the OrgRoam ctags language leak into code runs and let upstream conf refreshes
+clobber the org label. Because the org quartet (`GTAGSCONF`/`GTAGSLABEL`/`GTAGSROOT`/
+`GTAGSDBPATH`) is injected per-process, the daemon-wide `java-pygments` pair stays
+untouched — `(getenv "GTAGSLABEL")` is still `java-pygments` after an org rebuild, which
+is exactly the CLAUDE.md invariant.
+
+Writers serialize via a non-blocking `flock(1)` on `<root>/.org-index/.lock` — the CLI,
+the Claude hook, and the Emacs side all take the same lock and silently skip when it's
+held (a concurrent `global -u` re-reads the files, so it covers the edit anyway; Emacs
+distinguishes the skip from real failure via `flock -E 200`).
+
 ## See also
 
 - [CLAUDE.md](../CLAUDE.md) — the extracted rules
