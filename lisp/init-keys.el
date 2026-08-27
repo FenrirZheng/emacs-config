@@ -454,6 +454,40 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
 (define-key goto-map (kbd "b") #'fenrir/back)
 (define-key goto-map (kbd "B") #'fenrir/forward)
 
+;; --------------------------------------------- editor-contract release ---
+;; `C-x C-c' -> release the blocking emacsclient when there is one, else the
+;; stock quit.  In this daemon setup "C-x C-c, get me out" is most often
+;; pressed inside a blocking client session (Claude Code's Ctrl+G prompt
+;; editor / Ctrl+O transcript viewer via claude-editor{,-gui}), where the
+;; caller resumes only when the CLIENT is released -- see the EDITOR CONTRACT
+;; header in ~/.claude/bin/claude-editor-gui.  So: in a buffer some client is
+;; waiting on, behave like `C-x k' -- kill the buffer WITHOUT saving (the
+;; Ctrl+G prompt returns unchanged) -- which releases the client and hands
+;; control back to Claude Code; in every other buffer, fall through to
+;; `save-buffers-kill-terminal' exactly as the default binding.  Two
+;; deliberate details:
+;;   * the "buffer still has clients; kill it?" query is suppressed on this
+;;     path only -- releasing the client is the point of the gesture, not an
+;;     accident for the query to catch (`C-x k' keeps its query);
+;;   * a modified buffer still prompts "kill anyway?" from `kill-buffer'
+;;     itself, so edits are never discarded silently; `C-x #' remains the
+;;     save-and-finish path.
+(defun fenrir/quit-or-release-client ()
+  "Release a waiting emacsclient like `C-x k' would, else plain `C-x C-c'.
+In a buffer some emacsclient is blocking on (`server-buffer-clients'
+non-nil), kill that buffer without saving, so the caller (Claude Code's
+Ctrl+G, git, ...) resumes with the file as last saved.  In any other
+buffer, call `save-buffers-kill-terminal' as the default binding does."
+  (interactive)
+  (if (and (boundp 'server-buffer-clients) server-buffer-clients)
+      (let ((kill-buffer-query-functions
+             (remq 'server-kill-buffer-query-function
+                   kill-buffer-query-functions)))
+        (kill-buffer (current-buffer)))
+    (call-interactively #'save-buffers-kill-terminal)))
+
+(global-set-key (kbd "C-x C-c") #'fenrir/quit-or-release-client)
+
 ;; casual-suite: pre-built transient menus for the BUILT-IN modes (dired,
 ;; ibuffer, isearch, Info, re-builder, bookmarks, agenda, calc, ...).  Same
 ;; Tier-2 idea as the hub, but for the "I know this mode can do it, not which
