@@ -16,13 +16,14 @@ treated as a project. If root detection seems stuck on a stale answer after edit
 markers list, run `M-x fenrir/project-reset-cache` — `project-try-vc` memoises via
 `vc-file-setprop`, and that function clears the `vc-file-prop-obarray`.
 
-**Magit.** With ~1500 tracked files plus `status.showUntrackedFiles=no` hiding ~1M items,
+**Magit.** With ~1500 tracked files plus ~1M untracked items under `$HOME`,
 `diff-hl-dired-mode` was dropped from this config (see
 [`init-git.el`](../lisp/init-git.el)). The untracked-files section used to be dropped for
 the same reason (a `remove-hook` on `magit-status-sections-hook`), but that is no longer
-needed and was restored: Magit now reads the **repo-local** `status.showUntrackedFiles` in
-`magit-list-untracked-files` (returns nothing when it's `no`, so `$HOME` is never walked)
-and caps any listing at `magit-status-file-list-limit` (100).
+needed and was restored: Magit reads the **repo-local** `status.showUntrackedFiles` in
+`magit-list-untracked-files` and caps any listing at `magit-status-file-list-limit` (100).
+Since that key became `normal` for `$HOME` (2026-09-02) the Untracked section does appear
+there, listing the ~237 collapsed top-level entries rather than walking the whole tree.
 
 **Don't re-add that `remove-hook`** — it hides untracked files in every *normal* repo to
 solve a problem Magit already solves for `$HOME`.
