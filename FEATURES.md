@@ -875,6 +875,9 @@ expression syntax is the debuggee's language. An empty message removes the logpo
 | `C-x g` | `magit-status` | The full Git porcelain — stage hunks, commit, rebase, log, … |
 | `C-x M-g` | `magit-dispatch` | Menu of all Magit commands |
 
+**Context hints:** Magit status, log, revision and diff buffers show a default-on, one-row toolbar: muted context on the left, bold themed keys beside action labels, and `TAB Fold` / `? Help` on the right. Narrow windows omit whole items, preserving Help and the first action when they fit; existing titles appear when space permits. Active selections are labeled Region. The layout supports GUI and TTY frames.
+Toggle per buffer with `M-x fenrir/magit-hints-mode`; customize `fenrir/magit-hints-default` for new buffers or `fenrir/magit-hints-alist` to extend the hints. Menu labels open transients.
+
 **`C-x v …` — Magit on the retired `vc.el` prefix.** `vc-handled-backends` is
 `nil` (vc.el disabled), so its stock `C-x v` prefix map is repurposed wholesale:
 each key keeps the slot vc.el used, so vc muscle memory carries over. Keys marked

@@ -24,6 +24,223 @@
   ;; exclusively through Magit (see the `C-x v' remap below).
   (setq vc-handled-backends '(Git)))
 
+;; Persistent, context-sensitive help.  Keep rendering free of Git subprocesses;
+;; `magit-diff-type' can resolve revisions, so cache it at refresh time.
+(defcustom fenrir/magit-hints-default t
+  "Whether new Magit status, log, revision and diff buffers show hints."
+  :type 'boolean :group 'magit)
+
+(defcustom fenrir/magit-hints-alist
+  '((unstaged ("s" "stage" magit-stage) ("k" "discard" magit-discard)
+              ("RET" "diff" magit-diff-unstaged))
+    (staged ("u" "unstage" magit-unstage) ("k" "discard" magit-discard)
+            ("RET" "diff" magit-diff-staged) ("c" "commit menu" magit-commit))
+    (untracked ("s" "track" magit-stage) ("k" "delete" magit-discard)
+               ("i" "ignore menu" magit-gitignore))
+    ((file unstaged) ("s" "stage file" magit-stage) ("k" "discard file" magit-discard)
+                     ("RET" "visit" magit-diff-visit-file))
+    ((hunk unstaged) ("s" "stage hunk/region" magit-stage)
+                     ("k" "discard hunk/region" magit-discard)
+                     ("RET" "visit" magit-diff-visit-file))
+    ((file staged) ("u" "unstage file" magit-unstage) ("k" "discard file" magit-discard)
+                   ("c" "commit menu" magit-commit) ("RET" "visit" magit-diff-visit-file))
+    ((hunk staged) ("u" "unstage hunk/region" magit-unstage)
+                   ("k" "discard hunk/region" magit-discard)
+                   ("RET" "visit" magit-diff-visit-file))
+    ((file untracked) ("s" "track" magit-stage) ("k" "delete" magit-discard)
+                      ("i" "ignore menu" magit-gitignore)
+                      ("RET" "visit" magit-diff-visit-file))
+    (file ("RET" "visit" magit-diff-visit-file) ("d" "diff menu" magit-diff))
+    (hunk ("RET" "visit" magit-diff-visit-file) ("d" "diff menu" magit-diff))
+    (commit ("RET" "show" magit-show-commit) ("b" "branch menu" magit-branch)
+            ("r" "rebase menu" magit-rebase) ("A" "cherry-pick menu" magit-cherry-pick)
+            ("y" "refs" magit-show-refs))
+    (branch ("RET" "visit ref" magit-visit-ref) ("b" "branch menu" magit-branch)
+            ("l" "log menu" magit-log) ("y" "refs" magit-show-refs))
+    (stash ("RET" "show" magit-stash-show) ("a" "apply" magit-stash-apply)
+           ("A" "pop" magit-stash-pop) ("k" "drop" magit-stash-drop))
+    (stashes ("RET" "list" magit-stash-list) ("z" "stash menu" magit-stash))
+    (default ("c" "commit menu" magit-commit) ("P" "push menu" magit-push)
+             ("F" "pull menu" magit-pull) ("b" "branch menu" magit-branch)
+             ("l" "log menu" magit-log) ("z" "stash menu" magit-stash)))
+  "Hints keyed by section TYPE or (TYPE DIFF-TYPE), with a default fallback.
+Each entry contains (KEY LABEL COMMAND) triples.  A hint is shown only
+when KEY actually invokes COMMAND at point, including command remapping.
+Diff type distinguishes staged, unstaged and untracked files/hunks.
+Unknown sections use default; TAB and help are added independently.
+These are command reminders, not a guarantee that Git will accept an action."
+  :type '(alist :key-type sexp
+                :value-type (repeat (list string string function)))
+  :group 'magit)
+
+(defvar-local fenrir/magit-hints--saved-header nil)
+(defvar-local fenrir/magit-hints--diff-type nil)
+(defconst fenrir/magit-hints--header
+  '((:eval (fenrir/magit-hints--render))))
+
+(defface fenrir/magit-hints-key
+  '((t :inherit (font-lock-keyword-face fixed-pitch) :weight bold))
+  "Keys in the Magit hint toolbar."
+  :group 'magit)
+
+(defface fenrir/magit-hints-context
+  '((t :inherit (shadow fixed-pitch)))
+  "Context and repository titles in the Magit hint toolbar."
+  :group 'magit)
+
+(defface fenrir/magit-hints-label
+  '((t :inherit (header-line fixed-pitch)))
+  "Action labels and spacing in the Magit hint toolbar."
+  :group 'magit)
+
+(defun fenrir/magit-hints--item (entry)
+  "Format ENTRY only if its key actually invokes its command at point."
+  (when (eq (key-binding (kbd (car entry))) (nth 2 entry))
+    (let* ((label (replace-regexp-in-string
+                   "\\(?: file\\| hunk/region\\)\\'" "" (nth 1 entry)))
+           (label (replace-regexp-in-string "[\n\r]" " " label)))
+      (concat (propertize (car entry) 'face 'fenrir/magit-hints-key)
+              " " (if (string-empty-p label) label
+                    (concat (upcase (substring label 0 1))
+                            (substring label 1)))))))
+
+(defun fenrir/magit-hints--layout (width context actions title fold help)
+  "Fit complete toolbar items into WIDTH columns, with HELP on the right.
+Prefer HELP and the first action.  Drop TITLE, trailing ACTIONS, CONTEXT,
+then FOLD as space shrinks.  Never truncate an action or a key."
+  (let* ((width (max 0 width))
+         (left (lambda () (string-join (delq nil (append (list context)
+                                                        actions (list title)))
+                                       "   ")))
+         (right (lambda () (string-join (delq nil (list fold help)) "   ")))
+         (fits (lambda ()
+                 (<= (+ 2 (string-width (funcall left))
+                        (string-width (funcall right))
+                        (if (and (not (string-empty-p (funcall left)))
+                                 (not (string-empty-p (funcall right)))) 3 0))
+                     width))))
+    (unless (funcall fits) (setq title nil))
+    (while (and (cdr actions) (not (funcall fits)))
+      (setq actions (butlast actions)))
+    (unless (funcall fits) (setq context nil))
+    (unless (funcall fits) (setq fold nil))
+    (unless (funcall fits) (setq actions nil))
+    ;; Even exceptionally small windows retain the help key if it fits.
+    (unless (funcall fits)
+      (setq help (and help (>= width 3)
+                      (propertize "?" 'face 'fenrir/magit-hints-key))))
+    (let* ((lhs (funcall left))
+           (rhs (funcall right))
+           (padding (max 0 (- width 2 (string-width lhs) (string-width rhs)))))
+      (if (< width 2) ""
+        (let ((text (concat " " lhs (make-string padding ?\s) rhs " ")))
+          (add-face-text-property 0 (length text) 'fenrir/magit-hints-label t text)
+          text)))))
+
+(defun fenrir/magit-hints--render ()
+  "Render a toolbar for the window being redisplayed, without running Git."
+  (save-excursion
+    ;; Redisplay and format-mode-line select the window being formatted.
+    (when (eq (window-buffer (selected-window)) (current-buffer))
+      (goto-char (window-point (selected-window))))
+    (let* ((section (magit-section-at))
+           (type (and section (oref section type)))
+           (diff-type (if (derived-mode-p 'magit-status-mode)
+                          (let ((ancestor section) result)
+                            (while ancestor
+                              (when (memq (oref ancestor type)
+                                          '(staged unstaged untracked))
+                                (setq result (oref ancestor type)))
+                              (setq ancestor (oref ancestor parent)))
+                            result)
+                        fenrir/magit-hints--diff-type))
+           (entries (or (alist-get (list type diff-type) fenrir/magit-hints-alist
+                                   nil nil #'equal)
+                        (alist-get type fenrir/magit-hints-alist)
+                        (alist-get 'default fenrir/magit-hints-alist)))
+           (scope (if (use-region-p) "Region"
+                    (pcase type
+                      ((or 'file 'hunk) (symbol-name type))
+                      (_ nil))))
+           (context (if scope
+                        (string-join
+                         (delq nil (list (and (memq diff-type '(staged unstaged untracked))
+                                              (capitalize (symbol-name diff-type)))
+                                         (if (memq diff-type '(staged unstaged untracked))
+                                             scope
+                                           (capitalize scope)))) " ")
+                      (if type (capitalize (replace-regexp-in-string
+                                            "-" " " (symbol-name type)))
+                        "Magit")))
+           ;; Magit's alignment properties would draw its title over our hints.
+           (title (string-trim (replace-regexp-in-string
+                                "[\n\r]" " "
+                                (substring-no-properties
+                                 (format-mode-line fenrir/magit-hints--saved-header)))))
+           (text (fenrir/magit-hints--layout
+                  (max 0 (1- (window-body-width)))
+                  (propertize context 'face 'fenrir/magit-hints-context)
+                  (delq nil (mapcar #'fenrir/magit-hints--item entries))
+                  (unless (string-empty-p title)
+                    (propertize title 'face 'fenrir/magit-hints-context))
+                  (fenrir/magit-hints--item '("TAB" "Fold" magit-section-toggle))
+                  (fenrir/magit-hints--item '("?" "Help" magit-dispatch)))))
+      ;; Keep literal percent signs in labels and revision titles intact.
+      (list "" text))))
+
+(defun fenrir/magit-hints--install ()
+  "Preserve the current title and install the hint header after refresh."
+  (when fenrir/magit-hints-mode
+    (unless (equal header-line-format fenrir/magit-hints--header)
+      (setq fenrir/magit-hints--saved-header header-line-format))
+    (setq fenrir/magit-hints--diff-type
+          (when (derived-mode-p 'magit-diff-mode)
+            (magit-diff-type)))
+    (setq-local header-line-format fenrir/magit-hints--header)))
+
+(define-minor-mode fenrir/magit-hints-mode
+  "Toggle persistent context hints in this Magit buffer.
+New status, log, revision and diff buffers enable this by default.
+The previous header is retained after the hints, and restored on disable."
+  :lighter nil
+  (if fenrir/magit-hints-mode
+      (progn
+        (require 'magit)
+        (unless (memq major-mode '(magit-status-mode magit-log-mode
+                                  magit-revision-mode magit-diff-mode))
+          (setq fenrir/magit-hints-mode nil)
+          (user-error "Hints support Magit status, log, revision and diff buffers"))
+        (add-hook 'magit-refresh-buffer-hook #'fenrir/magit-hints--install nil t)
+        (fenrir/magit-hints--install))
+    (remove-hook 'magit-refresh-buffer-hook #'fenrir/magit-hints--install t)
+    (when (equal header-line-format fenrir/magit-hints--header)
+      (setq-local header-line-format fenrir/magit-hints--saved-header)))
+  (force-mode-line-update))
+
+(defun fenrir/magit-hints--maybe-enable ()
+  "Enable hints according to the default, excluding selection modes."
+  (when (and fenrir/magit-hints-default
+             (memq major-mode '(magit-status-mode magit-log-mode
+                                magit-revision-mode magit-diff-mode)))
+    (fenrir/magit-hints-mode 1)))
+
+(with-eval-after-load 'magit
+  ;; Magit refreshes its title through this function, including outside refresh.
+  (advice-add 'magit-set-header-line-format :after #'fenrir/magit-hints--title-changed)
+  (dolist (hook '(magit-status-mode-hook magit-log-mode-hook
+                  magit-revision-mode-hook magit-diff-mode-hook))
+    (add-hook hook #'fenrir/magit-hints--maybe-enable))
+  ;; Also cover already-open buffers when reloading this module.
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (unless (local-variable-p 'fenrir/magit-hints-mode)
+        (fenrir/magit-hints--maybe-enable)))))
+
+(defun fenrir/magit-hints--title-changed (&rest _)
+  "Reinstall hints when Magit changes the underlying title."
+  (when fenrir/magit-hints-mode
+    (fenrir/magit-hints--install)))
+
 ;; C-x v : retire vc.el's prefix, hand it to Magit.
 ;; vc.el's stock `C-x v ...' commands work again (the Git backend is enabled
 ;; in the magit block above) -- but every interactive VC task here goes
