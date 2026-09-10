@@ -2,7 +2,8 @@
 
 Author: codex (agent)
 Created: 2026-09-10
-Status: draft
+Status: accepted
+Accepted: 2026-09-10
 
 ## Requirements
 
@@ -119,7 +120,7 @@ Redisplay 中的新增 hints 邏輯不執行 Git subprocess、讀取工作樹或
 - **實際互動仍待驗證（實作者）**：已取得 hidden／invisible 狀態，但沒有前後畫面、按鍵實測與延遲資料。Baseline 不足以宣稱已證實所有可用性缺陷或已改善。
 - **共用 buffer 的視窗影響（實作者）**：摺疊共用而 point／header 依視窗；必須測試兩窗均在不同 hunk 的情境，不把 per-window rendering 誤當 per-window visibility。
 - **套件版本與擴充（實作者）**：本地 Magit／magit-section 版本與 SHA 見 baseline。升級、Forge 或延遲 section 可能改變 tree；採用 API 前重查，遇未知節點保留原行為。
-- **需求取捨（使用者）**：本草稿提議新 buffer 預設檔案概況；若使用者偏好原生初始展開，可停用預設並使用手動入口。Spec 尚未由使用者接受。
+- **需求取捨（使用者）**：新 buffer 預設檔案概況；若使用者偏好原生初始展開，可停用預設並使用手動入口。使用者於 2026-09-10 接受本 Spec。
 
 ## Open questions carried from intent.md
 

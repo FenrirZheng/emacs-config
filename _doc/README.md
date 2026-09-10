@@ -17,7 +17,7 @@ here and is read on demand.
 Not in this directory:
 
 - [Magit status overview intent](../sdlc/intents/magit-status-overview/intent.md) —
-  accepted improvement outcome; [draft specification](../sdlc/intents/magit-status-overview/spec.md)
+  accepted improvement outcome; [accepted specification](../sdlc/intents/magit-status-overview/spec.md)
   defines the overview, observation limits, and proposed UI validation;
   [discussion and review record](../sdlc/intents/magit-status-overview/evidence/review-summary.md).
 - [FEATURES.md](../FEATURES.md) — the "what keys do I press" cheat sheet.
