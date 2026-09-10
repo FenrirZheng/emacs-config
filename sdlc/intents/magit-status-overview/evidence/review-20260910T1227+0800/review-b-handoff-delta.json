@@ -1,0 +1,72 @@
+{
+  "evidence": "Bounded delta review of spec v2 (SHA256 fa7efffcfd8733f987f66a18127ffc7a144549f2c24dee9ddea9cdd167b67421) against v1-v2.diff and my own review-b.md, at source d65ffc85. PRIOR FINDINGS: both v1 blockers RESOLVED and re-verified against source, not only against the new prose - B1 because magit-status-mode-map binds j to magit-status-jump (magit-status.el:391) so R4's live-binding check genuinely passes for j, and magit-status-jump has no o suffix at this revision (keys z t n i u s / fu fp pu pp a w / j), confirming v2's claim that o is free; B2 because D1 now states the per-group asymmetry and R2 makes untracked->show the required increment, with HIDE=t re-confirmed at magit-status.el:797 (D1 cites :793, the enclosing defun). S1, S2, S3, S4, S5 all RESOLVED; N2 and N3 RESOLVED; N1 (hints item position vs --layout's preserve-first-action, init-git.el:117-124) STILL OPEN as a nit. No prior finding refuted. SIX DIMENSIONS re-triaged: only architecture/design warrants discussion; the other five skip with recorded reasons (v2 added the failure contract, honest reversibility, and distinguishing tests). NEW FINDINGS: D1 should-fix - cross-buffer visibility restore is not self-installing. magit-restore-section-visibility-cache runs unconditionally at magit-mode.el:917, but the preserve half is added to kill-buffer-hook in exactly one place, magit-refs.el:328, inside magit-refs-refresh-buffer and with no LOCAL arg. That explains the coordinator's default-value probe and the earlier baseline false negative, but it also means the hook only exists after a refs buffer has been refreshed once; in a status-only session, kill/recreate preserves nothing, making R6 rows 5 and 10 nondeterministic. Suggested fix is to pin the precondition in the row. D2 nit - D4 recommends M-x magit-zap-caches, which drops the repository's whole magit-repository-local-cache entry and the blob cache, broader than the visibility cache D4 discusses. Also confirmed git update-index --refresh is in the status refresh path (magit-status.el:467), so R6 row 12's stat-metadata allowance is well founded. ALL EVIDENCE SOURCE-DERIVED OR DOCUMENT-DERIVED: no Emacs started, no Elisp evaluated, no emacsclient, no fixture, no timing, no screen capture. The single interactive check that would settle D1 was not run and is named as such. Did not read any other reviewer's output or the live spec.md; A1/A2 positions in the dispatch are treated as coordinator-supplied context. Budget honoured: 7 files, 6 tool calls, 1138 words (<=1200). No project edit, git write, Emacs mutation, or subagent. Timestamps taken from `date -u`, correcting the v1 handoff which carried 04:44:00Z ahead of mailbox receipt. Sole artifact is /tmp/magit-spec-peers/review-b-delta.md, the one owned path.",
+  "generation": "2e7009c5cdac4d5a888887194ad523ae",
+  "handoff": {
+    "artifacts": [
+      {
+        "path": "/tmp/magit-spec-peers/review-b-delta.md",
+        "sha256": "6d422274b73831d72175a38e0bc6dd58e75c7a90ddbeb528e864d0706f1075bd"
+      }
+    ],
+    "dirty_digest": "0ee27bd95fdc4f34a1bde510fbf7799fac9a593b8a0e4008d70763cf642043c7",
+    "dirty_digest_method": "sha256 of `git status --porcelain` followed by `git diff HEAD`, run in /home/fenrir/.emacs.d at 2026-09-10T04:44:12Z. Untracked file contents are not included; untracked paths are listed by name. The v2 snapshot and the diff were hashed separately.",
+    "revision": 1,
+    "source_note": "Reviewed input is evidence/review-20260910T1227+0800/spec-v2.snapshot, SHA256 fa7efffcfd8733f987f66a18127ffc7a144549f2c24dee9ddea9cdd167b67421, with v1-v2.diff SHA256 121c6adee6ae896a7a38b2d966a8d14eb6c83b2fe023bd8b67d3df5e6e30a817; both recomputed locally and matching. Working tree dirty with Codex-owned and unrelated entries only; review-b wrote nothing inside the worktree.",
+    "source_sha": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+    "tests": [
+      {
+        "command": "sha256sum spec-v2.snapshot",
+        "result": "pass - fa7efffcfd8733f987f66a18127ffc7a144549f2c24dee9ddea9cdd167b67421, matches the dispatched v2 SHA",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty 0ee27bd95fdc4f34a1bde510fbf7799fac9a593b8a0e4008d70763cf642043c7",
+        "updated_at": "2026-09-10T04:44:12Z"
+      },
+      {
+        "command": "sha256sum v1-v2.diff",
+        "result": "pass - 121c6adee6ae896a7a38b2d966a8d14eb6c83b2fe023bd8b67d3df5e6e30a817; diff applies to the v1 snapshot reviewed earlier and contains no hunks in Flagged concerns or Open questions",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty 0ee27bd95fdc4f34a1bde510fbf7799fac9a593b8a0e4008d70763cf642043c7",
+        "updated_at": "2026-09-10T04:44:12Z"
+      },
+      {
+        "command": "grep magit-status-mode-map / magit-status-jump suffixes in elpa/magit-20260506.643/magit-status.el",
+        "result": "pass - \"j\" is bound to magit-status-jump at :391; magit-status-jump suffix keys are z t n i u s, fu fp pu pp a w, j, with NO o suffix. Confirms v2 R3's claim and makes R4's live-binding route sound.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty 0ee27bd95fdc4f34a1bde510fbf7799fac9a593b8a0e4008d70763cf642043c7",
+        "updated_at": "2026-09-10T04:44:12Z"
+      },
+      {
+        "command": "sed magit-status.el 790-800 and grep for the magit-insert-files HIDE form",
+        "result": "pass with a citation note - HIDE=t form is at :797; v2 D1 cites :793, the enclosing defun line. Untracked group default hide re-confirmed.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty 0ee27bd95fdc4f34a1bde510fbf7799fac9a593b8a0e4008d70763cf642043c7",
+        "updated_at": "2026-09-10T04:44:12Z"
+      },
+      {
+        "command": "grep -rn magit-preserve-section-visibility-cache elpa/magit-20260506.643/*.el",
+        "result": "finding, not a pass - the only add-hook site is magit-refs.el:328 inside magit-refs-refresh-buffer, global (no LOCAL arg); restore side is magit-mode.el:917. Basis for new finding D1.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty 0ee27bd95fdc4f34a1bde510fbf7799fac9a593b8a0e4008d70763cf642043c7",
+        "updated_at": "2026-09-10T04:44:12Z"
+      },
+      {
+        "command": "NOT RUN - any interactive Emacs verification, including the check that settles D1 (whether default-value of kill-buffer-hook carries the preserve hook in a status-only session) and the j/o transient conflict path",
+        "result": "not executed by design - scope is spec review with no Emacs mutation and no expectation of implementation test execution. Consequence: every finding is source-derived or document-derived.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+        "updated_at": "2026-09-10T04:44:12Z"
+      }
+    ],
+    "unresolved": [
+      "New finding D1 (should-fix) is open for the author: R2/D3 should state that cross-buffer visibility restore depends on the kill-buffer-hook installed by magit-refs.el:328, and R6 row 5 should pin that precondition instead of leaving the row's outcome dependent on whether the tester opened a refs buffer.",
+      "New finding D2 (nit) is open: D4's recommended magit-zap-caches clears more than the visibility cache.",
+      "Prior N1 remains open as a nit: R4 does not fix where the j Jump menu item sits in fenrir/magit-hints-alist, and --layout preserves only help plus the first action.",
+      "The interactive check for D1 and the j o conflict-path check were not executed; no implementation test execution was in scope.",
+      "The four magit / magit-section package SHA-256 values in evidence/baseline.md were not recomputed in this task.",
+      "Findings are recommendations. Neither snapshot nor the live spec.md was modified by review-b. Coordinator verification of this handoff remains required."
+    ],
+    "updated_at": "2026-09-10T04:44:12Z"
+  },
+  "message_id": "review-b-delta-001",
+  "protocol": "peer-task/v1",
+  "seq": 31,
+  "state": "done",
+  "task_id": "magit-spec-review-b-delta",
+  "type": "status",
+  "updated_at": "2026-09-10T04:44:12.909631+00:00",
+  "worker": "review-b"
+}

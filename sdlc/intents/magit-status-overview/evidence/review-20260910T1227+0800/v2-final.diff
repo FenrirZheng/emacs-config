@@ -1,0 +1,53 @@
+--- spec-v2.snapshot
++++ spec-final.snapshot
+@@ -30,7 +30,7 @@
+ 
+ ### R3 — 入口與定位
+ 
+-提供 `M-x fenrir/magit-status-overview`，以及 status 的 `j` Jump menu 中 `o` Overview 入口（即 `j o`）。保留原生 `M-2`。目前已安裝 `magit-status-jump` 沒有 `o` suffix；整合時仍需檢查實際 transient／keymap，若使用者或擴充已佔用則保留原動作，提示入口衝突並保留 M-x，不無聲覆寫。此衝突退路另列驗收；正常 fixture 必須提供 `j o`。
++提供 `M-x fenrir/magit-status-overview`，以及 status 的 `j` Jump menu 中 `o` Overview 入口（即 `j o`），放在新增的 View 欄，標籤為 `Overview (fold diffs)`，表明這會收合 diff 而非純粹跳轉。保留原生 `M-2`。目前已安裝 `magit-status-jump` 沒有 `o` suffix；整合時仍需檢查實際 transient／keymap，若使用者或擴充已佔用則保留原動作，提示入口衝突並保留 M-x，不無聲覆寫。此衝突退路另列驗收；正常 fixture 必須提供 `j o`。
+ 
+ 從檔案或 hunk 執行時，point 留在該檔案的可見標題；從目標群組執行時留在群組標題；其他位置保留可見位置。只有因概況被隱藏的視窗 point 才需要移動；不變更視窗配置或選取其他 frame。成功套用目標概況時解除 active region／section selection，避免 point 改變後沿用舊選取範圍；不改 mark ring。沒有變更群組時為安全 no-op，非 status 錯誤也不改 selection。
+ 
+@@ -41,6 +41,8 @@
+ 延伸既有 `fenrir/magit-hints-mode`，不新增競爭的 header 所有者。Hints 只顯示目前 key-binding 真正呼叫的命令；窄窗保留完整項目，不裁切成誤導的按鍵／標籤。Overview 的入口可以在窄窗被省略，但仍可透過 M-x 與文件找到。
+ 
+ Status hints 可以提示 `j Jump menu`，並用既有 live-binding 檢查確認 `j` 呼叫 `magit-status-jump`。不得把只在 transient 內生效的 `o` 當成 status 的直接快捷鍵，亦不把 `j o` 偽裝成一般 keymap 序列交給現有 hints 檢查。`FEATURES.md` 說明 `j o`／M-x、入口衝突退路與 native M-2 的範圍差異。
++
++預設的 j 提示附加在既有情境動作之後，保留原有第一動作與 Help 的窄窗優先權；不為維持 j 提示而移除 stage／unstage 等主要動作。Status 的 diff-type 由該視窗 point 的 section ancestry 推導；其他模式既有的 buffer-local diff-type cache 不在此改動範圍。
+ 
+ 本階段以原生檔案清單、狀態與群組數量作為概況資訊；不新增獨立 diffstat 計算器、XML 解析器、提交主題分類或測試成功標章。原生 diffstat 仍可按需使用；資料不存在時不製造零值，也不從歷史報告推論目前工作樹通過驗證。
+ 
+@@ -58,12 +60,13 @@
+ 
+ | 案例 | 必須觀察的結果 |
+ |---|---|
+-| 無既有可見性快取的新 buffer：1 untracked、1 unstaged、10 staged，其中一個 XML 超過 1,600 行 | staged／unstaged 為原生相容性控制；untracked 必須因新增預設開啟。對照關閉新選項時原生 untracked 收合，避免 no-op 通過 |
++| 無既有可見性快取的新 buffer：1 untracked、1 unstaged、10 staged，其中一個 XML 超過 1,600 行 | 第一次完整 status 顯示、尚未按 g 時，staged／unstaged 為原生相容性控制，untracked 必須因新增預設開啟。對照關閉新選項時原生 untracked 收合，避免 no-op 或第二次刷新才生效的實作通過 |
+ | 人為先收合三個變更群組，且快取中部分 tracked file 為 show，執行新概況命令 | 三群組標題下的檔名可見、tracked body 隱藏，原先隱藏的 untracked body 可載入；noop 與只開父群組都必須失敗 |
+ | 同檔 staged + unstaged，rename、binary、submodule、unmerged，以及 untracked 目錄 | 原生狀態與可用入口保留，部分暫存兩筆不合併；概況不聲稱目錄數量等同遞迴檔案總數 |
+ | Untracked 顯示停用、超過 100 個平坦 untracked 檔案（原生上限 100）、status 帶檔案篩選 | 原生排除及截斷 info 提示保留；另以超過 100 個 staged 檔確認不受此限，不宣稱完整清單、不改 Git 設定或自動載入省略內容 |
+ | 手動展開檔案、收合群組，再刷新、重新進入現有 buffer、kill 後重建 | Magit 可匹配／還原的 section 保留手動選擇；新檔無既有／快取狀態時套用預設 |
+ | 既有 visibility alist 條目、初次定位條目、goto-file-position、preserve-visibility=nil | 各自保留原生優先順序；與普通 g 分開驗證，不為強迫概況而覆寫使用者選項 |
++| 未手動操作新 buffer 的 untracked 群組就重新執行 magit-status；其間改預設選項／重載模組 | 既有 buffer 保留建立時的初始規則選擇，不因 mode 重新初始化而遺失；後建 buffer 才採用新選項。載入功能前已存在且無此選擇紀錄的 buffer 不被自動套用 |
+ | 從 hunk 執行概況兩次後普通 g 刷新；同 buffer 在 GUI／TTY 各一窗顯示不同 hunk | 兩次摺疊結果相同且刷新後維持概況；selected 與 non-selected window-point 均在可見標題；非目標群組及篩選保持 |
+ | 有 active region／多 section selection 時執行概況；重映射 j 或佔用 transient o | 成功概況後 selection 解除且 hints 不再標 Region；入口無衝突時 j o 正確呼叫命令，有衝突時原動作不變、M-x 可用且有提示 |
+ | 無變更、只有 untracked、只有 staged、只有 unstaged、非 status 呼叫 | 前四者安全且有可理解畫面；非 status 無副作用並回報 user-error |
+@@ -97,6 +100,8 @@
+ 
+ 使用 status buffer-local `magit-section-initial-visibility-alist` 加入 untracked show 預設，保留並優先尊重其他既有可匹配條目；不添加全域 `(file . hide)` 或重做 tracked 預設。已安裝 `magit-insert-section--create` 優先查 visibility hook（原生含 cached visibility）；只有 `magit-section-preserve-visibility` 為 nil 時才查相符舊 section，之後才是 initial alist 與 hardcoded default。Cache 優先於新預設正是 R2 的要求，不把未改變既有快取誤認為失敗。`magit-mode.el` 的 `magit-preserve-section-visibility-cache`／`magit-restore-section-visibility-cache` 可在同 repository 關閉再建 buffer 時還原狀態。因此不能在每次 refresh 結束無條件執行 overview，亦不應以更高優先的 visibility hook 強迫重設手動選擇。初次定位／reveal 的原生後處理依 R2 保留。
+ 
++初始化時機固定在 status 專用、受 mode guard 保護的 `magit-create-buffer-hook`：此 hook 在 `magit-setup-buffer-internal` 呼叫 mode 後、第一次 `magit-refresh-buffer` 前執行（`magit-mode.el:664–697`）。在此記錄該 buffer 建立時的預設選擇並加入規則，不能等 `magit-post-create-buffer-hook` 或 refresh 結束才加入。該選擇是可跨 major-mode 重設保留的 buffer-local 狀態；既有 buffer 重新執行 mode 時，由 `magit-status-mode-hook` 只恢復已記錄的選擇，不重新讀取全域預設，也不替載入前已存在的 buffer 建立新選擇。此記憶只存於 buffer，非另一套摺疊 cache。對 `tracked`、`ignored`、`skip-worktree`、`assume-unchanged` 清單群組不增加 show 規則。
++
+ 明確命令只處理變更群組，透過 Magit section API 展開父群組並收合 tracked file body。Untracked 保留原生清單／目錄表達，不強制遞迴載入。保留既有身分與 body，不自行重建 diff 或替換原生 section keymap。
+ 
+ 原生 `M-2` (`magit-section-show-level-2-all`) 是重要比較方案，但作用於整個 root tree，可能改變 stash、commit 或其他非變更群組；本 spec 保留 `M-2` 並採用範圍受限的命令以滿足 R2。只對目標群組使用原生 section API，不呼叫全 root 的 M-2 再事後猜測還原其他群組。精確 lineage、point 調整與 lazy section 順序留給 plan 依已安裝 API 固定並驗證。
+@@ -104,6 +109,8 @@
+ ### D4 — 整合、恢復與成本
+ 
+ 使用 buffer-local 設定與可撤銷的 hook；重載不重複安裝，不強制折疊已開啟的 buffer。保留停用前的其他初始可見性條目；不改 `magit-section-cache-visibility` 變數或模組 load order。關閉預設／撤回配置會停止新增介入，並不抹除已經由明確命令寫入的原生快取。使用者若要重新比較原生初始外觀，可另外明確執行 `M-x magit-zap-caches` 或重新啟動 Emacs；功能本身不自動清除 repository 的其他快取，也不承諾恢復命令前的個別摺疊。沒有資料 migration。診斷可用 `magit-describe-section` 查 lineage，並區分初始 alist、原生 cache 與明確導覽的影響。
++
++`magit-zap-caches` 也會清理 repository-local、host Git-version 與 blob 快取，並非只清可見性；這是使用者另外選擇的原生命令，不是停用本功能的自動步驟。
+ 
+ 概況入口整合 `magit-status-jump` 的 `o` suffix 與現有 hints；用 status 上的 `j` 提示選單入口，M-x 作為必要且穩定的退路。整合必須可重載且不重複插入 suffix。具體 transient API 與衝突偵測在 plan 中固定。採用原生數量與按需 diffstat，比在每次 redisplay 計算數量或解析 XML 更容易維持語意與反應速度。
+ 

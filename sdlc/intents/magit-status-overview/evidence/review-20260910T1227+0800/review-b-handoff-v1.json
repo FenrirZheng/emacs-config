@@ -1,0 +1,58 @@
+{
+  "evidence": "Independent review of the frozen spec snapshot (SHA256 46802f5e951552106798c768f332374caa4881a8303cc092cb43dc8590229e2a) completed at source revision d65ffc852c29fdb2c0c5600074f7181b6ffc0001. All six review-plan dimensions triaged: 4 discussed (context/alignment, architecture/design, resilience/edge cases, execution/milestones), 2 skipped with recorded verified reasons (operability/observability, security/compliance). Result: 2 blockers (B1 R3/R4 discoverability unreachable because fenrir/magit-hints--item drops unbound commands, init-git.el:96-98; B2 untracked group hardcoded HIDE=t in magit-insert-files makes D1's keep-native advice violate R1/intent constraint), 5 should-fix (S1 R6 row 1 satisfiable by a no-op; S2 magit-status-file-list-limit scope is magit-insert-files only, magit-status.el:805; S3 no observable for the command's own wash cost; S4 multi-window window-point repair unowned, magit-section.el:966-969; S5 D3 names the wrong preserve-visibility gate, actual symbol magit-section-preserve-visibility magit-section.el:337), 3 nits, plus a 3-cause pre-mortem. ALL FINDINGS ARE SOURCE-DERIVED OR DOCUMENT-DERIVED: no Emacs was started, no Elisp evaluated, no emacsclient call, no timing, no screenshot, no fixture repository, no interactive TTY/GUI check; the review file states this limit explicitly and names the settling check for B2. Verified every magit symbol the spec cites actually exists in the installed magit-20260506.643 / magit-section-20260503.2051. Re-verified lisp/init-git.el SHA-256 8eb0cd89304a25465dfa8c4c90aed6729dd6fa0dfb70c8ea51a69aeb551cc48b matches evidence/baseline.md; did not recompute the four magit package hashes. Did not read other reviewers' output and did not read or modify the live spec.md. No project files written, no git add/commit, no Emacs mutation, no subagents. Budget honoured: 12 files read, ~24 tool calls. Sole artifact is /tmp/magit-spec-peers/review-b.md, the one owned path.",
+  "generation": "2e7009c5cdac4d5a888887194ad523ae",
+  "handoff": {
+    "artifacts": [
+      {
+        "path": "/tmp/magit-spec-peers/review-b.md",
+        "sha256": "f5a97a5b3a81efd3d5311e82c012a6ca8985c34c04039be26c8486576f088bab"
+      }
+    ],
+    "dirty_digest": "a1d1a74e73c947ef1b53105218be7b43ba2c59b7fdb5c36f355a6c5ebe0f34ef",
+    "dirty_digest_method": "sha256 of the concatenated output of `git status --porcelain` followed by `git diff HEAD`, run in /home/fenrir/.emacs.d at 2026-09-10T04:44Z. Untracked file CONTENTS are not included in this digest; untracked paths are listed by name via --porcelain. The reviewed snapshot and lisp/init-git.el were hashed separately and both match their expected values.",
+    "revision": 1,
+    "source_note": "Reviewed input is the frozen snapshot sdlc/intents/magit-status-overview/evidence/review-20260910T1227+0800/spec-v1.snapshot, SHA256 46802f5e951552106798c768f332374caa4881a8303cc092cb43dc8590229e2a, re-verified unchanged after the review. Working tree at report time is dirty with Codex-owned and unrelated entries only: ' M _doc/README.md', '?? AGENTS.md', '?? records/', '?? sdlc/intents/magit-status-overview/evidence/', '?? sdlc/intents/magit-status-overview/spec.md'. review-b made none of those changes and touched no path inside the worktree.",
+    "source_sha": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+    "tests": [
+      {
+        "command": "sha256sum sdlc/intents/magit-status-overview/evidence/review-20260910T1227+0800/spec-v1.snapshot",
+        "result": "pass - 46802f5e951552106798c768f332374caa4881a8303cc092cb43dc8590229e2a, matches the dispatched snapshot SHA before and after the review",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty a1d1a74e73c947ef1b53105218be7b43ba2c59b7fdb5c36f355a6c5ebe0f34ef",
+        "updated_at": "2026-09-10T04:44:00Z"
+      },
+      {
+        "command": "sha256sum lisp/init-git.el",
+        "result": "pass - 8eb0cd89304a25465dfa8c4c90aed6729dd6fa0dfb70c8ea51a69aeb551cc48b, matches the hash recorded in evidence/baseline.md",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty a1d1a74e73c947ef1b53105218be7b43ba2c59b7fdb5c36f355a6c5ebe0f34ef",
+        "updated_at": "2026-09-10T04:44:00Z"
+      },
+      {
+        "command": "grep for defcustom/defvar/defun of every magit symbol cited by the spec across elpa/magit-20260506.643 and elpa/magit-section-20260503.2051",
+        "result": "pass - all cited symbols exist: magit-status-show-untracked-files (magit-status.el:147), magit-status-file-list-limit (:184), magit-status-initial-section (:91), magit-preserve-section-visibility-cache (magit-mode.el:1548), magit-restore-section-visibility-cache (:1554), magit-section-show-level-2-all (magit-section.el:1139), magit-section-initial-visibility-alist (:184), magit-section-cache-visibility (:167), magit-insert-section--create (:1441). No invented API in the spec.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty a1d1a74e73c947ef1b53105218be7b43ba2c59b7fdb5c36f355a6c5ebe0f34ef",
+        "updated_at": "2026-09-10T04:42:00Z"
+      },
+      {
+        "command": "NOT RUN - any interactive Emacs verification (emacsclient eval, fixture repository, TTY/GUI coexistence, timing, screen capture)",
+        "result": "not executed by design - the task scope is spec review with no Emacs mutation. Consequence: every finding is source-derived or document-derived, never executed. B2 in particular is confirmed from source (magit-insert-files passes HIDE=t) but its one settling interactive check - reading the untracked group's hidden slot in a fresh-visibility-cache status buffer - was not performed. The review file records this limit in its 'Evidence classes' and 'Coverage and limits' sections.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+        "updated_at": "2026-09-10T04:44:00Z"
+      }
+    ],
+    "unresolved": [
+      "B2 has one unperformed interactive check: confirm the untracked group's hidden slot on a status buffer whose repository-local magit-section-visibility-cache is empty. Source evidence (magit-insert-files HIDE=t) is unambiguous, but evidence/baseline.md observed hidden=nil on a cached buffer, so an executed check should accompany the spec fix.",
+      "The four magit / magit-section package SHA-256 values recorded in evidence/baseline.md were not recomputed; only lisp/init-git.el was re-verified.",
+      "Findings are recommendations only. The frozen snapshot and the live spec.md are unchanged by review-b; no spec edit was applied and no severity was negotiated with the author.",
+      "Reviewer verification of this handoff remains required per the coordination protocol; a done report is a completion claim, not acceptance."
+    ],
+    "updated_at": "2026-09-10T04:44:00Z"
+  },
+  "message_id": "review-b-001",
+  "protocol": "peer-task/v1",
+  "seq": 22,
+  "state": "done",
+  "task_id": "magit-spec-review-b",
+  "type": "status",
+  "updated_at": "2026-09-10T04:36:00.003872+00:00",
+  "worker": "review-b"
+}

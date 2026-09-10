@@ -1,0 +1,41 @@
+{
+  "evidence": "Design discussion complete, including Addendum v2 answering updates discuss-update-002 and discuss-update-003 (both read from the mailbox and acknowledged before the addendum was written). Sole artifact and sole owned path: /tmp/magit-spec-peers/discussion.md, 304 lines. Read: sdlc/intents/magit-status-overview/intent.md, lisp/init-git.el, FEATURES.md, and installed sources elpa/magit-20260506.643/{magit-status.el,magit-diff.el,magit-mode.el,magit-refs.el}, elpa/magit-section-20260503.2051/magit-section.el, elpa/magit-todos-20250928.1611/magit-todos.el; Emacs 30.1. I did not read or write sdlc/intents/magit-status-overview/spec.md (Codex-owned). No project file, live-Emacs daemon, or Git writes; no subagents; no .elc created or deleted. Main source-backed conclusions, each cited to exact file:line in the artifact: (1) status-mode file sections are ALREADY collapsed unconditionally (magit-diff.el:2779-2786), so the proposal's core behaviour is upstream default, not new work; (2) the observed screen was collapsed GROUP sections, the opposite of the assumed defect; (3) native M-2 already yields the overview shape and leaves untracked visible, but acts on magit-root-section and so overreaches past the change groups; (4) per-window folds are structurally impossible (buffer-wide invisible overlays plus a single hidden slot); (5) --stat is gated out of status buffers upstream (magit-diff.el:1252-1257, 1266-1268) and forcing it in would yield nil-valued colliding file section idents, so no statistics; (6) buffer size is a bad acceptance criterion because hunks are washed eagerly (magit-diff.el:2800) and collapsing only adds overlays. Addendum v2 records two concessions where the coordinator was right: my cache-preserving overview wrapper was WRONG (it would evaporate on the next refresh, since stale cached 'show' entries win at magit-section.el:1455-1470), and the command must be scoped to unstaged/staged rather than shadowing M-2. On update-002's question I verified BOTH halves: magit-restore-section-visibility-cache is called for every new Magit buffer (magit-mode.el:917) and is status-mode aware, but nothing populates its key for status buffers in this version -- the only kill-buffer-hook registration of magit-preserve-section-visibility-cache is in magit-refs.el:328 -- so the restore path is real in principle and inert in practice today. I recommend the spec define 'fresh' by the cache lookup rather than by buffer creation, which is correct either way. Sections 8 and 14 carry the open questions; section 8 question 2 is explicitly WITHDRAWN per update-003.",
+  "generation": "93e59af280a8416eb13c9866a9ea9dc7",
+  "handoff": {
+    "artifacts": [
+      {
+        "path": "/tmp/magit-spec-peers/discussion.md",
+        "sha256": "21bcb1b17f6f97eb98a865dad298f9ffa1fad8463dda5bb7a028a053d1eb24bf"
+      }
+    ],
+    "dirty_digest": "8069257ab5dc5a6e8da765ce65d4b7f551227eced7d9783cc37d4acbe39dba56",
+    "revision": 1,
+    "source_note": "Read-only discussion task; no commit produced and no tracked file modified. Worktree /home/fenrir/.emacs.d at this SHA with pre-existing untracked AGENTS.md and records/, matching the dispatched baseline. Codex may have added sdlc/intents/magit-status-overview/spec.md after dispatch; the dirty_digest below is computed at report time and therefore reflects the tree as it stands now, which may differ from the baseline string in the task payload for that reason.",
+    "source_sha": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+    "tests": [
+      {
+        "command": "emacs -Q --batch -L elpa/magit-section-20260503.2051 -L elpa/compat-31.0.0.1 -L elpa/cond-let-20260511.1513 -L elpa/llama-20260508.949 -L elpa/dash-20260221.1346 -l <scratchpad>/probe.el   -- synthetic magit-section tree probe comparing magit-section-show-headings-1 against magit-section-show-children-1",
+        "result": "PARTIAL. The two compared cases ran and agreed with the source reading: show-headings-1 and show-children-1 with depth nil both unhide unstaged, file AND hunk (byte-identical output), confirming that magit-section-show-headings does not keep hunk bodies hidden despite its docstring, and therefore that <backtab>/magit-section-cycle-global offers no intermediate overview state. The two further depth=0 and depth=1 cases in the same file ERRORED with wrong-type-argument (integer-or-marker-p nil), because magit-section-hide requires real markers in a real buffer; the depth arithmetic attributed to M-2 in the artifact is therefore source-derived, NOT probe-verified. This probe validates one narrow Elisp claim only. It is NOT evidence that the design recommendations are correct, that any acceptance criterion passes, or that the worktree is in any particular state.",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty 8069257ab5dc5a6e8da765ce65d4b7f551227eced7d9783cc37d4acbe39dba56",
+        "updated_at": "2026-09-10T04:29:24Z"
+      }
+    ],
+    "unresolved": [
+      "Section 2.4 -- that M-2 produces the overview shape and leaves the untracked list visible -- is derived from reading magit-section.el:1004-1011 and 1101-1122 with magit-status.el:808-811. It was NOT confirmed in a live status buffer. One interactive keypress should confirm it before the spec is frozen.",
+      "Whether magit-restore-section-visibility-cache will remain inert for status buffers is an upstream question; a magit upgrade wiring magit-preserve-section-visibility-cache into magit-status-mode would change what a new status buffer inherits (section 10).",
+      "Section 14 asks the frozen draft to carry two items: the cache-anchored definition of 'fresh', and criterion T8 restated in TTY terms, since a fringe-based collapsed-state assertion passes vacuously on TTY (magit-section.el:212, 2018). Neither is resolved here.",
+      "Criterion T9 -- magit-todos and forge section behaviour under the scoped overview command -- is untested; those packages were inspected only far enough to establish that they insert level-1 status sections.",
+      "Byte-compiled .elc files sit beside every .el read. Load order was not verified, so a stale .elc could in principle diverge from the cited sources. No .elc was created or deleted.",
+      "I did not read sdlc/intents/magit-status-overview/spec.md, so this discussion does not constitute review of that draft; update-003 states two separate reviewers will review it."
+    ],
+    "updated_at": "2026-09-10T04:29:24Z"
+  },
+  "message_id": "discuss-001",
+  "protocol": "peer-task/v1",
+  "seq": 20,
+  "state": "done",
+  "task_id": "magit-spec-discussion",
+  "type": "status",
+  "updated_at": "2026-09-10T04:29:24.371246+00:00",
+  "worker": "discuss"
+}

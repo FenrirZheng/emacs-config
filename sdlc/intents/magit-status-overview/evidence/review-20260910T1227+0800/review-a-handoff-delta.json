@@ -1,0 +1,63 @@
+{
+  "evidence": "Delta review complete, written to my only owned path /tmp/magit-spec-peers/review-a-delta.md (SHA256 eb20ae0be88b3b0171ffd50b3f9a78b62e82a3c6c7a7882f83bfe51d11743bfc, 1170 words excluding table pipes, under the 1200 limit). Every one of my 13 prior findings has an explicit status: 2 refuted (A1, A2), 9 resolved (A3-A8, A10, A12, A13; A11 resolved with a residual note that no increment is declared independently shippable), 1 still open (A9, the hints diff-type nit). Six dimensions triaged briefly; five skip with reasons, architecture discusses one new item. I confirm the coordinator is right on both contested points and I corrected my own error in writing: magit-status.el:793/796 shows magit-insert-files creates its group with HIDE=t, which I failed to read in v1, so the untracked initial-show rule has real effect and A2's uniform-native-default claim is refuted; consequently A1's 'no-op in both branches' blocker is refuted, since v2 R2/D3 make cache-over-alist the intended contract and no cache override is warranted. Three new findings against changed text only: A14 should-fix (the buffer-local alist entry is read at section-creation time per magit-section.el:1465-1467, so v2 must name where it is installed or the default silently degrades to the second refresh), A15 nit (tracked/ignored/skip-worktree/assume-unchanged share HIDE=t; say the rule does not widen), A16 nit (j o placement; verified magit-status-jump at magit-status.el:394-411 has no o suffix, confirming R3's claim, and j is bound at :391). Also recorded three v2 statements verified correct and needing no action, including that materializing a hidden untracked body adds no Git subprocess because files is bound outside magit-insert-section-body. Constraints honoured: no project file created, edited or deleted; no git writes; no live Emacs and no emacsclient, so zero executed evidence and every behavioural claim is labelled source-derived; no subagents; other reviewers' output not read. Budget: 4 source files re-checked, 11 tool calls. Timestamps in this report and in the artifact come from date -u at the moment of writing.",
+  "generation": "6bf5f986b8c14db9baab8b2f6ed4e886",
+  "handoff": {
+    "artifacts": [
+      {
+        "path": "/tmp/magit-spec-peers/review-a-delta.md",
+        "sha256": "eb20ae0be88b3b0171ffd50b3f9a78b62e82a3c6c7a7882f83bfe51d11743bfc"
+      },
+      {
+        "path": "/tmp/magit-spec-peers/review-a.md",
+        "sha256": "4b3ef643928d331eede9be0849b8c4274713cb3ea58ff7ed326c1b80cc205752"
+      }
+    ],
+    "dirty_digest": "e4be4aed4c4674a85082382f8c8fdd3b9c6b04b22a167166aadc437ec26da2c7",
+    "revision": 1,
+    "source_note": "Codebase HEAD unchanged from the v1 review. Reviewed input is spec-v2.snapshot, recomputed SHA256 fa7efffcfd8733f987f66a18127ffc7a144549f2c24dee9ddea9cdd167b67421, matching the dispatched base_revision, plus all 113 lines of v1-v2.diff and my own prior review-a.md (4b3ef643928d331eede9be0849b8c4274713cb3ea58ff7ed326c1b80cc205752). Worktree dirty and not authored by me: untracked AGENTS.md, records/, the sdlc evidence tree and spec.md, plus a modified _doc/README.md. Installed packages inspected are magit 20260506.643 and magit-section 20260503.2051; all source-derived findings are void on a package upgrade.",
+    "source_sha": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+    "tests": [
+      {
+        "command": "sha256sum /home/fenrir/.emacs.d/sdlc/intents/magit-status-overview/evidence/review-20260910T1227+0800/spec-v2.snapshot",
+        "result": "pass - fa7efffcfd8733f987f66a18127ffc7a144549f2c24dee9ddea9cdd167b67421, identical to the dispatched base_revision, so the reviewed bytes are the intended v2 input",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty e4be4aed4c4674a85082382f8c8fdd3b9c6b04b22a167166aadc437ec26da2c7",
+        "updated_at": "2026-09-10T04:43:47Z"
+      },
+      {
+        "command": "sed -n '793,800p' elpa/magit-20260506.643/magit-status.el",
+        "result": "pass - shows (magit-insert-section section ((eval type) nil t)), i.e. HIDE=t for magit-insert-files groups; this refutes my own v1 finding A2 and confirms the coordinator's and reviewer B's claim",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty e4be4aed4c4674a85082382f8c8fdd3b9c6b04b22a167166aadc437ec26da2c7",
+        "updated_at": "2026-09-10T04:43:47Z"
+      },
+      {
+        "command": "sed -n '394,411p' elpa/magit-20260506.643/magit-status.el",
+        "result": "pass - magit-status-jump suffixes are z t n i u s / fu fp pu pp a w / j with no o suffix, confirming v2 R3's stated premise for the j o entry",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty e4be4aed4c4674a85082382f8c8fdd3b9c6b04b22a167166aadc437ec26da2c7",
+        "updated_at": "2026-09-10T04:43:47Z"
+      },
+      {
+        "command": "git -C /home/fenrir/.emacs.d status --porcelain",
+        "result": "pass - no project file added, modified or staged by this delta review; entries are the same coordinator-owned ones as at the end of the v1 review",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty e4be4aed4c4674a85082382f8c8fdd3b9c6b04b22a167166aadc437ec26da2c7",
+        "updated_at": "2026-09-10T04:43:47Z"
+      }
+    ],
+    "unresolved": [
+      "No executed evidence: no Emacs started, no Magit command run, no keymap or transient probed at runtime. New findings A14 and A16 are source-derived predictions and should be confirmed interactively during implementation.",
+      "A9 (hints diff-type is a per-refresh buffer-local while --render runs per-window, lisp/init-git.el:196-199) remains open in v2; R5's per-window hints claim still overstates for diff-type.",
+      "A11 residual: R6 now has an ordered validation path, but no increment is declared independently shippable; v2 defers file-level sequencing to the plan.",
+      "A14 cannot be closed from the spec alone - v2 does not name where the buffer-local initial-visibility entry is installed relative to the buffer's first section insertion.",
+      "FEATURES.md, lisp/init-keys.el, the live spec.md and other reviewers' output were deliberately not read.",
+      "Findings apply only to magit 20260506.643 / magit-section 20260503.2051."
+    ],
+    "updated_at": "2026-09-10T04:43:47Z"
+  },
+  "message_id": "review-a-delta-001",
+  "protocol": "peer-task/v1",
+  "seq": 32,
+  "state": "done",
+  "task_id": "magit-spec-review-a-delta",
+  "type": "status",
+  "updated_at": "2026-09-10T04:44:28.563154+00:00",
+  "worker": "review-a"
+}

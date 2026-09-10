@@ -1,0 +1,53 @@
+{
+  "evidence": "Independent review of the frozen spec snapshot complete; written to my only owned path /tmp/magit-spec-peers/review-a.md (191 lines, SHA256 4b3ef643928d331eede9be0849b8c4274713cb3ea58ff7ed326c1b80cc205752). All six dimensions triaged (security skipped with verified reasons citing R3/R5/R6 lines); deeper passes on architecture, API/source correctness, visibility-cache lifecycle, lazy sections, compatibility and rollback per the task focus. 13 findings with stable IDs: 1 blocker (A1), 8 should-fix (A2-A7, A10, A11), 4 nits (A8, A9, A12, A13), plus a 3-cause cross-dimension pre-mortem and 4 author questions. Headline: magit-section.el:1453-1468 shows magit-section-initial-visibility-alist is outranked by magit-section-set-visibility-hook, whose default member magit-section-cached-visibility (magit-section.el:130-131, 1996-2001) returns the visibility cache written by every magit-section-show/hide, so D3's chosen mechanism is a no-op in both the cached and uncached branch; and magit-section.el:521-522 registers magit-preserve-section-visibility-cache on the GLOBAL kill-buffer-hook, which explains and corrects the baseline follow-up's ':kill-hook-installed nil' false negative. Also verified correct and recorded as such: R5's 'collapsing does not avoid native diff generation' (magit-diff.el:3430-3434, 3454-3458) and D4's 'no data migration' (magit-mode.el:1468). Constraints honoured: no project file was created, edited or deleted by me; no git add/commit/stage; no subagents; no Emacs started and no emacsclient run, so the review carries ZERO executed evidence and every behavioural claim is labelled source-derived [src] or attributed to the coordinator's baseline [base]. I did not read the live spec.md or any other reviewer's output. Budget: 11 files, 22 tool calls, within the ~12 file / ~25 call bound. Note for the coordinator: I observed '_doc/README.md' as modified in git status at completion time; I did not touch it, and it is outside my owned paths.",
+  "generation": "6bf5f986b8c14db9baab8b2f6ed4e886",
+  "handoff": {
+    "artifacts": [
+      {
+        "path": "/tmp/magit-spec-peers/review-a.md",
+        "sha256": "4b3ef643928d331eede9be0849b8c4274713cb3ea58ff7ed326c1b80cc205752"
+      }
+    ],
+    "dirty_digest": "ecbbfa3d8e034ee2493d46b87f18a8bc4a1f2f680b045cf343b986c9d9b91614",
+    "revision": 1,
+    "source_note": "Codebase HEAD verified locally with git rev-parse before work. Reviewed input is the frozen snapshot sdlc/intents/magit-status-overview/evidence/review-20260910T1227+0800/spec-v1.snapshot, recomputed SHA256 46802f5e951552106798c768f332374caa4881a8303cc092cb43dc8590229e2a, matching the dispatched base_revision. Worktree is dirty and NOT authored by me: untracked AGENTS.md, records/, sdlc/intents/magit-status-overview/evidence/ and spec.md, plus a modified _doc/README.md that appeared during the review. evidence/baseline.md also gained a 'Follow-up on the cache disagreement' section mid-review; findings A1 and A3 account for it and A3 corrects one of its conclusions. Installed packages inspected are magit 20260506.643 and magit-section 20260503.2051; every source-derived finding is void on a package upgrade.",
+    "source_sha": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001",
+    "tests": [
+      {
+        "command": "sha256sum sdlc/intents/magit-status-overview/evidence/review-20260910T1227+0800/spec-v1.snapshot",
+        "result": "pass - 46802f5e951552106798c768f332374caa4881a8303cc092cb43dc8590229e2a, identical to the task base_revision, so the reviewed bytes are the dispatched frozen input",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty ecbbfa3d8e034ee2493d46b87f18a8bc4a1f2f680b045cf343b986c9d9b91614",
+        "updated_at": "2026-09-10T04:34:32Z"
+      },
+      {
+        "command": "git -C /home/fenrir/.emacs.d rev-parse HEAD",
+        "result": "pass - d65ffc852c29fdb2c0c5600074f7181b6ffc0001, matching the task base_revision",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty ecbbfa3d8e034ee2493d46b87f18a8bc4a1f2f680b045cf343b986c9d9b91614",
+        "updated_at": "2026-09-10T04:34:32Z"
+      },
+      {
+        "command": "git -C /home/fenrir/.emacs.d status --porcelain",
+        "result": "pass - confirms no project file was added or staged by this review; the only entries are the pre-existing/coordinator-owned AGENTS.md, records/, the sdlc evidence tree and spec.md, plus a modified _doc/README.md I did not author",
+        "tested_revision": "d65ffc852c29fdb2c0c5600074f7181b6ffc0001 + dirty ecbbfa3d8e034ee2493d46b87f18a8bc4a1f2f680b045cf343b986c9d9b91614",
+        "updated_at": "2026-09-10T04:34:32Z"
+      }
+    ],
+    "unresolved": [
+      "No executed/runtime evidence at all: no Emacs or emacsclient was run, so no finding is confirmed against a live Magit session. A1, A3, A4, A5 and A7 are source-derived predictions and should be re-checked interactively before the spec is accepted.",
+      "A3 recommends re-running the baseline's kill-hook probe as (memq 'magit-preserve-section-visibility-cache (default-value 'kill-buffer-hook)); that re-probe was not performed by me and evidence/baseline.md still records the false negative.",
+      "lisp/init-git.el was read by grep only, for the hints contract behind nit A9; its full logic was not reviewed.",
+      "R3's key-binding conflict check, FEATURES.md, lisp/init-keys.el and the live spec.md were deliberately not read.",
+      "Rendering, timing, TTY/GUI coexistence, narrow-window hint truncation (R4) and the R6 performance criteria cannot be settled from source and stay open for implementation acceptance.",
+      "Findings apply only to magit 20260506.643 / magit-section 20260503.2051 at the paths cited."
+    ],
+    "updated_at": "2026-09-10T04:34:32Z"
+  },
+  "message_id": "review-a-001",
+  "protocol": "peer-task/v1",
+  "seq": 21,
+  "state": "done",
+  "task_id": "magit-spec-review-a",
+  "type": "status",
+  "updated_at": "2026-09-10T04:35:15.235952+00:00",
+  "worker": "review-a"
+}

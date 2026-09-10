@@ -1,0 +1,102 @@
+# Spec: Magit status 檔案概況與檢閱動線
+
+Author: codex (agent)
+Created: 2026-09-10
+Status: draft
+
+## Requirements
+
+### R1 — 可辨識的檔案概況
+
+在 `magit-status-mode` 提供「檔案概況」：保留原生分支／HEAD 資訊、群組標題及 Magit 原生數量；展開存在的 staged、unstaged、untracked 群組，讓檔案標題可見，收合 staged／unstaged 底下的檔案 body。千行 XML 與一般文字檔使用相同規則，不依副檔名排除變更。
+
+「可見」指不因概況的摺疊設定而被隱藏，並非保證任何數量的檔案都塞進單一畫面。清單超過視窗時可正常捲動；長路徑沿用原生呈現與檔案造訪入口。同檔部分暫存時，保留 staged、unstaged 兩筆，不去重或合併。保留原生 rename、binary、submodule、unmerged 狀態資訊。
+
+呈現範圍沿用現有 Magit／Git 篩選、`status.showUntrackedFiles`、`magit-status-show-untracked-files` 與 `magit-status-file-list-limit`；不為概況強制列出原生未載入或被使用者排除的資料。達清單上限時保留原生未列出數量／提示，群組數量不包裝成全 repository 的完整清冊。預設 fixture 應啟用 untracked 顯示，另測試使用者停用與清單超限情境。
+
+### R2 — 初始預設與手動選擇
+
+新建立且沒有既有可見性還原資料的 status buffer 預設使用檔案概況，限目標群組及其檔案 body。Magit 能在 buffer 被關閉後還原同 repository 的可見性快取；這類重建優先保留原生還原結果，不強制覆寫為概況。既有 buffer 在載入／重載設定時，不自動重設使用者的摺疊選擇。一般刷新、重新顯示已存在的 buffer，保留 Magit 對相同 section 身分的既有摺疊還原；新出現且沒有原生快取狀態的檔案使用概況預設。
+
+明確執行「返回檔案概況」才重新套用目標群組的概況狀態。此命令需可重複執行，結果不隨執行次數變動；不變更其他群組的摺疊、Git diff 篩選或設定。不提供跨 Emacs 重啟的額外狀態儲存。
+
+明確概況是一次新的手動摺疊選擇，按原生規則更新目標 section 的 visibility cache；其後普通刷新應保留概況，不自動恢復命令前展開的 diff。這是單向命令，不是暫時預覽或可恢復舊快照的 toggle。
+
+### R3 — 入口與定位
+
+提供 `M-x fenrir/magit-status-overview`，且在 status 的既有說明入口可找到；若配置按鍵，必須先核對實際 keymap 不覆蓋既有動作，並同步 hints 與 `FEATURES.md`。從檔案或 hunk 執行時，point 留在該檔案的可見標題；從目標群組執行時留在群組標題；其他位置保留可見位置。沒有變更群組時為安全 no-op。
+
+使用者可用原生 TAB 展開／收合、section 導覽及 RET 造訪檔案，並以一次命令返回概況。命令不會 stage、unstage、discard、commit 或修改被檢閱 repository。
+
+### R4 — 資訊與 hints 正確性
+
+延伸既有 `fenrir/magit-hints-mode`，不新增競爭的 header 所有者。Hints 只顯示目前 key-binding 真正呼叫的命令；窄窗保留完整項目，不裁切成誤導的按鍵／標籤。Overview 的入口可以在窄窗被省略，但仍可透過 M-x 與文件找到。
+
+本階段以原生檔案清單、狀態與群組數量作為概況資訊；不新增獨立 diffstat 計算器、XML 解析器、提交主題分類或測試成功標章。原生 diffstat 仍可按需使用；資料不存在時不製造零值，也不從歷史報告推論目前工作樹通過驗證。
+
+### R5 — 共用 daemon、失敗與停用
+
+TTY 與 GUI 可同時使用，同一 status buffer 的摺疊是 buffer 共用狀態，不承諾各視窗獨立。一次明確概況操作可影響所有顯示該 buffer 的視窗；各視窗 hints 仍依自身寬度與 point 顯示。操作後其他視窗的 point 不可卡在新隱藏的 body；需回到對應檔案／群組的可見標題。
+
+新功能限定 status buffer。Log、revision、獨立 diff、selection buffer 的預設摺疊與 hints 既有行為維持。非 status buffer 呼叫概況命令時回報清楚的 user-error 且無副作用。提供可關閉概況預設的使用者選項；停用後新 buffer 使用原生初始規則，既有摺疊不被強制重設，手動命令仍可使用。
+
+Redisplay 不執行 Git subprocess、讀取工作樹或解析整個 diff。概況只操作現有 section；與 Magit 原生延遲展開有關的計算成本要明示，不承諾收合能避免原生 diff 生成。新功能若遇無法辨識的 section，保留原生顯示；不得因概況增強失敗而使正常 status 無法開啟。原生 Git 刷新錯誤仍交由 Magit 呈現，不顯示自製「成功」摘要。
+
+### R6 — 驗收邊界
+
+| 案例 | 必須觀察的結果 |
+|---|---|
+| 無既有可見性快取的新 buffer：1 untracked、1 unstaged、10 staged，其中一個 XML 超過 1,600 行 | 檔名可見，tracked body 隱藏；群組與分支保留。這個案例可區分整組收合、全部展開與正確概況 |
+| 同檔 staged + unstaged，rename、binary、submodule、unmerged，以及 untracked 目錄 | 原生狀態與可用入口保留，部分暫存兩筆不合併；概況不聲稱目錄數量等同遞迴檔案總數 |
+| Untracked 顯示停用、清單超過原生上限、status 帶檔案篩選 | 原生排除及截斷提示保留，不宣稱完整清單、不改 Git 設定或自動載入省略內容 |
+| 手動展開檔案、收合群組，再刷新、重新進入現有 buffer、kill 後重建 | Magit 可匹配／還原的 section 保留手動選擇；新檔無既有／快取狀態時套用預設 |
+| 從 hunk 執行概況兩次後刷新；同 buffer 顯示於兩窗 | 兩次摺疊結果相同且刷新後維持概況；point 均在可見標題；非目標群組及篩選保持 |
+| 無變更、只有 untracked、只有 staged、只有 unstaged、非 status 呼叫 | 前四者安全且有可理解畫面；非 status 無副作用並回報 user-error |
+| TTY 80×24 與 GUI 窄／寬窗；同 daemon 並存 | 清單可導覽，hints 不裁切完整動作，按鍵與實際命令一致，沒有 frame 互斥 |
+| 關閉預設、重載模組、套用功能前後的 log/revision/diff buffer | 沒有重複 hook/advice、沒有非 status 摺疊回歸，停用語意符合 R5 |
+| 顯示操作前後與效能取證 | 測試 repository 的 index 與工作樹內容雜湊相同；新 redisplay 路徑零 Git／檔案 I/O；記錄概況、原生刷新各自耗時及環境，不用 batch 啟動代替互動驗收 |
+
+上述為後續實作驗收要求，本 spec 產出不代表已執行。測試一律使用可丟棄的 fixture repository，不更動觀察案例的業務資料。比較前後使用相同 fixture、尺寸、套件版本及篩選條件；保留畫面或可見 section／header 證據與操作步驟。
+
+## Design
+
+### D1 — 已知基準與資料來源
+
+接受的 [intent](intent.md) 定義改善方向；[baseline](evidence/baseline.md) 記錄 2026-09-10（Asia/Taipei）的唯讀 runtime 與已安裝來源版本。當時 GUI staged／unstaged 群組已收合，子檔名不可見，不能把完整 buffer 文字當成畫面。
+
+本庫 `lisp/init-git.el` 已有依 section/type 判斷的 hints，寬度不足時逐項移除；`fenrir/magit-hints--item` 核對 live binding；`--render` 走 redisplay，不能塞入新 Git 查詢。初始目標是能從「群組收合」或「長 diff 展開」直接回到檔案層級，並建立一致的新 buffer 預設。
+
+討論伙伴核對 `magit-diff-insert-file-section`（已安裝 `magit-diff.el:2779`）後指出：status 的 tracked file body 原生即預設 hide，群組原生也提供數量。此 spec 不把原生行為算成新增功能；實作增量為範圍受限且可發現的概況入口、必要的初始規則整合與完整驗收。若既有預設已滿足 R2，保留原生即可，不為重複效果增加 hook。現有群組為何收合未經查證，不推定是使用者或擴充套件造成。
+
+### D2 — 元件與所有權
+
+所有概況選項、status 專用初始化、命令與 hints 整合歸 `lisp/init-git.el`，命名沿用 `fenrir/`；如需全域路由才在 `lisp/init-keys.el` 重複路由，不移動原功能定義。`FEATURES.md` 說明概況、手動摺疊、刷新、停用、共用 buffer 的影響與原生 diffstat 入口。
+
+資料流：Magit 正常刷新建立 section tree → 初始可見性規則只作用於 status 的目標 section → 原生 buffer 顯示檔案概況。明確命令則走當前 tree → 找 staged／unstaged／untracked 群組 → 原生 section show/hide → 修正隱藏 point → 更新顯示。沒有額外資料庫、背景服務、Git index 寫入或持久化摘要。
+
+### D3 — 初始規則與概況命令
+
+優先使用 status buffer-local `magit-section-initial-visibility-alist` 的 lineage 規則，保留其他既有條目。已安裝 `magit-insert-section--create` 優先查 visibility hook（原生含 cached visibility）；停用 preserve-visibility 時才查相符舊 section，之後才是 initial alist 與 hardcoded default。`magit-mode.el` 的 `magit-preserve-section-visibility-cache`／`magit-restore-section-visibility-cache` 可在同 repository 關閉再建 buffer 時還原狀態。因此不能在每次 refresh 結束無條件執行 overview，亦不應以更高優先的 visibility hook 強迫重設手動選擇。規則需精確匹配 staged／unstaged 的檔案，不以全域 `(file . hide)` 影響其他模式。
+
+明確命令只處理變更群組，透過 Magit section API 展開父群組並收合 tracked file body。Untracked 保留原生清單／目錄表達，不強制遞迴載入。保留既有身分與 body，不自行重建 diff 或替換原生 section keymap。
+
+原生 `M-2` (`magit-section-show-level-2-all`) 是重要比較方案，但作用於整個 root tree，可能改變 stash、commit 或其他非變更群組；本 spec 保留 `M-2` 並採用範圍受限的命令以滿足 R2。只對目標群組使用原生 section API，不呼叫全 root 的 M-2 再事後猜測還原其他群組。精確 lineage、point 調整與 lazy section 順序留給 plan 依已安裝 API 固定並驗證。
+
+### D4 — 整合、恢復與成本
+
+使用 buffer-local 設定與可撤銷的 hook；重載不重複安裝，不強制折疊已開啟的 buffer。保留停用前的其他初始可見性條目；不改 `magit-section-cache-visibility` 或模組 load order。可用關閉預設與撤回本庫配置回復原行為，沒有資料 migration。
+
+概況入口整合目前 hints／說明流程；binding 未確定前不得顯示虛構快捷鍵。M-x 是必要且穩定的入口，具體短鍵屬 plan 的衝突檢查項。採用原生數量與按需 diffstat，比在每次 redisplay 計算數量或解析 XML 更容易維持語意與反應速度。
+
+## Flagged concerns
+
+- **實際互動仍待驗證（實作者）**：已取得 hidden／invisible 狀態，但沒有前後畫面、按鍵實測與延遲資料。Baseline 不足以宣稱已證實所有可用性缺陷或已改善。
+- **共用 buffer 的視窗影響（實作者）**：摺疊共用而 point／header 依視窗；必須測試兩窗均在不同 hunk 的情境，不把 per-window rendering 誤當 per-window visibility。
+- **套件版本與擴充（實作者）**：本地 Magit／magit-section 版本與 SHA 見 baseline。升級、Forge 或延遲 section 可能改變 tree；採用 API 前重查，遇未知節點保留原行為。
+- **需求取捨（使用者）**：本草稿提議新 buffer 預設檔案概況；若使用者偏好原生初始展開，可停用預設並使用手動入口。Spec 尚未由使用者接受。
+
+## Open questions carried from intent.md
+
+1. **目前是否已有收合、主要困難何在？** 已確認群組收合使檔名隱藏；未取得主觀操作評分或實際截圖。設計針對可直接切到檔案層級的需求；實作驗收需比較原生與改善動線，不再聲稱 XML 已佔滿畫面。
+2. **首次開啟與刷新如何兼顧手動狀態？** 提議新 buffer／新且無還原狀態的 section 使用初始規則，刷新交由 Magit 身分還原，手動命令才重設目標群組。依據是本地 section 建立與 visibility cache 的宣告，最終需 R6 驗證。
+3. **原生統計與 hints 是否足夠？** 本草稿採用原生清單／群組數量與按需 diffstat，延伸既有 hints；不新增統計管線。以 R6 的可見資訊及返回概況操作驗收，若仍無法判斷提交範圍，再提出具體證據與獨立需求。
