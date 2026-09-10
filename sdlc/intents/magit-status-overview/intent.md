@@ -2,7 +2,8 @@
 
 Author: codex (agent)
 Created: 2026-09-10
-Status: draft
+Status: accepted
+Accepted: 2026-09-10
 
 ## Problem
 
@@ -31,7 +32,7 @@ Status: draft
 
 ## Constraints
 
-- 本次授權為記錄改善 intent；使用者隨後以「submit」授權本機提交草稿。狀態仍為 draft，尚未接受、設計或實作。
+- 初次授權為記錄改善 intent，隨後以「submit」授權本機提交草稿；2026-09-10（Asia/Taipei）使用者以「$sdlc accept intent」明確接受本 intent。此決定不代表接受尚未產出的 spec 或批准實作 plan。
 - 優先採用 Magit 既有功能與本庫設定，保留原有 stage／unstage／discard 語意；不得隱藏 untracked section。
 - 顯示優化不得自動暫存、取消暫存、提交或修改被檢閱專案。
 - 不能從成功 XML 推論目前版本已驗證；報告摘要與版本證據格式若需變更，另由擁有該報告的專案處理。
