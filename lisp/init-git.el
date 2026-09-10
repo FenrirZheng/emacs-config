@@ -180,7 +180,15 @@ then FOLD as space shrinks.  Never truncate an action or a key."
            (text (fenrir/magit-hints--layout
                   (max 0 (1- (window-body-width)))
                   (propertize context 'face 'fenrir/magit-hints-context)
-                  (delq nil (mapcar #'fenrir/magit-hints--item entries))
+                  ;; The Jump menu goes LAST: `--layout' drops trailing actions
+                  ;; first, so a narrow window sheds the menu before it sheds a
+                  ;; stage/unstage action.  `j o' is a transient sequence, not a
+                  ;; keymap chord, so only `j' itself is offered to `--item'.
+                  (delq nil (append
+                             (mapcar #'fenrir/magit-hints--item entries)
+                             (and (derived-mode-p 'magit-status-mode)
+                                  (list (fenrir/magit-hints--item
+                                         '("j" "Jump menu" magit-status-jump))))))
                   (unless (string-empty-p title)
                     (propertize title 'face 'fenrir/magit-hints-context))
                   (fenrir/magit-hints--item '("TAB" "Fold" magit-section-toggle))
@@ -240,6 +248,230 @@ The previous header is retained after the hints, and restored on disable."
   "Reinstall hints when Magit changes the underlying title."
   (when fenrir/magit-hints-mode
     (fenrir/magit-hints--install)))
+
+;; Status overview: get back to a file-level view of the working tree.
+;;
+;; The native FRESH defaults are already close to that: `staged'/`unstaged'
+;; groups are created shown (`magit-insert-unstaged-changes' passes no HIDE
+;; argument), tracked file bodies are created hidden in status mode
+;; (`magit-diff-insert-file-section' hides on `derived-mode-p'), and only
+;; `untracked' is created hidden (`magit-insert-files' passes HIDE=t).  What
+;; drifts away from it is the VISIBILITY CACHE -- after a session of folding,
+;; whole groups are collapsed and not one filename is on screen.
+;;
+;; Native `M-2' (`magit-section-show-level-2-all') gets a level-2 view back, but
+;; it rewrites the WHOLE root tree: stashes, unpushed, unpulled, everything.
+;; This command touches the three change groups and nothing else -- no other
+;; section, no Git diff filter, no Magit option, and no Git subprocess.
+;;
+;; It is a one-way fold, NOT a toggle: `magit-section-show'/`-hide' update the
+;; native visibility cache exactly as a manual fold does, so a later `g' keeps
+;; the overview rather than restoring the diffs that happened to be open before.
+
+(defcustom fenrir/magit-status-overview-untracked-threshold nil
+  "Untracked file count above which the overview asks before expanding.
+nil means follow `magit-status-file-list-limit' (Magit's own default is
+100).  Expanding the untracked group runs its lazy washer, which inserts
+up to that many file lines; in a repository whose working tree is mostly
+untracked -- `$HOME' is the local example, with a few hundred entries --
+that is a wall of text nobody asked for, so `fenrir/magit-status-overview'
+asks first.  A prefix argument answers yes without prompting."
+  :type '(choice (const :tag "Follow magit-status-file-list-limit" nil)
+                 natnum)
+  :group 'magit)
+
+(defconst fenrir/magit-status-overview--groups '(staged unstaged untracked)
+  "Root-level status sections `fenrir/magit-status-overview' operates on.")
+
+(defun fenrir/magit-status-overview--threshold ()
+  "Resolve `fenrir/magit-status-overview-untracked-threshold'."
+  (or fenrir/magit-status-overview-untracked-threshold
+      magit-status-file-list-limit))
+
+(defun fenrir/magit-status-overview--child-count (section)
+  "Return the child count Magit rendered into SECTION's heading, or nil.
+`magit-insert-files' hands `magit-insert-heading' the FULL file count, so
+this reads the real total even when the list itself is truncated at
+`magit-status-file-list-limit' -- and reads it off the buffer, without
+asking Git anything."
+  (and magit-section-show-child-count
+       (save-excursion
+         (goto-char (oref section start))
+         (and (re-search-forward " (\\([0-9]+\\))[ \t]*$" (line-end-position) t)
+              (string-to-number (match-string 1))))))
+
+(defun fenrir/magit-status-overview--expand-untracked-p (section force)
+  "Return non-nil when the untracked SECTION should be expanded.
+Ask first when it is still collapsed and holds more files than
+`fenrir/magit-status-overview--threshold'.  FORCE (the command's prefix
+argument) and a batch Emacs answer yes without prompting; an unreadable
+count also answers yes, since the point of the overview is to show files."
+  (let ((count (fenrir/magit-status-overview--child-count section))
+        (limit (fenrir/magit-status-overview--threshold)))
+    (or force
+        noninteractive
+        (not (oref section hidden))
+        (null count)
+        (<= count limit)
+        (y-or-n-p (format "Untracked files (%d) exceeds %d -- expand anyway? "
+                          count limit)))))
+
+(defun fenrir/magit-status-overview--ident-at (pos)
+  "Return the section identity at POS, or nil."
+  (let ((section (save-excursion (goto-char pos) (magit-section-at))))
+    (and section (magit-section-ident section))))
+
+(defun fenrir/magit-status-overview--save-points ()
+  "Record where point sits, in this buffer and in every window showing it.
+Positions are markers: expanding the untracked group inserts text, which
+would invalidate raw integers.  Each is paired with the section identity
+there, so a position that the fold hides can climb to its parent heading.
+`get-buffer-window-list' with ALL-FRAMES covers the other frames of a
+shared daemon -- folding is buffer state, but point is per window."
+  (cons (cons (copy-marker (point))
+              (fenrir/magit-status-overview--ident-at (point)))
+        (mapcar (lambda (window)
+                  (list window
+                        (copy-marker (window-point window))
+                        (fenrir/magit-status-overview--ident-at
+                         (window-point window))))
+                (get-buffer-window-list nil nil t))))
+
+(defun fenrir/magit-status-overview--visible-position (marker ident)
+  "Return a visible position for MARKER, or the nearest visible ancestor of IDENT.
+A position the fold did not hide is kept as it is -- only a point that the
+overview made invisible has to move.  Returns nil when nothing in IDENT's
+lineage survived."
+  (let ((pos (and marker (marker-position marker))))
+    (if (and pos (not (invisible-p pos)))
+        pos
+      (let (found)
+        (while (and ident (not found))
+          (let ((section (magit-get-section ident)))
+            (when (and section (not (invisible-p (oref section start))))
+              (setq found (oref section start))))
+          (unless found (setq ident (cdr ident))))
+        found))))
+
+(defun fenrir/magit-status-overview--restore-points (saved)
+  "Put point back on a visible line for SAVED, then release its markers."
+  (pcase-let ((`(,marker . ,ident) (car saved)))
+    (when-let* ((pos (fenrir/magit-status-overview--visible-position marker ident)))
+      (goto-char pos))
+    (set-marker marker nil))
+  (pcase-dolist (`(,window ,marker ,ident) (cdr saved))
+    (when (and (window-live-p window)
+               (eq (window-buffer window) (current-buffer)))
+      (when-let* ((pos (fenrir/magit-status-overview--visible-position
+                        marker ident)))
+        (set-window-point window pos)))
+    (set-marker marker nil)))
+
+(defun fenrir/magit-status-overview (&optional force)
+  "Fold the status buffer back to a file-level overview.
+Expand the `staged', `unstaged' and `untracked' groups so every file
+heading is visible, and collapse the file bodies under `staged' and
+`unstaged' so a thousand-line diff does not bury the list.  Untracked
+entries have no body and are left as Magit rendered them, truncation
+notice included.
+
+Nothing else is touched: other root sections, the diff filters and every
+Magit option keep their state, no file is staged, unstaged or discarded,
+and no Git command is run.  Unrecognised sections are left alone.
+
+With a prefix argument FORCE, expand a large untracked group without
+asking -- see `fenrir/magit-status-overview-untracked-threshold'.
+
+This is a one-way fold, not a toggle: it updates the native visibility
+cache, so a later `g' keeps the overview instead of reopening the diffs
+that were expanded before.  Running it twice changes nothing the second
+time.  `TAB' and the usual navigation still work on the result."
+  (interactive "P")
+  (unless (derived-mode-p 'magit-status-mode)
+    (user-error "The status overview only works in a Magit status buffer"))
+  (when-let* ((groups (seq-filter
+                       (lambda (section)
+                         (memq (oref section type)
+                               fenrir/magit-status-overview--groups))
+                       (and magit-root-section
+                            (oref magit-root-section children)))))
+    (let ((saved (fenrir/magit-status-overview--save-points))
+          (failure nil))
+      (condition-case err
+          (dolist (group groups)
+            (let ((type (oref group type)))
+              (when (or (not (eq type 'untracked))
+                        (fenrir/magit-status-overview--expand-untracked-p
+                         group force))
+                ;; Showing the group drains its lazy washer, so the file
+                ;; sections exist only after this call -- never before it.
+                (magit-section-show group)
+                (unless (eq type 'untracked)
+                  ;; One level only: file headings stay, file bodies go.
+                  (magit-section-hide-children group)))))
+        (error (setq failure err)))
+      (fenrir/magit-status-overview--restore-points saved)
+      ;; A stale section selection would still name sections the fold hid.
+      (deactivate-mark)
+      (magit-section-update-highlight t)
+      (when failure
+        ;; Partial folding is kept -- this reports what happened, it does not
+        ;; claim a transaction.  Magit's own Git errors are not routed here.
+        (user-error "Status overview incomplete: %s"
+                    (error-message-string failure))))))
+
+(defvar fenrir/magit-status-overview--entry-warned nil
+  "Non-nil once a `magit-status-jump' entry-point problem has been reported.")
+
+(defun fenrir/magit-status-overview--suffix-command (suffix)
+  "Return the command SUFFIX runs, or nil.
+`transient-get-suffix' hands back the raw LAYOUT ELEMENT, and in this
+Transient a suffix element is an unevaluated spec list --
+\(transient-suffix :key \"o\" ... :command CMD) -- not an EIEIO object, so
+`oref' on it signals `wrong-type-argument'.  Transient's own edit code
+reads it as a plist behind the `cdr' alias `transient--suffix-props'; that
+alias is internal, so the plist is read directly here.  A group element is
+a vector and has no command."
+  (and (consp suffix) (plist-get (cdr suffix) :command)))
+
+(defun fenrir/magit-status-overview--install-entry ()
+  "Add `o' to `magit-status-jump', unless something else already owns it.
+Three hazards, all handled here.  `transient-get-suffix' signals a plain
+`error' when the key is absent, so \"free\" has to be read out of a failed
+lookup.  `transient-append-suffix' only `message's on failure by default
+\(`transient-error-on-insert-failure' is nil), so it is bound to t to make
+the fallback reachable.  And appending twice is exactly what reloading this
+module does -- hence the already-installed branch.  `M-x
+fenrir/magit-status-overview' stays available whatever happens here."
+  (let* ((existing (ignore-errors (transient-get-suffix 'magit-status-jump "o")))
+         (command (fenrir/magit-status-overview--suffix-command existing)))
+    (cond
+     ((eq command 'fenrir/magit-status-overview))       ; already installed
+     (existing
+      (fenrir/magit-status-overview--warn-entry
+       (format "`o' in magit-status-jump is taken by %s -- left alone" command)))
+     (t
+      (condition-case err
+          ;; (0 2) is the "Jump using" COLUMN, so the addition has to be a
+          ;; group vector; a bare suffix there is refused as a sibling.
+          (let ((transient-error-on-insert-failure t))
+            (transient-append-suffix 'magit-status-jump '(0 2)
+              ["View" ("o" "Overview (fold diffs)" fenrir/magit-status-overview)]))
+        (error
+         (fenrir/magit-status-overview--warn-entry
+          (format "could not add `o' to magit-status-jump: %s"
+                  (error-message-string err)))))))))
+
+(defun fenrir/magit-status-overview--warn-entry (detail)
+  "Report DETAIL once, pointing at the entry point that always works."
+  (unless fenrir/magit-status-overview--entry-warned
+    (setq fenrir/magit-status-overview--entry-warned t)
+    (display-warning 'fenrir
+                     (concat detail "; use M-x fenrir/magit-status-overview")
+                     :warning)))
+
+(with-eval-after-load 'magit
+  (fenrir/magit-status-overview--install-entry))
 
 ;; C-x v : retire vc.el's prefix, hand it to Magit.
 ;; vc.el's stock `C-x v ...' commands work again (the Git backend is enabled

@@ -30,6 +30,7 @@ emacs -Q --batch --eval '
       (bad 0))
   (dolist (f (append (file-expand-wildcards "lisp/*.el")
                      (file-expand-wildcards "lisp/languages/*.el")
+                     (file-expand-wildcards "shell/*.el")
                      (list "init.el" "early-init.el" "custom.el")))
     (with-temp-buffer
       (delay-mode-hooks (emacs-lisp-mode))

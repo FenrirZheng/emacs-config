@@ -874,12 +874,24 @@ expression syntax is the debuggee's language. An empty message removes the logpo
 |---|---|---|
 | `C-x g` | `magit-status` | The full Git porcelain — stage hunks, commit, rebase, log, … |
 | `C-x M-g` | `magit-dispatch` | Menu of all Magit commands |
+| `j` | `magit-status-jump` | Jump menu (status buffers) — native |
+| `j o` | `fenrir/magit-status-overview` | **Fold back to a file overview** (status buffers) |
+
+**File overview (`j o`, or `M-x fenrir/magit-status-overview`):** after a session of folding, a status buffer often shows three collapsed group headings and not one filename. This expands the *Staged*, *Unstaged* and *Untracked* groups so every file heading is visible, and collapses the file bodies under Staged and Unstaged so a thousand-line diff stops burying the list. Untracked entries have no body and are left exactly as Magit rendered them, "N files not listed" notice included.
+
+Nothing else moves: other sections (stashes, unpushed, …), the diff filters and every Magit option keep their state, and no Git command runs. It is **one-way, not a toggle** — it writes the native visibility cache like any manual fold, so a later `g` keeps the overview instead of reopening the diffs that happened to be expanded before. Running it twice changes nothing the second time; `TAB`, `RET` and normal section navigation work on the result as usual.
+
+Two things it is not. Native `M-2` (`magit-section-show-level-2-all`) also gets a level-2 view, but rewrites the **whole** root tree; this command touches only the three change groups. And it is not a new statistics panel — the counts are Magit's own, and `magit-diff-stat` is still there when you want a diffstat.
+
+Expanding a large Untracked group would insert up to `magit-status-file-list-limit` file lines (Magit's default is 100), which in a mostly-untracked working tree — `$HOME` being the local example — is a wall of text. Above `fenrir/magit-status-overview-untracked-threshold` (nil = follow that limit) the command asks first; a prefix argument, `C-u j o`, answers yes without asking. If some other package has already claimed `o` in the Jump menu, that binding is left alone and a one-time warning points at `M-x fenrir/magit-status-overview`, which always works.
 
 **Context hints:** Magit status, log, revision and diff buffers show a default-on, one-row toolbar: muted context on the left, bold themed keys beside action labels, and `TAB Fold` / `? Help` on the right. Narrow windows omit whole items, preserving Help and the first action when they fit; existing titles appear when space permits. Active selections are labeled Region. The layout supports GUI and TTY frames.
-Toggle per buffer with `M-x fenrir/magit-hints-mode`; customize `fenrir/magit-hints-default` for new buffers or `fenrir/magit-hints-alist` to extend the hints. Menu labels open transients.
+Toggle per buffer with `M-x fenrir/magit-hints-mode`; customize `fenrir/magit-hints-default` for new buffers or `fenrir/magit-hints-alist` to extend the hints. Menu labels open transients. Status buffers also advertise `j Jump menu` after the context actions — it is the last item added, so a narrow window drops it before it drops a stage/unstage action.
 
 **`C-x v …` — Magit on the retired `vc.el` prefix.** `vc-handled-backends` is
-`nil` (vc.el disabled), so its stock `C-x v` prefix map is repurposed wholesale:
+`(Git)` — vc.el keeps just the one backend, because diff-hl computes its gutter
+through it — but every interactive VC task goes through Magit, so vc.el's stock
+`C-x v` prefix map is repurposed wholesale:
 each key keeps the slot vc.el used, so vc muscle memory carries over. Keys marked
 *(menu)* open a Magit transient rather than acting immediately.
 
