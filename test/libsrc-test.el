@@ -272,4 +272,127 @@
 (ert-deftest libsrc-rejump-after-successful-build ()
   (should (= 1 (libsrc-test--definitions-with-result 'ok))))
 
+;; --- A3: an unzip that lists nothing must not store an empty index ------------
+
+(ert-deftest libsrc-listing-failures ()
+  (let ((out "@@/r/a-1.jar\norg/x/Foo.class\n@@/r/b-1.jar\n!!/r/b-1.jar\n"))
+    (should (equal (fenrir/libsrc--listing-failures out) '("/r/b-1.jar")))
+    ;; the failure marker is not a class entry
+    (should (equal (fenrir/libsrc--parse-listing out)
+                   '(("/r/a-1.jar" "Foo") ("/r/b-1.jar"))))))
+
+(defun libsrc-test--index-with-output (jars output)
+  "Run `--index-classes' for JARS with the listing process faked to OUTPUT.
+Returns (STATE . STILL-RESOLVING-P)."
+  (let ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir))))
+    (make-directory proj t)
+    (puthash proj nil fenrir/libsrc--resolving)
+    (cl-letf (((symbol-function 'fenrir/libsrc--run)
+               (lambda (_name _cmd _dir cb _on-error) (funcall cb 0 output))))
+      (fenrir/libsrc--index-classes proj jars 100.0))
+    (cons (fenrir/libsrc--state proj)
+          (not (eq (gethash proj fenrir/libsrc--resolving 'none) 'none)))))
+
+(ert-deftest libsrc-index-all-jars-unreadable-stores-nothing ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((a "/h/.m2/repository/org/x/a/1/a-1.jar")
+             (b "/h/.m2/repository/org/x/b/1/b-1.jar")
+             (res (libsrc-test--index-with-output
+                   (list a b) (concat "@@" a "\n!!" a "\n@@" b "\n!!" b "\n"))))
+        (should-not (car res))          ; no state -> not "current (0 classes)"
+        (should-not (cdr res))))))      ; resolving entry released
+
+(ert-deftest libsrc-index-some-jars-unreadable-records-them ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((a "/h/.m2/repository/org/x/a/1/a-1.jar")
+             (b "/h/.m2/repository/org/x/b/1/b-1.jar")
+             (st (car (libsrc-test--index-with-output
+                       (list a b)
+                       (concat "@@" a "\norg/x/Foo.class\n@@" b "\n!!" b "\n")))))
+        (should (equal (plist-get st :unreadable) (list b)))
+        (should (equal (gethash "Foo" (plist-get st :class-index)) '("org.x:a:1")))
+        (should (equal (plist-get st :resolved-at) 100.0))))))
+
+;; --- A5: staleness covers subproject build files and parent poms -----------------
+
+(defun libsrc-test--touch (file &optional time)
+  "Create FILE (and its directory) with mtime TIME (float, default now)."
+  (make-directory (file-name-directory file) t)
+  (with-temp-file file)
+  (when time (set-file-times file (seconds-to-time time))))
+
+(ert-deftest libsrc-build-files-gradle ()
+  (libsrc-test--with-cache
+    (let ((root (file-name-as-directory (expand-file-name "gr" fenrir/libsrc-cache-dir))))
+      (dolist (f '("settings.gradle.kts" "build.gradle.kts" "sub/build.gradle.kts"
+                   "gradle/libs.versions.toml" "build/tmp/build.gradle"
+                   "sub/src/main/resources/pom.xml"))
+        (libsrc-test--touch (expand-file-name f root)))
+      (should (equal (sort (mapcar (lambda (f) (file-relative-name f root))
+                                   (fenrir/libsrc--build-files root))
+                           #'string<)
+                     '("build.gradle.kts" "gradle/libs.versions.toml"
+                       "settings.gradle.kts" "sub/build.gradle.kts"))))))
+
+(ert-deftest libsrc-build-files-maven-parents ()
+  (libsrc-test--with-cache
+    (let* ((parent (file-name-as-directory (expand-file-name "rx" fenrir/libsrc-cache-dir)))
+           (mod (file-name-as-directory (expand-file-name "mod" parent))))
+      (libsrc-test--touch (expand-file-name "pom.xml" parent))
+      (libsrc-test--touch (expand-file-name "pom.xml" mod))
+      (let ((files (fenrir/libsrc--build-files mod)))
+        (should (member (expand-file-name "pom.xml" mod) files))
+        (should (member (expand-file-name "pom.xml" parent) files))))))
+
+(ert-deftest libsrc-stale-on-subproject-edit ()
+  (libsrc-test--with-cache
+    (let* ((root (file-name-as-directory (expand-file-name "gr" fenrir/libsrc-cache-dir)))
+           (sub (expand-file-name "sub/build.gradle.kts" root))
+           (old (- (float-time) 1000)))
+      (libsrc-test--touch (expand-file-name "settings.gradle.kts" root) old)
+      (libsrc-test--touch sub old)
+      (let ((st (list :resolved-at (- (float-time) 500)
+                      :build-files (fenrir/libsrc--build-files root))))
+        (should-not (fenrir/libsrc--stale-p root st))
+        (set-file-times sub)                      ; edited now, after resolution
+        (should (fenrir/libsrc--stale-p root st))))))
+
+;; --- A6: the status buffer reports this root, with the real resolve time ---------
+
+(ert-deftest libsrc-status-pending-and-resolved-time ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+             (default-directory proj)
+             (at (encode-time '(0 30 9 1 2 2026 nil nil 0))))
+        (libsrc-test--touch (expand-file-name "pom.xml" proj))
+        (fenrir/libsrc--state-update
+         proj :resolved-at (float-time at) :class-index (make-hash-table :test #'equal)
+         :jars '("/h/.m2/repository/org/x/a/1/a-1.jar" "/h/.m2/repository/org/x/b/1/b-1.jar"))
+        (puthash "org.x:a:1" (list #'ignore) fenrir/libsrc--jobs)       ; this root
+        (puthash "org.other:z:9" (list #'ignore) fenrir/libsrc--jobs)   ; another project
+        (fenrir/libsrc-status)
+        (with-current-buffer "*libsrc-status*"
+          (should (string-match-p "Pending: 1 " (buffer-string)))
+          (should (string-match-p "\\[pending\\] +org\\.x:a:1" (buffer-string)))
+          (should (string-match-p (regexp-quote (format-time-string "resolved %F %T" at))
+                                  (buffer-string))))))))
+
+;; --- A4: a no-sources class says so instead of being overwritten -----------------
+
+(ert-deftest libsrc-no-sources-is-a-user-error ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+             (default-directory proj)
+             (index (make-hash-table :test #'equal)))
+        (libsrc-test--touch (expand-file-name "pom.xml" proj) (- (float-time) 100))
+        (puthash "Closed" '("org.x:closed:1") index)
+        (fenrir/libsrc--state-update proj :class-index index :resolved-at (float-time))
+        (libsrc-test--touch (fenrir/libsrc--no-sources-file "org.x:closed:1"))
+        (let ((err (should-error (fenrir/libsrc-definitions "Closed") :type 'user-error)))
+          (should (string-match-p "no sources published for org.x:closed:1" (cadr err))))))))
+
 ;;; libsrc-test.el ends here

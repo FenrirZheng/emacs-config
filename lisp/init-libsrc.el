@@ -137,6 +137,14 @@ Each jar starts with an `@@<jar>' line followed by its `unzip -Z1' lines."
           (setcdr cur (cons name (cdr cur))))))
     (mapcar (lambda (c) (cons (car c) (delete-dups (cdr c)))) (nreverse acc))))
 
+(defun fenrir/libsrc--listing-failures (string)
+  "Jars the batched listing STRING marks with `!!' (unzip could not list)."
+  (let (acc)
+    (dolist (line (string-lines string t))
+      (when (string-prefix-p "!!" line)
+        (push (substring line 2) acc)))
+    (nreverse acc)))
+
 (defun fenrir/libsrc--build-class-index (listing)
   "Hash table simple-name -> list of \"g:a:v\" from LISTING (see above).
 Jars with no GAV are skipped -- there is no sources jar to ask for."
@@ -223,21 +231,51 @@ Gradle settings root (the init script unions every subproject)."
         (car (sort cands (lambda (a b) (> (length (expand-file-name a))
                                           (length (expand-file-name b)))))))))))
 
-(defun fenrir/libsrc--build-mtime (root)
-  "Newest mtime (float) of ROOT's build files."
-  (apply #'max 0
-         (mapcar (lambda (f)
-                   (let ((p (expand-file-name f root)))
-                     (if (file-exists-p p)
-                         (float-time (file-attribute-modification-time
-                                      (file-attributes p)))
-                       0)))
-                 '("pom.xml" "build.gradle" "build.gradle.kts"
-                   "settings.gradle" "settings.gradle.kts"))))
+(defconst fenrir/libsrc--build-file-names
+  '("pom.xml" "build.gradle" "build.gradle.kts" "settings.gradle"
+    "settings.gradle.kts" "gradle.properties" "libs.versions.toml")
+  "Files whose edit can change a classpath.")
+
+(defconst fenrir/libsrc--build-file-skip-dirs
+  '(".git" ".gradle" ".idea" ".mvn" "build" "target" "out" "bin" "node_modules" "src")
+  "Directories never searched for build files (`src' is the big one).")
+
+(defun fenrir/libsrc--build-files (root)
+  "Every file under ROOT whose edit can change its classpath.
+Subproject build scripts, `gradle/libs.versions.toml' and, for Maven, the
+parent poms in consecutive ancestors (their dependencyManagement pins
+versions).  Collected once per resolution, so the staleness check on each
+`M-.' is a handful of stats, not a tree walk."
+  (let ((files (directory-files-recursively
+                root (concat "\\`" (regexp-opt fenrir/libsrc--build-file-names) "\\'")
+                nil
+                (lambda (d) (not (member (file-name-nondirectory d)
+                                         fenrir/libsrc--build-file-skip-dirs)))))
+        (up (file-name-directory (directory-file-name root))))
+    (when (file-exists-p (expand-file-name "pom.xml" root))
+      (while (and up (file-exists-p (expand-file-name "pom.xml" up)))
+        (push (expand-file-name "pom.xml" up) files)
+        (let ((next (file-name-directory (directory-file-name up))))
+          (setq up (and (not (equal next up)) next)))))
+    files))
+
+(defun fenrir/libsrc--stale-p (root st)
+  "Non-nil when a build file of ROOT changed after state ST was resolved.
+States written before `:build-files' / `:resolved-at' existed fall back
+to the root's own build files and `:classpath-mtime'."
+  (let ((since (or (plist-get st :resolved-at) (plist-get st :classpath-mtime) 0)))
+    (seq-some (lambda (f)
+                (when-let* ((attrs (file-attributes f)))
+                  (> (float-time (file-attribute-modification-time attrs)) since)))
+              (or (plist-get st :build-files)
+                  (mapcar (lambda (n) (expand-file-name n root))
+                          fenrir/libsrc--build-file-names)))))
 
 ;; --- Per-project state --------------------------------------------------------
-;; Plist: :root :classpath-mtime :jars (list of jar paths) :unparsed (jars
-;; with no GAV) :class-index (name -> "g:a:v" list) :libpath (trees used).
+;; Plist: :root :resolved-at (when the resolution STARTED, so an edit made
+;; while it ran still reads as stale) :build-files :jars (jar paths)
+;; :unparsed (jars with no GAV) :unreadable (jars unzip could not list)
+;; :class-index (name -> "g:a:v" list) :libpath (trees used).
 
 (defvar fenrir/libsrc--projects (make-hash-table :test #'equal)
   "Build root -> state plist, loaded lazily from `proj/*.eld'.")
@@ -326,7 +364,7 @@ CALLBACK, if given, runs with no arguments after success."
     (if (not (eq waiting 'none))
         (when callback (puthash root (cons callback waiting) fenrir/libsrc--resolving))
       (puthash root (and callback (list callback)) fenrir/libsrc--resolving)
-      (condition-case err (fenrir/libsrc--resolve-attempt root t)
+      (condition-case err (fenrir/libsrc--resolve-attempt root t (float-time))
         (error (fenrir/libsrc--resolve-fail root (error-message-string err)))))))
 
 (defun fenrir/libsrc--resolve-done (root ok)
@@ -345,8 +383,9 @@ chain already finished cannot double-finish."
   (message "libsrc: classpath resolution failed for %s: %s"
            (abbreviate-file-name root) msg))
 
-(defun fenrir/libsrc--resolve-attempt (root offline)
-  "One resolution attempt for ROOT; OFFLINE first, then one online retry."
+(defun fenrir/libsrc--resolve-attempt (root offline started)
+  "One resolution attempt for ROOT; OFFLINE first, then one online retry.
+STARTED is when the resolution began (becomes `:resolved-at')."
   (let* ((out (make-temp-file "libsrc-cp"))
          (cmd (fenrir/libsrc--classpath-command root offline out)))
     (if (not cmd)
@@ -368,33 +407,49 @@ chain already finished cannot double-finish."
                          (fenrir/libsrc--parse-gradle-output output)))))
            (delete-file out)
            (cond
-            (jars (fenrir/libsrc--index-classes root jars))
-            (offline (fenrir/libsrc--resolve-attempt root nil))
+            (jars (fenrir/libsrc--index-classes root jars started))
+            (offline (fenrir/libsrc--resolve-attempt root nil started))
             (t (fenrir/libsrc--resolve-done root nil)
                (message "libsrc: classpath resolution failed for %s -- see *libsrc*"
                         (abbreviate-file-name root))))))
        (lambda (msg) (ignore-errors (delete-file out))
          (fenrir/libsrc--resolve-fail root msg))))))
 
-(defun fenrir/libsrc--index-classes (root jars)
-  "List JARS in one async process, then store ROOT's class index."
+(defun fenrir/libsrc--index-classes (root jars started)
+  "List JARS in one async process, then store ROOT's class index.
+STARTED is when the resolution began.  When unzip could list no jar at
+all (typically: unzip not installed) nothing is stored -- an empty index
+saved as current would make every later sync report \"current (0
+classes)\" and every library miss silent."
   (fenrir/libsrc--run
    "classes"
-   `("sh" "-c" "for j; do printf '@@%s\\n' \"$j\"; unzip -Z1 \"$j\" 2>/dev/null; done"
+   `("sh" "-c"
+     "for j; do printf '@@%s\\n' \"$j\"; unzip -Z1 \"$j\" 2>/dev/null || printf '!!%s\\n' \"$j\"; done"
      "sh" ,@jars)
    root
    (lambda (_exit output)
-     (let* ((listing (fenrir/libsrc--parse-listing output))
-            (index (fenrir/libsrc--build-class-index listing)))
-       (fenrir/libsrc--state-update
-        root
-        :classpath-mtime (fenrir/libsrc--build-mtime root)
-        :jars jars
-        :unparsed (seq-remove #'fenrir/libsrc--jar-gav jars)
-        :class-index index)
-       (message "libsrc: %d jars, %d classes indexed for %s"
-                (length jars) (hash-table-count index) (abbreviate-file-name root))
-       (fenrir/libsrc--resolve-done root t)))
+     (let ((unreadable (fenrir/libsrc--listing-failures output)))
+       (if (>= (length unreadable) (length jars))
+           (fenrir/libsrc--resolve-fail
+            root (format "unzip could not list any of %d jars -- is unzip installed?"
+                         (length jars)))
+         (let ((index (fenrir/libsrc--build-class-index
+                       (fenrir/libsrc--parse-listing output))))
+           (when unreadable
+             (fenrir/libsrc--log "%s: unzip could not list %d jar(s): %s" root
+                                 (length unreadable) (string-join unreadable " ")))
+           (fenrir/libsrc--state-update
+            root
+            :resolved-at started
+            :build-files (fenrir/libsrc--build-files root)
+            :jars jars
+            :unparsed (seq-remove #'fenrir/libsrc--jar-gav jars)
+            :unreadable unreadable
+            :class-index index)
+           (message "libsrc: %d jars, %d classes indexed for %s%s"
+                    (length jars) (hash-table-count index) (abbreviate-file-name root)
+                    (if unreadable (format " (%d unreadable)" (length unreadable)) ""))
+           (fenrir/libsrc--resolve-done root t)))))
    (lambda (msg) (fenrir/libsrc--resolve-fail root msg))))
 
 ;; --- 3. Fetch, extract and index one artifact ---------------------------------
@@ -584,8 +639,7 @@ resolution executes the project's build code."
            (no-src-p (lambda (g) (file-exists-p (fenrir/libsrc--no-sources-file g))))
            (resume (let ((buf (current-buffer)) (pos (point)))
                      (lambda () (fenrir/libsrc--rejump buf pos symbol)))))
-      (when (and st (> (fenrir/libsrc--build-mtime root)
-                       (or (plist-get st :classpath-mtime) 0)))
+      (when (and st (fenrir/libsrc--stale-p root st))
         (fenrir/libsrc--resolve root))     ; build file changed: refresh quietly
       (if-let* ((hits (fenrir/libsrc--query
                        (append (or ready (plist-get st :libpath))
@@ -628,10 +682,11 @@ resolution executes the project's build code."
                           (mapconcat (lambda (g) (string-join (cdr (split-string g ":")) "-"))
                                      pending ", ")
                           symbol))
+             ;; A `user-error', not `message' + nil: xref would follow a nil
+             ;; with its own "No definitions found", overwriting the reason.
              ((seq-some no-src-p gavs)
-              (message "libsrc: no sources published for %s (%s)"
-                       symbol (string-join gavs ", "))
-              nil))))))))
+              (user-error "No definitions for %s: no sources published for %s"
+                          symbol (string-join gavs ", "))))))))))
 
 (with-eval-after-load 'gtags-mode
   (cl-defmethod xref-backend-definitions :around ((_backend (head :gtagsroot)) symbol)
@@ -671,9 +726,7 @@ re-resolves."
                   (user-error "libsrc: no pom.xml / Gradle build above %s"
                               default-directory))))
     (let ((st (fenrir/libsrc--state root)))
-      (if (and st (not force)
-               (<= (fenrir/libsrc--build-mtime root)
-                   (or (plist-get st :classpath-mtime) 0)))
+      (if (and st (not force) (not (fenrir/libsrc--stale-p root st)))
           (message "libsrc: %s is current (%d classes); C-u to re-resolve"
                    (abbreviate-file-name root)
                    (hash-table-count (plist-get st :class-index)))
@@ -704,26 +757,35 @@ re-resolves."
                                                         (fenrir/libsrc--gav-string g)))
                                           jars))))
                  (ready (seq-filter (lambda (g) (fenrir/libsrc--ready-p (fenrir/libsrc--gav-dir g))) gavs))
-                 (nosrc (seq-filter (lambda (g) (file-exists-p (fenrir/libsrc--no-sources-file g))) gavs)))
+                 (nosrc (seq-filter (lambda (g) (file-exists-p (fenrir/libsrc--no-sources-file g))) gavs))
+                 ;; This root's builds only, not every queued build in the session.
+                 (pending (seq-filter (lambda (g) (gethash g fenrir/libsrc--jobs)) gavs))
+                 (at (plist-get st :resolved-at)))
             (insert (format "Classpath:  %d jars, %d classes (resolved %s)\n"
                             (length jars) (hash-table-count (plist-get st :class-index))
-                            (format-time-string "%F %T" (plist-get st :classpath-mtime))))
-            (insert (format "Indexed:    %d   Pending: %d   No sources: %d   Unparseable: %d\n"
-                            (length ready) (hash-table-count fenrir/libsrc--jobs)
-                            (length nosrc) (length (plist-get st :unparsed))))
+                            (if at (format-time-string "%F %T" at)
+                              "at an unknown time -- C-u C-c g l records it")))
+            (insert (format "Indexed:    %d   Pending: %d   No sources: %d   Unparseable: %d   Unreadable: %d\n"
+                            (length ready) (length pending) (length nosrc)
+                            (length (plist-get st :unparsed))
+                            (length (plist-get st :unreadable))))
             (insert (format "Cache:      %s in %s\n\n"
                             (fenrir/libsrc--dir-size fenrir/libsrc-cache-dir)
                             (abbreviate-file-name fenrir/libsrc-cache-dir)))
             (dolist (g ready) (insert "  [indexed]    " g "\n"))
+            (dolist (g pending) (insert "  [pending]    " g "\n"))
             (dolist (g nosrc) (insert "  [no-sources] " g "\n"))
             (dolist (j (plist-get st :unparsed))
-              (insert "  [no GAV]     " (abbreviate-file-name j) "\n"))))
+              (insert "  [no GAV]     " (abbreviate-file-name j) "\n"))
+            (dolist (j (plist-get st :unreadable))
+              (insert "  [unreadable] " (abbreviate-file-name j) "\n"))))
         (goto-char (point-min))
         (special-mode))
       (display-buffer (current-buffer)))))
 
 (defun fenrir/libsrc-gc ()
-  "Delete library trees no project references and untouched for `fenrir/libsrc-gc-days'.
+  "Delete library trees no project references, built over `fenrir/libsrc-gc-days' ago.
+Age is the build's `.ok' mtime; using a tree does not refresh it.
 Also removes leftover `.tmp' build directories."
   (interactive)
   (let* ((proj (expand-file-name "proj" fenrir/libsrc-cache-dir))

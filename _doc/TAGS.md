@@ -168,7 +168,13 @@ directories, each with its own GTAGS, that `global -d` searches.
   `mvn -o dependency:build-classpath`, or `gradlew` with
   [`fenrir-libsrc/classpath.gradle`](../lisp/fenrir-libsrc/classpath.gradle); offline
   first, one online retry. `gradlew` without `+x` runs through `sh`. Cached in
-  `proj/<sha1>.eld`, re-resolved when the build file's mtime moves.
+  `proj/<sha1>.eld`, re-resolved when any build file changes after the resolution
+  started: every `pom.xml` / `build.gradle(.kts)` / `settings.gradle(.kts)` /
+  `gradle.properties` / `libs.versions.toml` under the root (`src/`, `build/`,
+  `target/` skipped), plus Maven parent poms in consecutive ancestors. The list is
+  collected at resolve time, so each `M-.` only stats those files. A resolution where
+  `unzip` can list no jar stores nothing; partly unreadable jars show as `[unreadable]`
+  in `C-c g L`.
 - **Opt-in per build root.** Resolving runs the project's own code — its
   `gradlew`, `build.gradle(.kts)`, Maven plugins — so it never starts on its own in a
   root you haven't synced. The first resolution is always an explicit **`C-c g l`**;
