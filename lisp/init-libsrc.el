@@ -9,25 +9,36 @@
 ;; own library search path: `GTAGSLIBPATH' is a colon-separated list of
 ;; directories, each with its own GTAGS, that `global -d' searches.
 ;;
-;; Moving parts (design: [TAGS.md](../_doc/TAGS.md#library-sources-fenrir-libsrc)):
+;; Moving parts, one per section below (design:
+;; [TAGS.md](../_doc/TAGS.md#library-sources-fenrir-libsrc)):
 ;;
-;;   1. Classpath, per build root, cached in `proj/<sha1>.eld':
-;;      Maven `mvn -o dependency:build-classpath', Gradle via the bundled
-;;      [init script](fenrir-libsrc/classpath.gradle).  Offline first, one
-;;      online retry.  Both execute the project's own build code, so a root
-;;      is first resolved only by an explicit `C-c g l'; after that, a
-;;      changed build file re-resolves it automatically.
-;;   2. Class index: `unzip -Z1' over every binary jar maps a simple class
-;;      name to the artifact(s) defining it.  This is what makes indexing
-;;      lazy -- a miss on `GitProperties' names the one jar to fetch.
-;;   3. One shared, immutable tree per artifact version under
-;;      `lib/<g>/<a>/<v>/': the extracted -sources.jar plus its own GTAGS,
-;;      built in `<v>.tmp', made read-only, renamed, and only then marked
-;;      ready with `.ok'.  A crash leaves a `.tmp' the next build removes.
-;;   4. An `:around' method on the gtags xref backend's definitions: project
-;;      hits win; otherwise query the ready trees; otherwise queue the build
-;;      and re-jump when it lands.  `M-?' is untouched -- library hits would
-;;      flood it.
+;;   * Pure layer -- path, listing and output parsing, GTAGSLIBPATH
+;;     assembly, state files; no processes, so the ERT suite covers it.
+;;   * Per-project state -- one plist per build root, cached in
+;;     `proj/<sha1>.eld'; its existence is also the opt-in record.
+;;   * Classpath resolution and class index -- Maven `mvn -o
+;;     dependency:build-classpath', Gradle via the bundled
+;;     [init script](fenrir-libsrc/classpath.gradle), offline first with one
+;;     online retry.  Both execute the project's own build code, so a root
+;;     is first resolved only by an explicit `C-c g l'; after that, a
+;;     changed build file re-resolves it automatically.  Then `unzip -Z1'
+;;     over every jar maps a simple class name to the artifact(s) defining
+;;     it -- what makes indexing lazy: a miss on `GitProperties' names the
+;;     one jar to fetch.
+;;   * Fetch, extract and index one artifact -- one shared, immutable tree
+;;     per artifact version under `lib/<g>/<a>/<v>/': the extracted
+;;     -sources.jar plus its own GTAGS, built in `<v>.tmp', made read-only,
+;;     renamed, and only then marked ready with `.ok'.  At most
+;;     `fenrir/libsrc-max-jobs' builds at once; a crash leaves a `.tmp' the
+;;     next build removes.
+;;   * The M-. hook -- an `:around' method on the gtags xref backend's
+;;     definitions: project hits win; otherwise query the ready trees;
+;;     otherwise queue the build and re-jump when it lands.  `M-?' is
+;;     untouched -- library hits would flood it.
+;;   * Library buffers -- opened read-only, remembering the project they
+;;     were reached from so its classpath keeps applying.
+;;   * Commands -- `C-c g l' sync, `C-c g L' status, and M-x
+;;     `fenrir/libsrc-index-jdk' / `fenrir/libsrc-gc'.
 ;;
 ;; Name-level only, like project gtags: no types, overloads list every
 ;; same-named definition.
@@ -271,7 +282,7 @@ to the root's own build files and `:classpath-mtime'."
                   (mapcar (lambda (n) (expand-file-name n root))
                           fenrir/libsrc--build-file-names)))))
 
-;; --- Per-project state --------------------------------------------------------
+;; --- Per-project state -------------------------------------------------------
 ;; Plist: :root :resolved-at (when the resolution STARTED, so an edit made
 ;; while it ran still reads as stale) :build-files :jars (jar paths)
 ;; :unparsed (jars with no GAV) :unreadable (jars unzip could not list)
@@ -341,7 +352,7 @@ error escaping here would leak it for the rest of the session."
        (kill-buffer buf)
        (funcall on-error (error-message-string err))))))
 
-;; --- 1+2. Classpath resolution and class index --------------------------------
+;; --- Classpath resolution and class index ------------------------------------
 
 (defun fenrir/libsrc--classpath-command (root offline out-file)
   "Command resolving ROOT's classpath, or nil.  OUT-FILE is Maven's output."
@@ -452,7 +463,7 @@ classes)\" and every library miss silent."
            (fenrir/libsrc--resolve-done root t)))))
    (lambda (msg) (fenrir/libsrc--resolve-fail root msg))))
 
-;; --- 3. Fetch, extract and index one artifact ---------------------------------
+;; --- Fetch, extract and index one artifact -----------------------------------
 
 (defvar fenrir/libsrc--jobs (make-hash-table :test #'equal)
   "\"g:a:v\" -> callbacks for a queued or running build.")
@@ -579,7 +590,7 @@ finished cannot release its slot twice."
           (fenrir/libsrc--build-error gav))))
      (fenrir/libsrc--build-error gav))))
 
-;; --- 4. The M-. hook -------------------------------------------------------------
+;; --- The M-. hook ------------------------------------------------------------
 
 (defvar-local fenrir/libsrc-origin nil
   "Build root a library buffer was reached from; its classpath keeps applying.")
@@ -696,7 +707,7 @@ resolution executes the project's build code."
              (derived-mode-p 'java-mode 'java-ts-mode)
              (fenrir/libsrc-definitions symbol)))))
 
-;; --- 5. Library buffers ---------------------------------------------------------
+;; --- Library buffers ---------------------------------------------------------
 
 (defun fenrir/libsrc--library-file-p (file)
   "Non-nil when FILE lives in the library-source cache."
@@ -715,7 +726,7 @@ resolution executes the project's build code."
     (setq fenrir/libsrc-origin fenrir/libsrc--last-origin)))
 (add-hook 'xref-after-jump-hook #'fenrir/libsrc--after-jump)
 
-;; --- 6. Commands ------------------------------------------------------------------
+;; --- Commands ----------------------------------------------------------------
 
 (defun fenrir/libsrc-sync (&optional force)
   "Resolve the current build root's classpath and class index.
