@@ -111,12 +111,16 @@ Understands ~/.m2 layout (slashed groupId) and the Gradle module cache
   "GAV list as \"g:a:v\"."
   (string-join gav ":"))
 
+(defun fenrir/libsrc--lib-dir ()
+  "The `lib/' tree holding every built artifact (no trailing slash)."
+  (expand-file-name "lib" fenrir/libsrc-cache-dir))
+
 (defun fenrir/libsrc--gav-dir (gav)
   "Slash-terminated cache tree for GAV (list or \"g:a:v\" string)."
   (let ((gav (if (stringp gav) (split-string gav ":") gav)))
     (file-name-as-directory
      (expand-file-name (string-join gav "/")
-                       (expand-file-name "lib" fenrir/libsrc-cache-dir)))))
+                       (fenrir/libsrc--lib-dir)))))
 
 (defun fenrir/libsrc--class-entry-name (entry)
   "Simple class name for jar ENTRY (a `unzip -Z1' line), or nil.
@@ -176,6 +180,10 @@ Jars with no GAV are skipped -- there is no sources jar to ask for."
   "Non-nil when tree DIR finished building."
   (file-exists-p (expand-file-name ".ok" dir)))
 
+(defun fenrir/libsrc--gav-ready-p (gav)
+  "Non-nil when GAV's tree finished building."
+  (fenrir/libsrc--ready-p (fenrir/libsrc--gav-dir gav)))
+
 (defun fenrir/libsrc--libpath-string (dirs)
   "GTAGSLIBPATH value from the ready trees in DIRS, or nil when none."
   (when-let* ((ready (seq-filter #'fenrir/libsrc--ready-p dirs)))
@@ -206,14 +214,17 @@ Jars with no GAV are skipped -- there is no sources jar to ask for."
       (let ((print-length nil) (print-level nil))
         (prin1 state (current-buffer))))))
 
+(defun fenrir/libsrc--read-eld (file)
+  "The one Lisp object in state FILE, or nil when unreadable or corrupt."
+  (when (file-readable-p file)
+    (ignore-errors
+      (with-temp-buffer
+        (insert-file-contents file)
+        (read (current-buffer))))))
+
 (defun fenrir/libsrc--read-state (root)
   "Persisted state for ROOT, or nil."
-  (let ((file (fenrir/libsrc--state-file root)))
-    (when (file-readable-p file)
-      (ignore-errors
-        (with-temp-buffer
-          (insert-file-contents file)
-          (read (current-buffer)))))))
+  (fenrir/libsrc--read-eld (fenrir/libsrc--state-file root)))
 
 (defun fenrir/libsrc--remove-tree (dir)
   "Delete DIR recursively, first restoring owner write (trees are read-only)."
@@ -223,7 +234,7 @@ Jars with no GAV are skipped -- there is no sources jar to ask for."
 
 (defun fenrir/libsrc--stale-tmp-dirs ()
   "Every `<v>.tmp' build directory under lib/."
-  (let ((lib (expand-file-name "lib" fenrir/libsrc-cache-dir)))
+  (let ((lib (fenrir/libsrc--lib-dir)))
     (when (file-directory-p lib)
       (seq-filter
        (lambda (d) (and (string-suffix-p ".tmp" d) (file-directory-p d)))
@@ -382,14 +393,23 @@ CALLBACK, if given, runs with no arguments after success."
       (condition-case err (fenrir/libsrc--resolve-attempt root t (float-time))
         (error (fenrir/libsrc--resolve-fail root (error-message-string err)))))))
 
+(defun fenrir/libsrc--take-callbacks (table key)
+  "Remove KEY from TABLE; return its callbacks in registration order.
+Returns `none' when KEY is not in flight, so a late failure path cannot
+finish the same resolution or build twice."
+  (let ((cbs (gethash key table 'none)))
+    (if (eq cbs 'none)
+        'none
+      (remhash key table)
+      (reverse cbs))))
+
 (defun fenrir/libsrc--resolve-done (root ok)
   "Finish ROOT's resolution; run waiting callbacks when OK.
 A no-op when ROOT is not resolving, so a failure path reached after the
 chain already finished cannot double-finish."
-  (let ((cbs (gethash root fenrir/libsrc--resolving 'none)))
-    (unless (eq cbs 'none)
-      (remhash root fenrir/libsrc--resolving)
-      (when ok (mapc (lambda (f) (ignore-errors (funcall f))) (reverse cbs))))))
+  (let ((cbs (fenrir/libsrc--take-callbacks fenrir/libsrc--resolving root)))
+    (when (and ok (not (eq cbs 'none)))
+      (mapc (lambda (f) (ignore-errors (funcall f))) cbs))))
 
 (defun fenrir/libsrc--resolve-fail (root msg)
   "Abort ROOT's resolution after an error MSG, releasing its resolving entry."
@@ -478,6 +498,10 @@ classes)\" and every library miss silent."
   "Marker recording that GAV publishes no sources jar."
   (concat (directory-file-name (fenrir/libsrc--gav-dir gav)) ".no-sources"))
 
+(defun fenrir/libsrc--gav-no-sources-p (gav)
+  "Non-nil when GAV is recorded as publishing no sources jar."
+  (file-exists-p (fenrir/libsrc--no-sources-file gav)))
+
 (defvar fenrir/libsrc--local-sources (make-hash-table :test #'equal)
   "Pseudo-GAV -> source archive not in any Maven/Gradle cache (the JDK's src.zip).")
 
@@ -497,9 +521,9 @@ classes)\" and every library miss silent."
 (defun fenrir/libsrc-ensure (gav &optional callback)
   "Make GAV's indexed source tree ready; CALLBACK gets `ok', `no-sources' or `error'."
   (cond
-   ((fenrir/libsrc--ready-p (fenrir/libsrc--gav-dir gav))
+   ((fenrir/libsrc--gav-ready-p gav)
     (when callback (funcall callback 'ok)))
-   ((file-exists-p (fenrir/libsrc--no-sources-file gav))
+   ((fenrir/libsrc--gav-no-sources-p gav)
     (when callback (funcall callback 'no-sources)))
    ((gethash gav fenrir/libsrc--jobs)
     (when callback (puthash gav (cons callback (gethash gav fenrir/libsrc--jobs))
@@ -521,12 +545,11 @@ classes)\" and every library miss silent."
   "End GAV's build with RESULT; DETAIL goes to the log.
 A no-op when GAV is not building, so an error raised after a step already
 finished cannot release its slot twice."
-  (let ((cbs (gethash gav fenrir/libsrc--jobs 'none)))
+  (let ((cbs (fenrir/libsrc--take-callbacks fenrir/libsrc--jobs gav)))
     (unless (eq cbs 'none)
       (cl-decf fenrir/libsrc--running)
-      (remhash gav fenrir/libsrc--jobs)
       (fenrir/libsrc--log "%s: %s%s" gav result (if detail (concat " -- " detail) ""))
-      (dolist (f (reverse cbs))
+      (dolist (f cbs)
         (condition-case err (funcall f result)
           (error (message "libsrc: %s" (error-message-string err)))))
       (fenrir/libsrc--pump))))
@@ -651,7 +674,7 @@ resolution executes the project's build code."
            (gavs (and st (gethash symbol (plist-get st :class-index))))
            (ready (seq-filter #'fenrir/libsrc--ready-p
                               (mapcar #'fenrir/libsrc--gav-dir gavs)))
-           (no-src-p (lambda (g) (file-exists-p (fenrir/libsrc--no-sources-file g))))
+           (no-src-p #'fenrir/libsrc--gav-no-sources-p)
            (resume (let ((buf (current-buffer)) (pos (point)))
                      (lambda () (fenrir/libsrc--rejump buf pos symbol)))))
       (when (and st (fenrir/libsrc--stale-p root st))
@@ -675,7 +698,7 @@ resolution executes the project's build code."
                         symbol (abbreviate-file-name root)
                         (substitute-command-keys "\\[fenrir/libsrc-sync]"))
           (let ((pending (seq-remove
-                          (lambda (g) (or (fenrir/libsrc--ready-p (fenrir/libsrc--gav-dir g))
+                          (lambda (g) (or (fenrir/libsrc--gav-ready-p g)
                                           (funcall no-src-p g)))
                           gavs)))
             (cond
@@ -715,7 +738,7 @@ resolution executes the project's build code."
 
 (defun fenrir/libsrc--library-file-p (file)
   "Non-nil when FILE lives in the library-source cache."
-  (and file (file-in-directory-p file (expand-file-name "lib" fenrir/libsrc-cache-dir))))
+  (and file (file-in-directory-p file (fenrir/libsrc--lib-dir))))
 
 (defun fenrir/libsrc--find-file-hook ()
   "Library sources are references, not workspaces: open them read-only."
@@ -771,8 +794,8 @@ re-resolves."
                         (delq nil (mapcar (lambda (j) (when-let* ((g (fenrir/libsrc--jar-gav j)))
                                                         (fenrir/libsrc--gav-string g)))
                                           jars))))
-                 (ready (seq-filter (lambda (g) (fenrir/libsrc--ready-p (fenrir/libsrc--gav-dir g))) gavs))
-                 (nosrc (seq-filter (lambda (g) (file-exists-p (fenrir/libsrc--no-sources-file g))) gavs))
+                 (ready (seq-filter #'fenrir/libsrc--gav-ready-p gavs))
+                 (nosrc (seq-filter #'fenrir/libsrc--gav-no-sources-p gavs))
                  ;; This root's builds only, not every queued build in the session.
                  (pending (seq-filter (lambda (g) (gethash g fenrir/libsrc--jobs)) gavs))
                  (at (plist-get st :resolved-at)))
@@ -806,13 +829,9 @@ Also removes leftover `.tmp' build directories."
   (let* ((proj (expand-file-name "proj" fenrir/libsrc-cache-dir))
          (used (cl-loop for f in (and (file-directory-p proj)
                                       (directory-files proj t "\\.eld\\'"))
-                        append (plist-get (ignore-errors
-                                            (with-temp-buffer
-                                              (insert-file-contents f)
-                                              (read (current-buffer))))
-                                          :libpath)))
+                        append (plist-get (fenrir/libsrc--read-eld f) :libpath)))
          (cutoff (- (float-time) (* 86400 fenrir/libsrc-gc-days)))
-         (lib (expand-file-name "lib" fenrir/libsrc-cache-dir))
+         (lib (fenrir/libsrc--lib-dir))
          (n 0))
     (dolist (tmp (fenrir/libsrc--stale-tmp-dirs))
       (unless (> (hash-table-count fenrir/libsrc--jobs) 0)
@@ -854,7 +873,7 @@ The tree is shared by every project using the same JDK version."
 
 (defun fenrir/libsrc--jdk-dirs ()
   "Ready JDK trees."
-  (let ((dir (expand-file-name "lib/jdk/jdk/" fenrir/libsrc-cache-dir)))
+  (let ((dir (expand-file-name "jdk/jdk/" (fenrir/libsrc--lib-dir))))
     (when (file-directory-p dir)
       (seq-filter #'fenrir/libsrc--ready-p
                   (mapcar #'file-name-as-directory
