@@ -44,9 +44,10 @@ Be honest with yourself about this list before filing a bug:
 - **Refactors.** No rename, no extract-method. `M-x project-query-replace-regexp`
   is the blunt substitute; it is textual and does not know scope.
 - **Find implementations / call hierarchy / type hierarchy.**
-- **Navigation into JDK or third-party jar sources.** The `jdt://` URI handler
-  that served this is gone. `M-.` on `ArrayList` finds nothing; the index
-  contains project source only.
+- **Type-aware navigation into JDK or third-party jar sources.** The `jdt://`
+  URI handler is gone. Name-level library navigation is back through
+  `init-libsrc.el` (below), but nothing is decompiled: an artifact that
+  publishes no `-sources.jar` stays a dead end.
 
 And the one that bites daily: **gtags answers at the NAME level.** `M-.` on an
 overloaded or common name offers every same-named definition in the project
@@ -161,9 +162,20 @@ There is no index covering this file. Build one — but check the root first
 
 ### `M-.` finds nothing for a JDK or library class
 
-Expected. The index contains project source only; jar and JDK sources are not
-indexed and there is no server to decompile them. Read the source in your
-browser or open the sources jar manually.
+Library classes go through [`init-libsrc.el`](../lisp/init-libsrc.el)
+([TAGS.md](TAGS.md#library-sources-fenrir-libsrc)). The first `M-.` on a
+library class resolves the classpath and/or indexes that artifact's
+`-sources.jar` and says so (`libsrc: indexing spring-boot-3.0.2 for
+GitProperties -- will jump when ready`); it then jumps by itself if point has
+not moved. Still nothing? Check, in order:
+
+- The **project has a GTAGS index** (`C-c g g`). The hook rides on the gtags
+  backend, so a project without an index never reaches it.
+- `C-c g L` — is the classpath resolved, is the artifact `[no-sources]`? The
+  `*libsrc*` buffer has every `mvn` / `gradlew` command and its output.
+- JDK classes (`java.*`) need a one-time `M-x fenrir/libsrc-index-jdk`.
+- Methods and fields are found only inside artifacts already indexed — the
+  class index knows class names only.
 
 ### `M-.` finds nothing for a field
 
@@ -203,6 +215,7 @@ Tier 1 marker at the level you want.
 | Java parser routing | the `java-pygments` label + `pygments-java` block in [`gtags.conf`](../gtags.conf) |
 | Annotation `@` retry for `M-?` | `:around` on `xref-backend-references` in [`init-tags.el`](../lisp/init-tags.el) |
 | Index build / update / diagnose | [`init-tags.el`](../lisp/init-tags.el) — `C-c g g` / `C-c g u` / `C-c g d` |
+| Library sources (jar / JDK) | [`init-libsrc.el`](../lisp/init-libsrc.el) — `C-c g l` sync, `C-c g L` status |
 | JUnit runner | `junit-runner` elisp + `junit-core` module (`cpp/junit-core/`) |
 | `C-c t` key table | `fenrir/junit-bind-keys` |
 

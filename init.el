@@ -186,6 +186,7 @@ only for a throwaway experiment -- it costs a little on every startup.")
         init-ide                ; modern-IDE conveniences (guides, sidebar, REST, ...)
         init-languages          ; shared LSP / tree-sitter / editing infra
         init-tags               ; GNU Global: gtags-mode xref fallback + C-c g
+        init-libsrc             ; Java library sources on GTAGSLIBPATH (extends init-tags)
         ;; Per-language modules (lisp/languages/), loaded AFTER init-languages:
         ;; each attaches its own eglot-ensure hook + eglot-workspace-configuration
         ;; entry onto the shared eglot setup declared above.

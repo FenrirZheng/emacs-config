@@ -1,0 +1,21 @@
+// Gradle init script for lisp/init-libsrc.el: print every resolved jar on
+// compileClasspath + runtimeClasspath, one per line, prefixed so the Emacs side
+// can ignore Gradle's own chatter.  Applied to all projects, so a multi-project
+// build yields the union.  Lenient resolution: one unresolvable dependency
+// must not hide the rest of the classpath.
+//
+//   ./gradlew -q --offline -I classpath.gradle fenrirLibsrcClasspath
+allprojects {
+    tasks.register('fenrirLibsrcClasspath') {
+        def cfgs = ['compileClasspath', 'runtimeClasspath']
+            .collect { project.configurations.findByName(it) }
+            .findAll { it != null }
+        doLast {
+            cfgs.each { c ->
+                c.resolvedConfiguration.lenientConfiguration.files.each { f ->
+                    println "FENRIR-LIBSRC-JAR ${f.absolutePath}"
+                }
+            }
+        }
+    }
+}

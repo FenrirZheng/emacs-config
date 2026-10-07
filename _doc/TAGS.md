@@ -151,6 +151,54 @@ create precisely the nested shadowing index described above.
 roots (`fenrir/gtags-forbidden-roots`) — `project-try-vc` can degenerate to those and a
 gtags walk there is runaway.
 
+## Library sources (fenrir-libsrc)
+
+[`init-libsrc.el`](../lisp/init-libsrc.el) gives Java `M-.` jar and JDK sources with no
+JVM in Emacs, through GNU Global's own library search path: `GTAGSLIBPATH` lists
+directories, each with its own GTAGS, that `global -d` searches.
+
+- **Cache, shared and immutable:** `~/.cache/fenrir-libsrc/lib/<g>/<a>/<v>/` holds one
+  extracted `-sources.jar` plus its GTAGS, built with the same daemon-wide
+  `java-pygments` label. Built in `<v>.tmp/`, contents made read-only, renamed, and
+  only then marked ready with `.ok`. A killed build leaves a `.tmp/` that the next build
+  of that artifact (or `fenrir/libsrc-gc`) deletes. `<v>.no-sources` records an artifact
+  Maven says has no sources jar; a network failure records nothing. JDK trees live under
+  `lib/jdk/jdk/<version>/`.
+- **Classpath, per build root** (the nearest `pom.xml`, or the Gradle settings root):
+  `mvn -o dependency:build-classpath`, or `gradlew` with
+  [`fenrir-libsrc/classpath.gradle`](../lisp/fenrir-libsrc/classpath.gradle); offline
+  first, one online retry. `gradlew` without `+x` runs through `sh`. Cached in
+  `proj/<sha1>.eld`, re-resolved when the build file's mtime moves.
+- **Class index:** `unzip -Z1` over every jar maps simple class name → artifact. That
+  makes indexing lazy: a miss on `GitProperties` names the one jar to fetch. Sources come
+  from `~/.m2`, the Gradle cache, or `mvn dependency:get …:jar:sources` (network).
+- **The hook:** an `:around` on `xref-backend-definitions` for `(head :gtagsroot)`, the
+  same pattern as the annotation retry. Project hits win. On a miss it runs
+  `global -d --path-style=absolute` from inside the first ready tree with the rest on
+  `GTAGSLIBPATH`. A class whose artifact isn't indexed yet is queued (two builds at
+  a time) and `M-.` signals `libsrc: indexing … -- will jump when ready`, then re-runs
+  itself when the build lands if point has not moved. `M-?` is untouched — library hits
+  would flood it. `GTAGSLIBPATH` is let-bound per query, never `setenv`'d: gtags-mode
+  builds result paths as `root + relative`, which a library hit would break.
+- **Library buffers** open read-only and remember the project they were reached from
+  (`fenrir/libsrc-origin`), so `M-.` from Spring code into another artifact still uses
+  the originating classpath. Jumps inside one artifact use its own GTAGS.
+
+Requires a project GTAGS index (`C-c g g`): the hook extends the gtags backend, which
+never claims a buffer outside an indexed tree. Measured 2026-10-07: spring-boot 3.0.4
+sources (699 files) index in ~2 s; classpath + class index for gfc-login-api (131 jars,
+21,622 classes) takes a few seconds.
+
+| Key / command | Does |
+|---|---|
+| `C-c g l` `fenrir/libsrc-sync` | resolve classpath + class index (`C-u` forces) |
+| `C-c g L` `fenrir/libsrc-status` | indexed / pending / no-sources / no-GAV jars, cache size |
+| `fenrir/libsrc-index-jdk` | index `$JAVA_HOME/lib/src.zip` once per JDK version |
+| `fenrir/libsrc-gc` | delete unreferenced trees older than `fenrir/libsrc-gc-days` (60) |
+
+Not done: decompiling jars without sources, type-aware resolution, eager whole-classpath
+indexing.
+
 ## CLI alignment (the `tags-symbol-lookup` skill)
 
 The Claude skill's `gtags.sh` historically wrote the DB into a `./tags/` subdirectory;

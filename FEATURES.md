@@ -584,6 +584,10 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   (`fenrir/gtags-diagnose`) lists every `GTAGS` in the subtree (`[root]`/`[nested]`) and
   offers to delete the nested ones — GNU Global resolves to the *nearest ancestor* index,
   so `backend/GTAGS` silently shadows the root index for everything beneath it.
+  **`C-c g l`** (`fenrir/libsrc-sync`; `C-u` forces) resolves the Java classpath of the
+  current Maven/Gradle build and indexes its class names; **`C-c g L`**
+  (`fenrir/libsrc-status`) lists indexed / no-sources / unparseable jars. Library
+  navigation itself is plain `M-.` — see [_doc/TAGS.md](_doc/TAGS.md#library-sources-fenrir-libsrc).
 - **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
   for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
   Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls

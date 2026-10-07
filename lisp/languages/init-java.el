@@ -25,8 +25,10 @@
 ;;
 ;; What Java therefore does NOT get -- accept these or put jdtls back, there is
 ;; no middle position: type-aware completion, hover javadoc, live diagnostics,
-;; rename/extract refactors, find-implementations, and navigation into JDK or
-;; third-party jar sources.  gtags answers at the NAME level only: `M-.' on an
+;; rename/extract refactors, find-implementations.  Navigation into jar and
+;; JDK sources is back without a server, NAME-level only: `init-libsrc.el'
+;; indexes a dependency's -sources.jar lazily on the first `M-.' miss and puts
+;; it on GTAGSLIBPATH.  gtags answers at the NAME level only: `M-.' on an
 ;; overloaded name offers every same-named definition in the project with no
 ;; type to discriminate them (measured on ~/code/camhr/camhr: `getId' has 75).
 ;;

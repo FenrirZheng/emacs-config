@@ -35,6 +35,7 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-ide` | the cross-cutting modern-IDE layer (below) |
 | `init-languages` | **language-agnostic** infra only (below) |
 | `init-tags` | GNU Global: `gtags-mode` xref fallback, `C-c g` index management, daemon-wide `GTAGSCONF`/`GTAGSLABEL` — see [TAGS.md](TAGS.md) |
+| `init-libsrc` | Java library sources: lazy per-artifact `-sources.jar` indexes on `GTAGSLIBPATH`, an `:around` on the gtags backend's definitions, `C-c g l` / `C-c g L` — see [TAGS.md](TAGS.md#library-sources-fenrir-libsrc) |
 | `init-git` | Magit, diff-hl, magit-todos, delta, difftastic, `smerge-mode` auto-enable, `consult-todo` |
 | `init-terminal` | vterm + `vterm-toggle` (`C-c T`) |
 | `init-docker` | `dockerfile-mode` + `docker.el` container UI (`C-c D`) |
