@@ -51,9 +51,9 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-keys` | the keybinding **routing layer** — required LAST (below) |
 
 Most of these correspond to one section of the pre-split monolith (`git log --oneline`
-for the split commits); `init-ide`, `init-tags`, `init-docker`, `init-diagrams`,
-`init-gui`, `init-aidermacs`, `init-tmux-claude`, `init-alacritty-claude` and `init-keys`
-are later standalone additions.
+for the split commits); `init-ide`, `init-tags`, `init-libsrc`, `init-docker`,
+`init-diagrams`, `init-gui`, `init-aidermacs`, `init-tmux-claude`, `init-alacritty-claude`
+and `init-keys` are later standalone additions.
 
 Local Elisp (not on MELPA), all lazily autoloaded from their owning module:
 [`lisp/claude-jobs-view.el`](../lisp/claude-jobs-view.el) (a `tabulated-list-mode` UI over

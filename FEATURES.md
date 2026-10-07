@@ -588,6 +588,10 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   current Maven/Gradle build and indexes its class names; **`C-c g L`**
   (`fenrir/libsrc-status`) lists indexed / no-sources / unparseable jars. Library
   navigation itself is plain `M-.` — see [_doc/TAGS.md](_doc/TAGS.md#library-sources-fenrir-libsrc).
+  Two `M-x`-only companions: **`fenrir/libsrc-index-jdk`** indexes the JDK's
+  `lib/src.zip` once per JDK version, so `M-.` reaches `java.*` / `javax.*` classes;
+  **`fenrir/libsrc-gc`** deletes library trees no project references that were built
+  more than `fenrir/libsrc-gc-days` (60) ago, plus leftover `.tmp` build directories.
 - **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
   for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
   Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls

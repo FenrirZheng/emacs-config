@@ -86,9 +86,20 @@ Operational how-to (fresh clone, the one-time Eglot upgrade, grammar ABI pinning
 
 ## Build / test / run
 
-Plain Elisp — there is no compile or test command. Reload with `M-x load-file RET init.el`,
+Plain Elisp — there is no compile step. Reload with `M-x load-file RET init.el`,
 or per module once its `require` has run at least once. Details, native compilation and the
 tree-sitter grammar ABI table: [_doc/BOOTSTRAP.md](_doc/BOOTSTRAP.md).
+
+ERT tests for [`init-libsrc`](lisp/init-libsrc.el) live in [`test/`](test/). The suite loads
+only `lisp/`, no package system, and leaves no `.elc`:
+
+```bash
+emacs -Q --batch -l test/libsrc-test.el -f ert-run-tests-batch-and-exit
+```
+
+[`test/libsrc-e2e.el`](test/libsrc-e2e.el) is **opt-in, not part of that suite**: it needs
+network, downloads `-sources.jar`s into the real `~/.m2`, and runs on a scratch project
+copy with its own GTAGS. Its header has the exact invocation.
 
 - **Never leave a `.elc` behind from an ad-hoc `byte-compile-file` syntax check.** A module
   compiled in a bare `emacs -Q --batch` has none of its runtime deps loaded, so macros that
