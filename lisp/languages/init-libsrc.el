@@ -370,18 +370,25 @@ error escaping here would leak it for the rest of the session."
 ;; --- Classpath resolution and class index ------------------------------------
 
 (defun fenrir/libsrc--classpath-command (root offline out-file)
-  "Command resolving ROOT's classpath, or nil.  OUT-FILE is Maven's output."
+  "(COMMAND . PARSER) resolving ROOT's classpath, or nil when no build.
+PARSER takes the process output and returns the jar paths -- the
+Maven/Gradle choice is made here, once.  OUT-FILE is where Maven writes
+the classpath (Gradle prints it instead)."
   (cond
    ((file-exists-p (expand-file-name "pom.xml" root))
-    `("mvn" "-q" "-B" ,@(and offline '("-o")) "dependency:build-classpath"
-      ,(concat "-Dmdep.outputFile=" out-file) "-Dmdep.appendOutput=true"))
+    (cons `("mvn" "-q" "-B" ,@(and offline '("-o")) "dependency:build-classpath"
+            ,(concat "-Dmdep.outputFile=" out-file) "-Dmdep.appendOutput=true")
+          (lambda (_output)
+            (fenrir/libsrc--parse-maven-classpath
+             (with-temp-buffer (insert-file-contents out-file) (buffer-string))))))
    ((let ((gradlew (expand-file-name "gradlew" root)))
       (when (or (file-exists-p gradlew) (executable-find "gradle"))
-        `(,@(cond ((file-executable-p gradlew) '("./gradlew"))
-                  ((file-exists-p gradlew) '("sh" "./gradlew"))   ; checked in without +x
-                  (t '("gradle")))
-          "-q" ,@(and offline '("--offline"))
-          "-I" ,fenrir/libsrc--gradle-script "fenrirLibsrcClasspath"))))))
+        (cons `(,@(cond ((file-executable-p gradlew) '("./gradlew"))
+                        ((file-exists-p gradlew) '("sh" "./gradlew"))   ; checked in without +x
+                        (t '("gradle")))
+                "-q" ,@(and offline '("--offline"))
+                "-I" ,fenrir/libsrc--gradle-script "fenrirLibsrcClasspath")
+              #'fenrir/libsrc--parse-gradle-output))))))
 
 (defun fenrir/libsrc--resolve (root &optional callback)
   "Resolve ROOT's classpath and class index asynchronously.
@@ -429,8 +436,8 @@ chain already finished cannot double-finish."
   "One resolution attempt for ROOT; OFFLINE first, then one online retry.
 STARTED is when the resolution began (becomes `:resolved-at')."
   (let* ((out (make-temp-file "libsrc-cp"))
-         (cmd (fenrir/libsrc--classpath-command root offline out)))
-    (if (not cmd)
+         (cmd+parser (fenrir/libsrc--classpath-command root offline out)))
+    (if (not cmd+parser)
         (progn (delete-file out)
                (fenrir/libsrc--resolve-done root nil)
                (message "libsrc: no Maven/Gradle build in %s" root))
@@ -439,14 +446,9 @@ STARTED is when the resolution began (becomes `:resolved-at')."
       ;; appendOutput: a reactor run appends every module's classpath.
       (with-temp-file out)
       (fenrir/libsrc--run
-       "classpath" cmd root
+       "classpath" (car cmd+parser) root
        (lambda (exit output)
-         (let ((jars (when (eq exit 0)
-                       (if (string= (car cmd) "mvn")
-                           (fenrir/libsrc--parse-maven-classpath
-                            (with-temp-buffer
-                              (insert-file-contents out) (buffer-string)))
-                         (fenrir/libsrc--parse-gradle-output output)))))
+         (let ((jars (when (eq exit 0) (funcall (cdr cmd+parser) output))))
            (delete-file out)
            (cond
             (jars (fenrir/libsrc--index-classes root jars started))

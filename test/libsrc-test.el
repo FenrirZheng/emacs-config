@@ -411,4 +411,26 @@ Returns (STATE . STILL-RESOLVING-P)."
       (should (equal ran '(second)))
       (should (eq (gethash "/r/" fenrir/libsrc--resolving 'none) 'none)))))
 
+;; --- One Maven/Gradle decision: command and parser together -------------------
+
+(ert-deftest libsrc-classpath-command-pairs-parser ()
+  (libsrc-test--with-cache
+    (let* ((mvn-root (file-name-as-directory (expand-file-name "m" fenrir/libsrc-cache-dir)))
+           (gr-root (file-name-as-directory (expand-file-name "g" fenrir/libsrc-cache-dir)))
+           (out (expand-file-name "cp.txt" fenrir/libsrc-cache-dir)))
+      (libsrc-test--touch (expand-file-name "pom.xml" mvn-root))
+      (libsrc-test--touch (expand-file-name "gradlew" gr-root))   ; no +x
+      (let ((m (fenrir/libsrc--classpath-command mvn-root t out)))
+        (should (equal (seq-take (car m) 4) '("mvn" "-q" "-B" "-o")))
+        (with-temp-file out (insert "/r/a-1.jar:/r/b-1.jar"))
+        ;; Maven's parser reads OUT-FILE, ignoring the process output
+        (should (equal (funcall (cdr m) "noise") '("/r/a-1.jar" "/r/b-1.jar"))))
+      (let ((g (fenrir/libsrc--classpath-command gr-root nil out)))
+        (should (equal (seq-take (car g) 3) '("sh" "./gradlew" "-q")))
+        (should-not (member "--offline" (car g)))
+        (should (equal (funcall (cdr g) "chatter\nFENRIR-LIBSRC-JAR /g/a-1.jar\n")
+                       '("/g/a-1.jar"))))
+      (let ((exec-path nil))
+        (should-not (fenrir/libsrc--classpath-command fenrir/libsrc-cache-dir t out))))))
+
 ;;; libsrc-test.el ends here
