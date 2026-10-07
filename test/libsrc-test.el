@@ -24,12 +24,12 @@
 (ert-deftest libsrc-gav-m2 ()
   (should (equal (fenrir/libsrc--jar-gav
                   "/home/u/.m2/repository/org/springframework/boot/spring-boot/3.0.2/spring-boot-3.0.2.jar")
-                 '("org.springframework.boot" "spring-boot" "3.0.2"))))
+                 "org.springframework.boot:spring-boot:3.0.2")))
 
 (ert-deftest libsrc-gav-gradle ()
   (should (equal (fenrir/libsrc--jar-gav
                   "/home/u/.gradle/caches/modules-2/files-2.1/org.springframework.boot/spring-boot/3.2.2/9f274d1bd822c4c57bb5b37ecae2380b980f567/spring-boot-3.2.2.jar")
-                 '("org.springframework.boot" "spring-boot" "3.2.2"))))
+                 "org.springframework.boot:spring-boot:3.2.2")))
 
 (ert-deftest libsrc-gav-unparseable ()
   ;; classifier jar, project build output, random path
@@ -41,7 +41,14 @@
 (ert-deftest libsrc-gav-dir ()
   (let ((fenrir/libsrc-cache-dir "/c/"))
     (should (equal (fenrir/libsrc--gav-dir "org.x:a:1.0") "/c/lib/org.x/a/1.0/"))
-    (should (equal (fenrir/libsrc--gav-dir '("org.x" "a" "1.0")) "/c/lib/org.x/a/1.0/"))))
+    ;; the JDK pseudo-GAV goes through the same path
+    (should (equal (fenrir/libsrc--gav-dir "jdk:jdk:21.0.9") "/c/lib/jdk/jdk/21.0.9/"))))
+
+(ert-deftest libsrc-gav-parts-and-label ()
+  (should (equal (fenrir/libsrc--gav-parts "org.x:a:1.0") '("org.x" "a" "1.0")))
+  (should (equal (fenrir/libsrc--gav-label "org.springframework.boot:spring-boot:3.0.2")
+                 "spring-boot-3.0.2"))
+  (should (equal (fenrir/libsrc--gav-label "jdk:jdk:21.0.9") "jdk-21.0.9")))
 
 ;; --- Class index -----------------------------------------------------------------
 

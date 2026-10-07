@@ -95,32 +95,40 @@ the pure layer loads without gtags-mode.")
 
 ;; --- Pure layer (covered by test/libsrc-test.el) -----------------------------
 
+;; A GAV is always one "group:artifact:version" string -- the class-index
+;; value, the job key, the .no-sources marker name.  The JDK rides along as
+;; the pseudo-GAV "jdk:jdk:<version>".  Split it only via `--gav-parts'.
+
 (defun fenrir/libsrc--jar-gav (jar)
-  "Return (GROUP ARTIFACT VERSION) for binary JAR, or nil.
+  "Return the \"g:a:v\" GAV of binary JAR, or nil.
 Understands ~/.m2 layout (slashed groupId) and the Gradle module cache
 \(dotted groupId, one hash directory).  Classifier jars return nil."
   (cond
    ((string-match "/files-2\\.1/\\([^/]+\\)/\\([^/]+\\)/\\([^/]+\\)/[^/]+/\\2-\\3\\.jar\\'"
                   jar)
-    (list (match-string 1 jar) (match-string 2 jar) (match-string 3 jar)))
+    (string-join (list (match-string 1 jar) (match-string 2 jar) (match-string 3 jar)) ":"))
    ((string-match "/repository/\\(.+\\)/\\([^/]+\\)/\\([^/]+\\)/\\2-\\3\\.jar\\'" jar)
-    (list (string-replace "/" "." (match-string 1 jar))
-          (match-string 2 jar) (match-string 3 jar)))))
+    (string-join (list (string-replace "/" "." (match-string 1 jar))
+                       (match-string 2 jar) (match-string 3 jar))
+                 ":"))))
 
-(defun fenrir/libsrc--gav-string (gav)
-  "GAV list as \"g:a:v\"."
-  (string-join gav ":"))
+(defun fenrir/libsrc--gav-parts (gav)
+  "GAV split into (GROUP ARTIFACT VERSION)."
+  (split-string gav ":"))
+
+(defun fenrir/libsrc--gav-label (gav)
+  "Short user-facing name of GAV: \"artifact-version\"."
+  (string-join (cdr (fenrir/libsrc--gav-parts gav)) "-"))
 
 (defun fenrir/libsrc--lib-dir ()
   "The `lib/' tree holding every built artifact (no trailing slash)."
   (expand-file-name "lib" fenrir/libsrc-cache-dir))
 
 (defun fenrir/libsrc--gav-dir (gav)
-  "Slash-terminated cache tree for GAV (list or \"g:a:v\" string)."
-  (let ((gav (if (stringp gav) (split-string gav ":") gav)))
-    (file-name-as-directory
-     (expand-file-name (string-join gav "/")
-                       (fenrir/libsrc--lib-dir)))))
+  "Slash-terminated cache tree for GAV: lib/<g>/<a>/<v>/."
+  (file-name-as-directory
+   (expand-file-name (string-join (fenrir/libsrc--gav-parts gav) "/")
+                     (fenrir/libsrc--lib-dir))))
 
 (defun fenrir/libsrc--class-entry-name (entry)
   "Simple class name for jar ENTRY (a `unzip -Z1' line), or nil.
@@ -169,11 +177,10 @@ Each jar starts with an `@@<jar>' line followed by its `unzip -Z1' lines."
 Jars with no GAV are skipped -- there is no sources jar to ask for."
   (let ((index (make-hash-table :test #'equal)))
     (pcase-dolist (`(,jar . ,names) listing)
-      (when-let* ((gav (fenrir/libsrc--jar-gav jar)))
-        (let ((g (fenrir/libsrc--gav-string gav)))
-          (dolist (n names)
-            (unless (member g (gethash n index))
-              (puthash n (append (gethash n index) (list g)) index))))))
+      (when-let* ((g (fenrir/libsrc--jar-gav jar)))
+        (dolist (n names)
+          (unless (member g (gethash n index))
+            (puthash n (append (gethash n index) (list g)) index)))))
     index))
 
 (defun fenrir/libsrc--ready-p (dir)
@@ -516,7 +523,7 @@ classes)\" and every library miss silent."
 
 (defun fenrir/libsrc--find-sources-jar (gav)
   "Local -sources.jar for GAV, from ~/.m2 or the Gradle cache, or nil."
-  (pcase-let* ((`(,g ,a ,v) (split-string gav ":"))
+  (pcase-let* ((`(,g ,a ,v) (fenrir/libsrc--gav-parts gav))
                (base (format "%s-%s-sources.jar" a v))
                (m2 (expand-file-name (format "%s/%s/%s/%s" (string-replace "." "/" g) a v base)
                                      fenrir/libsrc-m2-repository)))
@@ -724,7 +731,7 @@ resolution executes the project's build code."
                        (when (and (zerop (cl-decf left)) any-ok)
                          (funcall resume))))))
               (user-error "libsrc: indexing %s for %s -- will jump when ready"
-                          (mapconcat (lambda (g) (string-join (cdr (split-string g ":")) "-"))
+                          (mapconcat #'fenrir/libsrc--gav-label
                                      pending ", ")
                           symbol))
              ;; A `user-error', not `message' + nil: xref would follow a nil
@@ -798,9 +805,7 @@ re-resolves."
             (insert "\nNo classpath yet -- C-c g l resolves it.\n")
           (let* ((jars (plist-get st :jars))
                  (gavs (delete-dups
-                        (delq nil (mapcar (lambda (j) (when-let* ((g (fenrir/libsrc--jar-gav j)))
-                                                        (fenrir/libsrc--gav-string g)))
-                                          jars))))
+                        (delq nil (mapcar #'fenrir/libsrc--jar-gav jars))))
                  (ready (seq-filter #'fenrir/libsrc--gav-ready-p gavs))
                  (nosrc (seq-filter #'fenrir/libsrc--gav-no-sources-p gavs))
                  ;; This root's builds only, not every queued build in the session.
