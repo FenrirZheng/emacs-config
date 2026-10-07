@@ -10,7 +10,7 @@
 ;; directories, each with its own GTAGS, that `global -d' searches.
 ;;
 ;; Moving parts, one per section below (design:
-;; [TAGS.md](../_doc/TAGS.md#library-sources-fenrir-libsrc)):
+;; [TAGS.md](../../_doc/TAGS.md#library-sources-fenrir-libsrc)):
 ;;
 ;;   * Pure layer -- path, listing and output parsing, GTAGSLIBPATH
 ;;     assembly, state files; no processes, so the ERT suite covers it.
@@ -42,6 +42,10 @@
 ;;
 ;; Name-level only, like project gtags: no types, overloads list every
 ;; same-named definition.
+;;
+;; Lives in `lisp/languages/' because it is Java-only, but `init.el' requires
+;; it right after `init-tags' rather than with the other language modules: it
+;; extends the gtags backend, not Eglot, and needs nothing from `init-java'.
 
 ;;; Code:
 

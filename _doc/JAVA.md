@@ -162,7 +162,7 @@ There is no index covering this file. Build one — but check the root first
 
 ### `M-.` finds nothing for a JDK or library class
 
-Library classes go through [`init-libsrc.el`](../lisp/init-libsrc.el)
+Library classes go through [`init-libsrc.el`](../lisp/languages/init-libsrc.el)
 ([TAGS.md](TAGS.md#library-sources-fenrir-libsrc)). Enable them once per
 build root with **`C-c g l`** — resolving the classpath runs the project's own
 `gradlew` / build scripts / Maven plugins, so it never happens unasked. After
@@ -218,7 +218,7 @@ Tier 1 marker at the level you want.
 | Java parser routing | the `java-pygments` label + `pygments-java` block in [`gtags.conf`](../gtags.conf) |
 | Annotation `@` retry for `M-?` | `:around` on `xref-backend-references` in [`init-tags.el`](../lisp/init-tags.el) |
 | Index build / update / diagnose | [`init-tags.el`](../lisp/init-tags.el) — `C-c g g` / `C-c g u` / `C-c g d` |
-| Library sources (jar / JDK) | [`init-libsrc.el`](../lisp/init-libsrc.el) — `C-c g l` sync, `C-c g L` status |
+| Library sources (jar / JDK) | [`init-libsrc.el`](../lisp/languages/init-libsrc.el) — `C-c g l` sync, `C-c g L` status |
 | JUnit runner | `junit-runner` elisp + `junit-core` module (`cpp/junit-core/`) |
 | `C-c t` key table | `fenrir/junit-bind-keys` |
 

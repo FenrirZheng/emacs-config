@@ -35,7 +35,6 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-ide` | the cross-cutting modern-IDE layer (below) |
 | `init-languages` | **language-agnostic** infra only (below) |
 | `init-tags` | GNU Global: `gtags-mode` xref fallback, `C-c g` index management, daemon-wide `GTAGSCONF`/`GTAGSLABEL` — see [TAGS.md](TAGS.md) |
-| `init-libsrc` | Java library sources: lazy per-artifact `-sources.jar` indexes on `GTAGSLIBPATH`, an `:around` on the gtags backend's definitions, `C-c g l` / `C-c g L` — see [TAGS.md](TAGS.md#library-sources-fenrir-libsrc) |
 | `init-git` | Magit, diff-hl, magit-todos, delta, difftastic, `smerge-mode` auto-enable, `consult-todo` |
 | `init-terminal` | vterm + `vterm-toggle` (`C-c T`) |
 | `init-docker` | `dockerfile-mode` + `docker.el` container UI (`C-c D`) |
@@ -51,9 +50,9 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-keys` | the keybinding **routing layer** — required LAST (below) |
 
 Most of these correspond to one section of the pre-split monolith (`git log --oneline`
-for the split commits); `init-ide`, `init-tags`, `init-libsrc`, `init-docker`,
-`init-diagrams`, `init-gui`, `init-aidermacs`, `init-tmux-claude`, `init-alacritty-claude`
-and `init-keys` are later standalone additions.
+for the split commits); `init-ide`, `init-tags`, `init-docker`, `init-diagrams`,
+`init-gui`, `init-aidermacs`, `init-tmux-claude`, `init-alacritty-claude` and `init-keys`
+are later standalone additions.
 
 Local Elisp (not on MELPA), all lazily autoloaded from their owning module:
 [`lisp/claude-jobs-view.el`](../lisp/claude-jobs-view.el) (a `tabulated-list-mode` UI over
@@ -105,6 +104,14 @@ Per-language modules live under [`lisp/languages/`](../lisp/languages/) — `ini
 `pyproject.toml`; format-on-save via apheleia's built-in taplo formatter). They were split
 out of the former monolithic `init-languages.el` so each language is easy to edit in
 isolation.
+
+One file there is not a per-language Eglot module:
+[`init-libsrc`](../lisp/languages/init-libsrc.el) — Java library sources (lazy
+per-artifact `-sources.jar` indexes on `GTAGSLIBPATH`, an `:around` on the gtags backend's
+definitions, `C-c g l` / `C-c g L`; see [TAGS.md](TAGS.md#library-sources-fenrir-libsrc)).
+It lives here because it is Java-only, but `init.el` requires it right after `init-tags`,
+ahead of the per-language block: it extends the gtags backend and needs nothing from
+`init-java`.
 
 **`init-languages` must load before them**: each per-language module attaches its own
 `eglot-ensure` hook (`add-hook`), registers its server's `eglot-workspace-configuration`

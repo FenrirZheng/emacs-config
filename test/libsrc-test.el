@@ -1,4 +1,4 @@
-;;; libsrc-test.el --- ERT for lisp/init-libsrc.el's pure layer -*- lexical-binding: t; -*-
+;;; libsrc-test.el --- ERT for lisp/languages/init-libsrc.el's pure layer -*- lexical-binding: t; -*-
 
 ;; emacs -Q --batch -l test/libsrc-test.el -f ert-run-tests-batch-and-exit
 ;;
@@ -7,7 +7,7 @@
 
 (require 'ert)
 (add-to-list 'load-path
-             (expand-file-name "../lisp" (file-name-directory
+             (expand-file-name "../lisp/languages" (file-name-directory
                                           (or load-file-name buffer-file-name))))
 (require 'init-libsrc)
 

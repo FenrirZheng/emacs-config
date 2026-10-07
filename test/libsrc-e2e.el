@@ -1,4 +1,4 @@
-;;; libsrc-e2e.el --- opt-in end-to-end check for lisp/init-libsrc.el -*- lexical-binding: t; -*-
+;;; libsrc-e2e.el --- opt-in end-to-end check for lisp/languages/init-libsrc.el -*- lexical-binding: t; -*-
 
 ;; NOT part of the ERT suite.  Needs network (Maven downloads -sources.jars
 ;; into the REAL ~/.m2) and a project copy that already has a GTAGS index --
@@ -24,6 +24,7 @@
 (setq package-user-dir (expand-file-name "~/.emacs.d/elpa/"))
 (package-initialize)
 (add-to-list 'load-path (expand-file-name "~/.emacs.d/lisp"))
+(add-to-list 'load-path (expand-file-name "~/.emacs.d/lisp/languages"))
 (require 'use-package)
 (require 'init-tags)
 (require 'init-libsrc)

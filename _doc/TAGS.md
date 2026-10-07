@@ -153,7 +153,7 @@ gtags walk there is runaway.
 
 ## Library sources (fenrir-libsrc)
 
-[`init-libsrc.el`](../lisp/init-libsrc.el) gives Java `M-.` jar and JDK sources with no
+[`init-libsrc.el`](../lisp/languages/init-libsrc.el) gives Java `M-.` jar and JDK sources with no
 JVM in Emacs, through GNU Global's own library search path: `GTAGSLIBPATH` lists
 directories, each with its own GTAGS, that `global -d` searches.
 
@@ -166,7 +166,7 @@ directories, each with its own GTAGS, that `global -d` searches.
   `lib/jdk/jdk/<version>/`.
 - **Classpath, per build root** (the nearest `pom.xml`, or the Gradle settings root):
   `mvn -o dependency:build-classpath`, or `gradlew` with
-  [`fenrir-libsrc/classpath.gradle`](../lisp/fenrir-libsrc/classpath.gradle); offline
+  [`fenrir-libsrc/classpath.gradle`](../lisp/languages/fenrir-libsrc/classpath.gradle); offline
   first, one online retry. `gradlew` without `+x` runs through `sh`. Cached in
   `proj/<sha1>.eld`, re-resolved when any build file changes after the resolution
   started: every `pom.xml` / `build.gradle(.kts)` / `settings.gradle(.kts)` /

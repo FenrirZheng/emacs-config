@@ -1,4 +1,4 @@
-// Gradle init script for lisp/init-libsrc.el: print every resolved jar on
+// Gradle init script for lisp/languages/init-libsrc.el: print every resolved jar on
 // compileClasspath + runtimeClasspath, one per line, prefixed so the Emacs side
 // can ignore Gradle's own chatter.  Applied to all projects, so a multi-project
 // build yields the union.  Lenient resolution: one unresolvable dependency
