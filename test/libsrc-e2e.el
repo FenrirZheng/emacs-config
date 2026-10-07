@@ -5,9 +5,13 @@
 ;; run it on a scratch copy so no GTAGS lands in the real repo:
 ;;
 ;;   rsync -a --exclude target --exclude build --exclude .git <project> $TMP/
-;;   (cd $TMP/<project> && GTAGSCONF=~/.emacs.d/gtags.conf GTAGSLABEL=java-pygments gtags)
+;;   (cd $TMP/<project> && GTAGSCONF=<this repo>/gtags.conf GTAGSLABEL=java-pygments gtags)
 ;;   LIBSRC_CACHE=$TMP/cache/ JAVA_FILE=$TMP/<project>/src/.../GitInfoLogger.java \
 ;;     emacs -Q --batch -l test/libsrc-e2e.el
+;;
+;; Paths -- lisp/, elpa/, gtags.conf, the tree-sitter grammars -- resolve from
+;; the repo this file lives in, so a checkout outside ~/.emacs.d tests itself;
+;; it then needs its own (gitignored) elpa/ and tree-sitter/.
 ;;
 ;; LIBSRC_CACHE keeps the real ~/.cache/fenrir-libsrc untouched.  Prints each
 ;; step; a working run shows: 0th = "library sources are off" user-error
@@ -21,10 +25,17 @@
 ;; 21,622 classes, spring-boot 3.0.2) and repos/lottery/kjw-web (Gradle via
 ;; `sh ./gradlew', 103 jars, 35,212 classes, spring-boot 3.2.2).
 
-(setq package-user-dir (expand-file-name "~/.emacs.d/elpa/"))
+(defconst libsrc-e2e--repo
+  (file-name-as-directory
+   (expand-file-name ".." (file-name-directory (or load-file-name buffer-file-name))))
+  "The config repo this harness lives in -- not necessarily ~/.emacs.d.")
+
+;; `user-emacs-directory' too: init-tags.el finds gtags.conf through it.
+(setq user-emacs-directory libsrc-e2e--repo
+      package-user-dir (expand-file-name "elpa/" libsrc-e2e--repo))
 (package-initialize)
-(add-to-list 'load-path (expand-file-name "~/.emacs.d/lisp"))
-(add-to-list 'load-path (expand-file-name "~/.emacs.d/lisp/languages"))
+(add-to-list 'load-path (expand-file-name "lisp" libsrc-e2e--repo))
+(add-to-list 'load-path (expand-file-name "lisp/languages" libsrc-e2e--repo))
 (require 'use-package)
 (require 'init-tags)
 (require 'init-libsrc)
