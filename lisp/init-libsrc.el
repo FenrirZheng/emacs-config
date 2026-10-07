@@ -274,25 +274,34 @@ Gradle settings root (the init script unions every subproject)."
       (goto-char (point-max))
       (insert (format-time-string "%T ") (apply #'format fmt args) "\n"))))
 
-(defun fenrir/libsrc--run (name command dir callback)
-  "Run COMMAND asynchronously in DIR; call CALLBACK with (EXIT OUTPUT)."
+(defun fenrir/libsrc--run (name command dir callback on-error)
+  "Run COMMAND asynchronously in DIR; call CALLBACK with (EXIT OUTPUT).
+ON-ERROR gets a message string when the process cannot start (e.g. the
+program is not on the daemon's `exec-path') or CALLBACK signals: every
+caller is mid-chain with a slot or a resolving entry to release, and an
+error escaping here would leak it for the rest of the session."
   (let* ((default-directory dir)
          (buf (generate-new-buffer (format " *libsrc-%s*" name))))
     (fenrir/libsrc--log "$ (cd %s && %s)" (abbreviate-file-name dir)
                         (mapconcat #'shell-quote-argument command " "))
-    (make-process
-     :name (concat "libsrc-" name) :buffer buf :command command
-     :connection-type 'pipe :noquery t
-     :sentinel
-     (lambda (proc _event)
-       (unless (process-live-p proc)
-         (let ((out (with-current-buffer buf (buffer-string)))
-               (exit (process-exit-status proc)))
-           (kill-buffer buf)
-           (unless (eq exit 0)
-             (fenrir/libsrc--log "exit %s: %s" exit
-                                 (string-trim (truncate-string-to-width out 2000))))
-           (funcall callback exit out)))))))
+    (condition-case err
+        (make-process
+         :name (concat "libsrc-" name) :buffer buf :command command
+         :connection-type 'pipe :noquery t
+         :sentinel
+         (lambda (proc _event)
+           (unless (process-live-p proc)
+             (let ((out (with-current-buffer buf (buffer-string)))
+                   (exit (process-exit-status proc)))
+               (kill-buffer buf)
+               (unless (eq exit 0)
+                 (fenrir/libsrc--log "exit %s: %s" exit
+                                     (string-trim (truncate-string-to-width out 2000))))
+               (condition-case err (funcall callback exit out)
+                 (error (funcall on-error (error-message-string err))))))))
+      (error
+       (kill-buffer buf)
+       (funcall on-error (error-message-string err))))))
 
 ;; --- 1+2. Classpath resolution and class index --------------------------------
 
@@ -317,13 +326,24 @@ CALLBACK, if given, runs with no arguments after success."
     (if (not (eq waiting 'none))
         (when callback (puthash root (cons callback waiting) fenrir/libsrc--resolving))
       (puthash root (and callback (list callback)) fenrir/libsrc--resolving)
-      (fenrir/libsrc--resolve-attempt root t))))
+      (condition-case err (fenrir/libsrc--resolve-attempt root t)
+        (error (fenrir/libsrc--resolve-fail root (error-message-string err)))))))
 
 (defun fenrir/libsrc--resolve-done (root ok)
-  "Finish ROOT's resolution; run waiting callbacks when OK."
-  (let ((cbs (gethash root fenrir/libsrc--resolving)))
-    (remhash root fenrir/libsrc--resolving)
-    (when ok (mapc (lambda (f) (ignore-errors (funcall f))) (reverse cbs)))))
+  "Finish ROOT's resolution; run waiting callbacks when OK.
+A no-op when ROOT is not resolving, so a failure path reached after the
+chain already finished cannot double-finish."
+  (let ((cbs (gethash root fenrir/libsrc--resolving 'none)))
+    (unless (eq cbs 'none)
+      (remhash root fenrir/libsrc--resolving)
+      (when ok (mapc (lambda (f) (ignore-errors (funcall f))) (reverse cbs))))))
+
+(defun fenrir/libsrc--resolve-fail (root msg)
+  "Abort ROOT's resolution after an error MSG, releasing its resolving entry."
+  (fenrir/libsrc--log "%s: resolution aborted -- %s" root msg)
+  (fenrir/libsrc--resolve-done root nil)
+  (message "libsrc: classpath resolution failed for %s: %s"
+           (abbreviate-file-name root) msg))
 
 (defun fenrir/libsrc--resolve-attempt (root offline)
   "One resolution attempt for ROOT; OFFLINE first, then one online retry."
@@ -352,7 +372,9 @@ CALLBACK, if given, runs with no arguments after success."
             (offline (fenrir/libsrc--resolve-attempt root nil))
             (t (fenrir/libsrc--resolve-done root nil)
                (message "libsrc: classpath resolution failed for %s -- see *libsrc*"
-                        (abbreviate-file-name root))))))))))
+                        (abbreviate-file-name root))))))
+       (lambda (msg) (ignore-errors (delete-file out))
+         (fenrir/libsrc--resolve-fail root msg))))))
 
 (defun fenrir/libsrc--index-classes (root jars)
   "List JARS in one async process, then store ROOT's class index."
@@ -372,7 +394,8 @@ CALLBACK, if given, runs with no arguments after success."
         :class-index index)
        (message "libsrc: %d jars, %d classes indexed for %s"
                 (length jars) (hash-table-count index) (abbreviate-file-name root))
-       (fenrir/libsrc--resolve-done root t)))))
+       (fenrir/libsrc--resolve-done root t)))
+   (lambda (msg) (fenrir/libsrc--resolve-fail root msg))))
 
 ;; --- 3. Fetch, extract and index one artifact ---------------------------------
 
@@ -420,18 +443,27 @@ CALLBACK, if given, runs with no arguments after success."
   "Start queued builds while slots are free."
   (while (and fenrir/libsrc--queue (< fenrir/libsrc--running fenrir/libsrc-max-jobs))
     (cl-incf fenrir/libsrc--running)
-    (fenrir/libsrc--build (pop fenrir/libsrc--queue))))
+    (let ((gav (pop fenrir/libsrc--queue)))
+      (condition-case err (fenrir/libsrc--build gav)
+        (error (fenrir/libsrc--finish gav 'error (error-message-string err)))))))
 
 (defun fenrir/libsrc--finish (gav result &optional detail)
-  "End GAV's build with RESULT; DETAIL goes to the log."
-  (cl-decf fenrir/libsrc--running)
-  (fenrir/libsrc--log "%s: %s%s" gav result (if detail (concat " -- " detail) ""))
-  (let ((cbs (gethash gav fenrir/libsrc--jobs)))
-    (remhash gav fenrir/libsrc--jobs)
-    (dolist (f (reverse cbs))
-      (condition-case err (funcall f result)
-        (error (message "libsrc: %s" (error-message-string err))))))
-  (fenrir/libsrc--pump))
+  "End GAV's build with RESULT; DETAIL goes to the log.
+A no-op when GAV is not building, so an error raised after a step already
+finished cannot release its slot twice."
+  (let ((cbs (gethash gav fenrir/libsrc--jobs 'none)))
+    (unless (eq cbs 'none)
+      (cl-decf fenrir/libsrc--running)
+      (remhash gav fenrir/libsrc--jobs)
+      (fenrir/libsrc--log "%s: %s%s" gav result (if detail (concat " -- " detail) ""))
+      (dolist (f (reverse cbs))
+        (condition-case err (funcall f result)
+          (error (message "libsrc: %s" (error-message-string err)))))
+      (fenrir/libsrc--pump))))
+
+(defun fenrir/libsrc--build-error (gav)
+  "ON-ERROR handler for GAV's build steps: end the build as `error'."
+  (lambda (msg) (fenrir/libsrc--finish gav 'error msg)))
 
 (defun fenrir/libsrc--build (gav)
   "Locate (or download) GAV's sources jar, then extract and index it."
@@ -457,7 +489,8 @@ CALLBACK, if given, runs with no arguments after success."
                                 (fenrir/libsrc--no-sources-file gav)) t)
                (with-temp-file (fenrir/libsrc--no-sources-file gav))
                (fenrir/libsrc--finish gav 'no-sources))
-              (t (fenrir/libsrc--finish gav 'error "sources download failed"))))))))))
+              (t (fenrir/libsrc--finish gav 'error "sources download failed")))))
+         (fenrir/libsrc--build-error gav))))))
 
 (defun fenrir/libsrc--extract (gav src)
   "Unzip SRC for GAV into `<v>.tmp', run gtags there, then publish it."
@@ -487,7 +520,9 @@ CALLBACK, if given, runs with no arguments after success."
                             "-mindepth" "1" "-exec" "chmod" "a-w" "{}" "+")
               (rename-file (directory-file-name tmp) (directory-file-name final))
               (with-temp-file (expand-file-name ".ok" final))
-              (fenrir/libsrc--finish gav 'ok)))))))))
+              (fenrir/libsrc--finish gav 'ok)))
+          (fenrir/libsrc--build-error gav))))
+     (fenrir/libsrc--build-error gav))))
 
 ;; --- 4. The M-. hook -------------------------------------------------------------
 
@@ -576,14 +611,18 @@ resolution executes the project's build code."
                           gavs)))
             (cond
              (pending
-              (let ((left (length pending)))
+              ;; Re-jump only when something got indexed: after a failure
+              ;; the re-run would find the GAV still pending, queue it again,
+              ;; fail again -- a loop for as long as point stays put.
+              (let ((left (length pending)) (any-ok nil))
                 (dolist (g pending)
                   (fenrir/libsrc-ensure
                    g (lambda (result)
                        (if (eq result 'ok)
-                           (fenrir/libsrc--add-libpath root (fenrir/libsrc--gav-dir g))
+                           (progn (setq any-ok t)
+                                  (fenrir/libsrc--add-libpath root (fenrir/libsrc--gav-dir g)))
                          (message "libsrc: %s -- %s (see *libsrc*)" g result))
-                       (when (zerop (cl-decf left))
+                       (when (and (zerop (cl-decf left)) any-ok)
                          (funcall resume))))))
               (user-error "libsrc: indexing %s for %s -- will jump when ready"
                           (mapconcat (lambda (g) (string-join (cdr (split-string g ":")) "-"))

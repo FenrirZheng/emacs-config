@@ -183,4 +183,93 @@
         (should-not (fenrir/libsrc-definitions "GitProperties"))
         (should-not resolved)))))
 
+;; --- Failures release what they hold ------------------------------------------
+;; A step that cannot start (program missing from the daemon's exec-path) or
+;; a callback that signals must not leave a resolving entry or a build slot
+;; behind -- otherwise every later lookup waits forever.
+
+(defmacro libsrc-test--with-queue (&rest body)
+  "Run BODY with fresh build-queue and resolution state."
+  (declare (indent 0))
+  `(let ((fenrir/libsrc--jobs (make-hash-table :test #'equal))
+         (fenrir/libsrc--resolving (make-hash-table :test #'equal))
+         (fenrir/libsrc--queue nil)
+         (fenrir/libsrc--running 0)
+         (inhibit-message t))
+     ,@body))
+
+(ert-deftest libsrc-resolve-missing-program-releases-entry ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+            (exec-path nil))                ; mvn cannot be found
+        (make-directory proj t)
+        (with-temp-file (expand-file-name "pom.xml" proj))
+        (fenrir/libsrc--resolve proj)       ; must not signal
+        (should (zerop (hash-table-count fenrir/libsrc--resolving)))))))
+
+(ert-deftest libsrc-build-missing-program-releases-slot ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let ((exec-path nil) (got nil))      ; no local sources jar -> mvn fetch
+        (cl-letf (((symbol-function 'fenrir/libsrc--find-sources-jar) #'ignore))
+          (fenrir/libsrc-ensure "g:a:1" (lambda (r) (push r got))))
+        (should (equal got '(error)))
+        (should (zerop fenrir/libsrc--running))
+        (should (zerop (hash-table-count fenrir/libsrc--jobs)))))))
+
+(ert-deftest libsrc-build-sync-error-releases-slot-and-pumps ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let ((fenrir/libsrc-max-jobs 1) (got nil))
+        (cl-letf (((symbol-function 'fenrir/libsrc--find-sources-jar) (lambda (_) "/x.jar"))
+                  ((symbol-function 'fenrir/libsrc--extract)
+                   (lambda (&rest _) (error "Disk full"))))
+          ;; With one slot, the second build only starts if the first released it.
+          (fenrir/libsrc-ensure "g:a:1" (lambda (r) (push (cons "a" r) got)))
+          (fenrir/libsrc-ensure "g:b:1" (lambda (r) (push (cons "b" r) got))))
+        (should (equal (reverse got) '(("a" . error) ("b" . error))))
+        (should (zerop fenrir/libsrc--running))
+        (should-not fenrir/libsrc--queue)))))
+
+(ert-deftest libsrc-run-callback-error-goes-to-on-error ()
+  (let ((msg nil) (inhibit-message t))
+    (fenrir/libsrc--run "t" '("true") temporary-file-directory
+                        (lambda (&rest _) (error "Boom"))
+                        (lambda (m) (setq msg m)))
+    (let ((end (+ (float-time) 10)))
+      (while (and (not msg) (< (float-time) end))
+        (accept-process-output nil 0.1)))
+    (should (equal msg "Boom"))))
+
+;; --- Re-jump only after a successful build ---------------------------------------
+;; A failed build used to re-run M-., which re-queued the still-pending GAV,
+;; failed again, and looped for as long as point stayed put.
+
+(defun libsrc-test--definitions-with-result (result)
+  "Run a lazy-path miss whose build ends with RESULT; return re-jump count."
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+             (default-directory proj)
+             (index (make-hash-table :test #'equal))
+             (rejumps 0))
+        (make-directory proj t)
+        (with-temp-file (expand-file-name "pom.xml" proj))
+        (puthash "GitProperties" '("org.x:a:1") index)
+        (fenrir/libsrc--state-update proj :class-index index :classpath-mtime (float-time))
+        (cl-letf (((symbol-function 'fenrir/libsrc-ensure)
+                   (lambda (_gav cb) (funcall cb result)))   ; build "finishes" at once
+                  ((symbol-function 'fenrir/libsrc--rejump)
+                   (lambda (&rest _) (cl-incf rejumps))))
+          (should-error (fenrir/libsrc-definitions "GitProperties") :type 'user-error))
+        rejumps))))
+
+(ert-deftest libsrc-no-rejump-after-failed-build ()
+  (should (= 0 (libsrc-test--definitions-with-result 'error)))
+  (should (= 0 (libsrc-test--definitions-with-result 'no-sources))))
+
+(ert-deftest libsrc-rejump-after-successful-build ()
+  (should (= 1 (libsrc-test--definitions-with-result 'ok))))
+
 ;;; libsrc-test.el ends here
