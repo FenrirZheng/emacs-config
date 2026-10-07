@@ -1,4 +1,4 @@
-;;; libsrc-e2e.el --- opt-in end-to-end check for lisp/languages/init-libsrc.el -*- lexical-binding: t; -*-
+;;; libsrc-e2e.el --- opt-in end-to-end check for libsrc (init-libsrc + fenrir-libsrc) -*- lexical-binding: t; -*-
 
 ;; NOT part of the ERT suite.  Needs network (Maven downloads -sources.jars
 ;; into the REAL ~/.m2) and a project copy that already has a GTAGS index --

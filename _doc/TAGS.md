@@ -153,7 +153,8 @@ gtags walk there is runaway.
 
 ## Library sources (fenrir-libsrc)
 
-[`init-libsrc.el`](../lisp/languages/init-libsrc.el) gives Java `M-.` jar and JDK sources with no
+[`init-libsrc.el`](../lisp/languages/init-libsrc.el) (wiring: the `:around`, buffer hooks, keys) and its
+engine [`fenrir-libsrc.el`](../lisp/languages/fenrir-libsrc.el) give Java `M-.` jar and JDK sources with no
 JVM in Emacs, through GNU Global's own library search path: `GTAGSLIBPATH` lists
 directories, each with its own GTAGS, that `global -d` searches.
 

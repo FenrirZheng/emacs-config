@@ -90,7 +90,7 @@ Plain Elisp — there is no compile step. Reload with `M-x load-file RET init.el
 or per module once its `require` has run at least once. Details, native compilation and the
 tree-sitter grammar ABI table: [_doc/BOOTSTRAP.md](_doc/BOOTSTRAP.md).
 
-ERT tests for [`init-libsrc`](lisp/languages/init-libsrc.el) live in [`test/`](test/). The suite loads
+ERT tests for the libsrc engine, [`fenrir-libsrc`](lisp/languages/fenrir-libsrc.el), live in [`test/`](test/). The suite loads
 only `lisp/`, no package system, and leaves no `.elc`:
 
 ```bash

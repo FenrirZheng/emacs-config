@@ -61,7 +61,10 @@ the external `jobctl` CLI, `M-x claude-jobs-view`),
 module), [`lisp/question-queue.el`](../lisp/question-queue.el) (front-end for the
 `question-queue-core` Rust module),
 [`lisp/fenrir-back-forward.el`](../lisp/fenrir-back-forward.el) (the merged jump history
-behind `<f6>` / `<f7>`, `require`d by `init-keys`).
+behind `<f6>` / `<f7>`, `require`d by `init-keys`),
+[`lisp/languages/fenrir-libsrc.el`](../lisp/languages/fenrir-libsrc.el) (the Java
+library-source engine, `require`d by `init-libsrc`, which holds only its xref `:around`,
+buffer hooks and keys).
 
 ## `init-ide.el` — the modern-IDE layer
 

@@ -1,15 +1,15 @@
-;;; libsrc-test.el --- ERT for lisp/languages/init-libsrc.el's pure layer -*- lexical-binding: t; -*-
+;;; libsrc-test.el --- ERT for the libsrc engine, lisp/languages/fenrir-libsrc.el -*- lexical-binding: t; -*-
 
 ;; emacs -Q --batch -l test/libsrc-test.el -f ert-run-tests-batch-and-exit
 ;;
-;; Loads only init-libsrc (no package system, no gtags-mode): the `:around'
-;; method is registered `with-eval-after-load', so it stays dormant here.
+;; Loads only the engine, fenrir-libsrc (no package system, no gtags-mode,
+;; no init-libsrc): no xref method, hook or key is registered here.
 
 (require 'ert)
 (add-to-list 'load-path
              (expand-file-name "../lisp/languages" (file-name-directory
                                           (or load-file-name buffer-file-name))))
-(require 'init-libsrc)
+(require 'fenrir-libsrc)
 
 (defmacro libsrc-test--with-cache (&rest body)
   "Run BODY with `fenrir/libsrc-cache-dir' bound to a fresh temp dir."
@@ -439,5 +439,14 @@ Returns (STATE . STILL-RESOLVING-P)."
                        '("/g/a-1.jar"))))
       (let ((exec-path nil))
         (should-not (fenrir/libsrc--classpath-command fenrir/libsrc-cache-dir t out))))))
+
+;; --- The engine has no load-time side effects -----------------------------------
+;; All registration lives in init-libsrc.el; requiring the engine alone (as
+;; this suite does) must leave the global hooks untouched.
+
+(ert-deftest libsrc-engine-registers-nothing ()
+  (should-not (memq #'fenrir/libsrc--find-file-hook find-file-hook))
+  (should-not (memq #'fenrir/libsrc--after-jump xref-after-jump-hook))
+  (should-not (featurep 'init-libsrc)))
 
 ;;; libsrc-test.el ends here
