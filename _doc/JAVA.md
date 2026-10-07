@@ -163,12 +163,15 @@ There is no index covering this file. Build one — but check the root first
 ### `M-.` finds nothing for a JDK or library class
 
 Library classes go through [`init-libsrc.el`](../lisp/init-libsrc.el)
-([TAGS.md](TAGS.md#library-sources-fenrir-libsrc)). The first `M-.` on a
-library class resolves the classpath and/or indexes that artifact's
+([TAGS.md](TAGS.md#library-sources-fenrir-libsrc)). Enable them once per
+build root with **`C-c g l`** — resolving the classpath runs the project's own
+`gradlew` / build scripts / Maven plugins, so it never happens unasked. After
+that, the first `M-.` on a library class indexes that artifact's
 `-sources.jar` and says so (`libsrc: indexing spring-boot-3.0.2 for
 GitProperties -- will jump when ready`); it then jumps by itself if point has
 not moved. Still nothing? Check, in order:
 
+- `library sources are off for <root>` — run `C-c g l` there (see above).
 - The **project has a GTAGS index** (`C-c g g`). The hook rides on the gtags
   backend, so a project without an index never reaches it.
 - `C-c g L` — is the classpath resolved, is the artifact `[no-sources]`? The

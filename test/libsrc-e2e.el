@@ -10,8 +10,9 @@
 ;;     emacs -Q --batch -l test/libsrc-e2e.el
 ;;
 ;; LIBSRC_CACHE keeps the real ~/.cache/fenrir-libsrc untouched.  Prints each
-;; step; a working run shows: 1st = "resolving classpath" user-error, 2nd =
-;; "indexing <artifact>" user-error, 3rd = absolute paths into the cache,
+;; step; a working run shows: 0th = "library sources are off" user-error
+;; (no auto-resolve in an unsynced root), then after `fenrir/libsrc-sync':
+;; 1st/2nd = "indexing <artifact>" user-error, 3rd = absolute paths into the cache,
 ;; a read-only library buffer with its origin set, a same-artifact hit, and a
 ;; cross-artifact class (spring-core's RuntimeHints) indexed via the origin.
 ;;
@@ -50,6 +51,11 @@
 (find-file (getenv "JAVA_FILE"))
 (java-ts-mode)
 (message "backend=%S" (car-safe (xref-find-backend)))
+(message "0th (unsynced): %S" (libsrc-e2e--defs "GitProperties"))
+(message "0th started a resolution? %S"
+         (> (hash-table-count fenrir/libsrc--resolving) 0))
+(fenrir/libsrc-sync)
+(libsrc-e2e--drain)
 (message "1st: %S" (libsrc-e2e--defs "GitProperties"))
 (libsrc-e2e--drain)
 (message "2nd: %S" (libsrc-e2e--defs "GitProperties"))

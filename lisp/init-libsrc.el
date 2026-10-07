@@ -14,7 +14,9 @@
 ;;   1. Classpath, per build root, cached in `proj/<sha1>.eld':
 ;;      Maven `mvn -o dependency:build-classpath', Gradle via the bundled
 ;;      [init script](fenrir-libsrc/classpath.gradle).  Offline first, one
-;;      online retry.
+;;      online retry.  Both execute the project's own build code, so a root
+;;      is first resolved only by an explicit `C-c g l'; after that, a
+;;      changed build file re-resolves it automatically.
 ;;   2. Class index: `unzip -Z1' over every binary jar maps a simple class
 ;;      name to the artifact(s) defining it.  This is what makes indexing
 ;;      lazy -- a miss on `GitProperties' names the one jar to fetch.
@@ -536,7 +538,9 @@ CALLBACK, if given, runs with no arguments after success."
 Ready trees answer directly.  A class whose artifact is not indexed yet is
 queued and this signals a `user-error' (so the message is what the user
 sees); when the build lands, `M-.' re-runs itself if point has not moved.
-A symbol outside the class index (a method, a field) is a plain miss."
+A symbol outside the class index (a method, a field) is a plain miss.
+Only a root already synced with `fenrir/libsrc-sync' is ever resolved:
+resolution executes the project's build code."
   (when-let* ((root (fenrir/libsrc--origin-root)))
     (let* ((st (fenrir/libsrc--state root))
            (gavs (and st (gethash symbol (plist-get st :class-index))))
@@ -557,10 +561,15 @@ A symbol outside the class index (a method, a field) is a plain miss."
             (setq fenrir/libsrc--last-origin root)
             hits)
         (if (null st)
-            (progn
-              (fenrir/libsrc--resolve root resume)
-              (user-error "libsrc: resolving classpath for %s -- will jump when ready"
-                          (abbreviate-file-name root)))
+            ;; Never resolve on our own in a root the user has not synced:
+            ;; resolving runs the project's own gradlew / build scripts /
+            ;; Maven plugins, i.e. the repo's code.  `C-c g l' is the opt-in;
+            ;; once it has run, the state file marks the root as trusted and
+            ;; later refreshes (the stale-mtime one above) are automatic.
+            (user-error "No definitions for %s; library sources are off for %s -- \
+%s runs its build tool once to enable them"
+                        symbol (abbreviate-file-name root)
+                        (substitute-command-keys "\\[fenrir/libsrc-sync]"))
           (let ((pending (seq-remove
                           (lambda (g) (or (fenrir/libsrc--ready-p (fenrir/libsrc--gav-dir g))
                                           (funcall no-src-p g)))

@@ -160,4 +160,27 @@
       (with-temp-file (expand-file-name "pom.xml" mod))
       (should (equal (fenrir/libsrc--build-root src) mod)))))
 
+;; --- Opt-in: never resolve an unsynced root -------------------------------------
+;; Resolving runs the project's own gradlew / build scripts, so a miss in a
+;; root without state must refuse rather than start a resolution.
+
+(ert-deftest libsrc-unsynced-root-does-not-resolve ()
+  (libsrc-test--with-cache
+    (let* ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+           (default-directory proj)
+           (resolved nil))
+      (make-directory proj t)
+      (with-temp-file (expand-file-name "pom.xml" proj))
+      (cl-letf (((symbol-function 'fenrir/libsrc--resolve)
+                 (lambda (&rest args) (push args resolved))))
+        (let ((err (should-error (fenrir/libsrc-definitions "GitProperties")
+                                 :type 'user-error)))
+          (should (string-match-p "library sources are off" (cadr err))))
+        (should-not resolved)
+        ;; Once synced (state exists), the same miss no longer refuses.
+        (fenrir/libsrc--state-update proj :class-index (make-hash-table :test #'equal)
+                                     :classpath-mtime (float-time))
+        (should-not (fenrir/libsrc-definitions "GitProperties"))
+        (should-not resolved)))))
+
 ;;; libsrc-test.el ends here

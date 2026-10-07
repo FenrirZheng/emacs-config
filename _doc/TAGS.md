@@ -169,6 +169,13 @@ directories, each with its own GTAGS, that `global -d` searches.
   [`fenrir-libsrc/classpath.gradle`](../lisp/fenrir-libsrc/classpath.gradle); offline
   first, one online retry. `gradlew` without `+x` runs through `sh`. Cached in
   `proj/<sha1>.eld`, re-resolved when the build file's mtime moves.
+- **Opt-in per build root.** Resolving runs the project's own code — its
+  `gradlew`, `build.gradle(.kts)`, Maven plugins — so it never starts on its own in a
+  root you haven't synced. The first resolution is always an explicit **`C-c g l`**;
+  until then a library miss says `library sources are off for <root> -- C-c g l …`.
+  The `proj/*.eld` state file is the trust record: once it exists, a changed build
+  file re-resolves automatically. Delete it to revoke. Fetching sources jars
+  (`mvn dependency:get`) runs in the cache directory and never touches project code.
 - **Class index:** `unzip -Z1` over every jar maps simple class name → artifact. That
   makes indexing lazy: a miss on `GitProperties` names the one jar to fetch. Sources come
   from `~/.m2`, the Gradle cache, or `mvn dependency:get …:jar:sources` (network).
@@ -184,7 +191,7 @@ directories, each with its own GTAGS, that `global -d` searches.
   (`fenrir/libsrc-origin`), so `M-.` from Spring code into another artifact still uses
   the originating classpath. Jumps inside one artifact use its own GTAGS.
 
-Requires a project GTAGS index (`C-c g g`): the hook extends the gtags backend, which
+Requires a project GTAGS index (`C-c g g`) and one `C-c g l` per build root: the hook extends the gtags backend, which
 never claims a buffer outside an indexed tree. Measured 2026-10-07: spring-boot 3.0.4
 sources (699 files) index in ~2 s; classpath + class index for gfc-login-api (131 jars,
 21,622 classes) takes a few seconds.
