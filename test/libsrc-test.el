@@ -395,4 +395,20 @@ Returns (STATE . STILL-RESOLVING-P)."
         (let ((err (should-error (fenrir/libsrc-definitions "Closed") :type 'user-error)))
           (should (string-match-p "no sources published for org.x:closed:1" (cadr err))))))))
 
+;; --- Callback errors are reported, not swallowed ---------------------------------
+
+(ert-deftest libsrc-resolve-done-reports-callback-errors ()
+  (libsrc-test--with-queue
+    (let ((msgs nil) (ran nil))
+      ;; Registration order: the failing callback first, then one that must still run.
+      (puthash "/r/" (list (lambda () (push 'second ran))
+                           (lambda () (error "Rejump broke")))
+               fenrir/libsrc--resolving)
+      (cl-letf (((symbol-function 'message)
+                 (lambda (fmt &rest args) (push (apply #'format fmt args) msgs))))
+        (fenrir/libsrc--resolve-done "/r/" t))
+      (should (member "libsrc: Rejump broke" msgs))
+      (should (equal ran '(second)))
+      (should (eq (gethash "/r/" fenrir/libsrc--resolving 'none) 'none)))))
+
 ;;; libsrc-test.el ends here

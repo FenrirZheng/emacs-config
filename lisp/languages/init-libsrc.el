@@ -403,13 +403,20 @@ finish the same resolution or build twice."
       (remhash key table)
       (reverse cbs))))
 
+(defun fenrir/libsrc--call-each (cbs &rest args)
+  "Call each of CBS with ARGS; report an error via `message' and go on.
+One failing callback must neither hide the reason nor stop the rest."
+  (dolist (f cbs)
+    (condition-case err (apply f args)
+      (error (message "libsrc: %s" (error-message-string err))))))
+
 (defun fenrir/libsrc--resolve-done (root ok)
   "Finish ROOT's resolution; run waiting callbacks when OK.
 A no-op when ROOT is not resolving, so a failure path reached after the
 chain already finished cannot double-finish."
   (let ((cbs (fenrir/libsrc--take-callbacks fenrir/libsrc--resolving root)))
     (when (and ok (not (eq cbs 'none)))
-      (mapc (lambda (f) (ignore-errors (funcall f))) cbs))))
+      (fenrir/libsrc--call-each cbs))))
 
 (defun fenrir/libsrc--resolve-fail (root msg)
   "Abort ROOT's resolution after an error MSG, releasing its resolving entry."
@@ -549,9 +556,7 @@ finished cannot release its slot twice."
     (unless (eq cbs 'none)
       (cl-decf fenrir/libsrc--running)
       (fenrir/libsrc--log "%s: %s%s" gav result (if detail (concat " -- " detail) ""))
-      (dolist (f cbs)
-        (condition-case err (funcall f result)
-          (error (message "libsrc: %s" (error-message-string err)))))
+      (fenrir/libsrc--call-each cbs result)
       (fenrir/libsrc--pump))))
 
 (defun fenrir/libsrc--build-error (gav)
