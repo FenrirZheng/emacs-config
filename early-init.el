@@ -22,8 +22,11 @@
 ;; by raising the threshold to the largest fixnum, then drop to a 16 MB FLOOR
 ;; on `emacs-startup-hook'.  `gcmh-mode' (configured in
 ;; `init-defaults.el') takes over from there and adapts the threshold upward
-;; on user activity, sweeping during idle -- so 16 MB is just the lower bound
-;; that holds between `emacs-startup-hook' and the first gcmh adjustment.
+;; on user activity, sweeping during idle.  The 16 MB set here holds only
+;; until the first gcmh idle sweep: `gcmh-idle-garbage-collect' then resets
+;; the threshold to `gcmh-low-cons-threshold' (gcmh default 800 KB) on every
+;; idle.  The 16 MB floor for the rest of the session is therefore carried by
+;; `gcmh-low-cons-threshold' in `lisp/init-defaults.el' -- change both together.
 ;; A fixed 32 MB without GCMH used to be the sweet spot here, but it still
 ;; produced visible pauses on heavy `consult-ripgrep' / Magit refresh; GCMH
 ;; eliminates those.
