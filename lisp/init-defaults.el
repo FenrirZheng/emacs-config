@@ -152,12 +152,19 @@ the filesystem round-trip but not `emacsclient --eval' argv quoting."
 ;; recent GC time -- short for cheap GCs, longer for expensive ones --
 ;; instead of forcing a single fixed value.  Upstream default.
 ;;
+;; `gcmh-low-cons-threshold' is what gcmh drops to when idle, and it replaces
+;; the early-init 16 MB floor.  gcmh's own default is 800 KB, which made idle
+;; redisplay garbage-collect constantly (measured 2026-10-08: GC was ~30% of
+;; CPU samples in the daemon).  So the 16 MB floor is restated here.
+;;
 ;; First-run note: as with every use-package block here, the archive is not
 ;; refreshed at startup (see init.el §1).  After this commit lands, run
 ;; `M-x my/package-refresh' then restart the daemon once so gcmh installs.
 (use-package gcmh
   :init (gcmh-mode 1)
-  :custom (gcmh-idle-delay 'auto))
+  :custom
+  (gcmh-idle-delay 'auto)
+  (gcmh-low-cons-threshold (* 16 1024 1024)))
 
 ;; which-key: after a prefix key (C-x, C-c, ...) pops up a panel listing the
 ;; follow-up keys.  Built into Emacs 30 -- hence :ensure nil.

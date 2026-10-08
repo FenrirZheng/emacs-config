@@ -83,7 +83,10 @@
 (defun fenrir/native-comp--on-cu-done (_file)
   "Flash a brief done indicator when an async compilation unit finishes."
   (setq fenrir/native-comp-flash-until (time-add (current-time) 2))
-  (force-mode-line-update t))
+  (force-mode-line-update t)
+  ;; The spinner timer is gone by the time the flash expires, so schedule the
+  ;; one redraw that clears the checkmark.
+  (run-with-timer 2.1 nil #'force-mode-line-update t))
 
 (when (boundp 'native-comp-async-cu-done-functions)
   (add-hook 'native-comp-async-cu-done-functions #'fenrir/native-comp--on-cu-done))
@@ -101,8 +104,17 @@ so an always-on timer would be pure waste."
                         (length fenrir/native-comp-spinner-frames)))
              (force-mode-line-update t))))))
 
+(defun fenrir/native-comp--stop-timer ()
+  "Cancel the spinner timer once the queue is empty.
+Left running, it forces every mode line and header line in every frame to
+redraw ~3x/s for the rest of the session."
+  (when (timerp fenrir/native-comp--timer)
+    (cancel-timer fenrir/native-comp--timer)
+    (setq fenrir/native-comp--timer nil)))
+
 (doom-modeline-def-segment native-comp-async
   (let ((n (if (fboundp 'comp--async-runnings) (comp--async-runnings) 0)))
+    (unless (> n 0) (fenrir/native-comp--stop-timer))
     (cond
      ((> n 0)
       (fenrir/native-comp--ensure-timer)

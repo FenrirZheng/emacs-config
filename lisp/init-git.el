@@ -137,7 +137,28 @@ then FOLD as space shrinks.  Never truncate an action or a key."
           (add-face-text-property 0 (length text) 'fenrir/magit-hints-label t text)
           text)))))
 
+(defvar-local fenrir/magit-hints--cache nil
+  "(KEY . RESULT) of the last render; cleared on every Magit refresh.")
+
 (defun fenrir/magit-hints--render ()
+  "Return the toolbar for the window being redisplayed, cached per state.
+The header `:eval' runs on every redisplay, so recompute only when point,
+window, width, region or the saved title changed."
+  (let* ((win (selected-window))
+         (pt (if (eq (window-buffer win) (current-buffer))
+                 (window-point win)
+               (point)))
+         (key (list win pt (window-body-width) (use-region-p)
+                    (and (use-region-p) (cons (region-beginning) (region-end)))
+                    fenrir/magit-hints--saved-header
+                    (buffer-modified-tick))))
+    (if (equal key (car fenrir/magit-hints--cache))
+        (cdr fenrir/magit-hints--cache)
+      (let ((result (fenrir/magit-hints--compute)))
+        (setq fenrir/magit-hints--cache (cons key result))
+        result))))
+
+(defun fenrir/magit-hints--compute ()
   "Render a toolbar for the window being redisplayed, without running Git."
   (save-excursion
     ;; Redisplay and format-mode-line select the window being formatted.
@@ -199,6 +220,7 @@ then FOLD as space shrinks.  Never truncate an action or a key."
 (defun fenrir/magit-hints--install ()
   "Preserve the current title and install the hint header after refresh."
   (when fenrir/magit-hints-mode
+    (setq fenrir/magit-hints--cache nil)
     (unless (equal header-line-format fenrir/magit-hints--header)
       (setq fenrir/magit-hints--saved-header header-line-format))
     (setq fenrir/magit-hints--diff-type
