@@ -207,11 +207,19 @@ sources (699 files) index in ~2 s; classpath + class index for gfc-login-api (13
 |---|---|
 | `C-c g l` `fenrir/libsrc-sync` | resolve classpath + class index (`C-u` forces) |
 | `C-c g L` `fenrir/libsrc-status` | indexed / pending / no-sources / no-GAV jars, cache size |
+| `fenrir/libsrc-index-all` | queue every unindexed artifact of the build root (eager; asks first, may download) |
 | `fenrir/libsrc-index-jdk` | index `$JAVA_HOME/lib/src.zip` once per JDK version |
 | `fenrir/libsrc-gc` | delete unreferenced trees older than `fenrir/libsrc-gc-days` (60) |
 
-Not done: decompiling jars without sources, type-aware resolution, eager whole-classpath
-indexing.
+**Eager indexing is opt-in:** `M-x fenrir/libsrc-index-all` queues every classpath
+artifact that is neither indexed nor `[no-sources]` through the same build queue
+(`fenrir/libsrc-max-jobs` at a time), after a `y-or-n-p` with the count. Like `M-.`, it
+refuses a root never synced with `C-c g l` and re-resolves a stale one first. Each landed
+tree joins the root's `:libpath`, so method and field names inside it become reachable
+by `M-.` even with no class-index hit, and `fenrir/libsrc-gc` keeps it. Progress is in
+`C-c g L`; one summary message reports indexed / no-sources / failed counts.
+
+Not done: decompiling jars without sources, type-aware resolution.
 
 ## CLI alignment (the `tags-symbol-lookup` skill)
 

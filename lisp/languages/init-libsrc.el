@@ -41,8 +41,8 @@
 (add-hook 'xref-after-jump-hook #'fenrir/libsrc--after-jump)
 
 ;; --- Keys --------------------------------------------------------------------
-;; On init-tags' `C-c g' map; `fenrir/libsrc-index-jdk' and `fenrir/libsrc-gc'
-;; stay M-x only.
+;; On init-tags' `C-c g' map; `fenrir/libsrc-index-all', `fenrir/libsrc-index-jdk'
+;; and `fenrir/libsrc-gc' stay M-x only.
 (when (boundp 'fenrir/gtags-map)
   (keymap-set fenrir/gtags-map "l" #'fenrir/libsrc-sync)
   (keymap-set fenrir/gtags-map "L" #'fenrir/libsrc-status))

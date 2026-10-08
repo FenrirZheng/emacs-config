@@ -588,7 +588,9 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   current Maven/Gradle build and indexes its class names; **`C-c g L`**
   (`fenrir/libsrc-status`) lists indexed / no-sources / unparseable jars. Library
   navigation itself is plain `M-.` — see [_doc/TAGS.md](_doc/TAGS.md#library-sources-fenrir-libsrc).
-  Two `M-x`-only companions: **`fenrir/libsrc-index-jdk`** indexes the JDK's
+  Three `M-x`-only companions: **`fenrir/libsrc-index-all`** queues every not-yet-indexed
+  artifact of the build root at once (asks first; may download sources jars) instead of
+  waiting for `M-.` to hit each one; **`fenrir/libsrc-index-jdk`** indexes the JDK's
   `lib/src.zip` once per JDK version, so `M-.` reaches `java.*` / `javax.*` classes;
   **`fenrir/libsrc-gc`** deletes library trees no project references that were built
   more than `fenrir/libsrc-gc-days` (60) ago, plus leftover `.tmp` build directories.

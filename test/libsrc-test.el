@@ -440,6 +440,45 @@ Returns (STATE . STILL-RESOLVING-P)."
       (let ((exec-path nil))
         (should-not (fenrir/libsrc--classpath-command fenrir/libsrc-cache-dir t out))))))
 
+;; --- index-all: queue every unindexed artifact, never resolve an unsynced root ---
+
+(ert-deftest libsrc-index-all-refuses-unsynced-root ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+             (default-directory proj)
+             (resolved nil))
+        (libsrc-test--touch (expand-file-name "pom.xml" proj))
+        (cl-letf (((symbol-function 'fenrir/libsrc--resolve)
+                   (lambda (&rest args) (push args resolved))))
+          (let ((err (should-error (fenrir/libsrc-index-all) :type 'user-error)))
+            (should (string-match-p "library sources are off" (cadr err)))))
+        (should-not resolved)))))
+
+(ert-deftest libsrc-index-all-queues-only-unindexed ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+             (default-directory proj)
+             (ensured nil))
+        (libsrc-test--touch (expand-file-name "pom.xml" proj) (- (float-time) 100))
+        (fenrir/libsrc--state-update
+         proj :resolved-at (float-time) :class-index (make-hash-table :test #'equal)
+         :jars '("/h/.m2/repository/org/x/a/1/a-1.jar"
+                 "/h/.m2/repository/org/x/a/1/a-1.jar"        ; duplicate jar
+                 "/h/.m2/repository/org/x/ready/1/ready-1.jar"
+                 "/h/.m2/repository/org/x/closed/1/closed-1.jar"
+                 "/work/app/target/classes"))                 ; no GAV
+        (libsrc-test--touch (expand-file-name ".ok" (fenrir/libsrc--gav-dir "org.x:ready:1")))
+        (libsrc-test--touch (fenrir/libsrc--no-sources-file "org.x:closed:1"))
+        (cl-letf (((symbol-function 'fenrir/libsrc-ensure)
+                   (lambda (gav cb) (push gav ensured) (funcall cb 'ok))))
+          (fenrir/libsrc-index-all))
+        (should (equal ensured '("org.x:a:1")))
+        ;; A landed tree joins :libpath (searched later, kept from gc).
+        (should (member (fenrir/libsrc--gav-dir "org.x:a:1")
+                        (plist-get (fenrir/libsrc--state proj) :libpath)))))))
+
 ;; --- The engine has no load-time side effects -----------------------------------
 ;; All registration lives in init-libsrc.el; requiring the engine alone (as
 ;; this suite does) must leave the global hooks untouched.

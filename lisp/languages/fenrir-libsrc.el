@@ -772,6 +772,63 @@ re-resolves."
                    (hash-table-count (plist-get st :class-index)))
         (fenrir/libsrc--resolve root)))))
 
+(defun fenrir/libsrc--unindexed-gavs (st)
+  "Distinct GAVs on state ST's classpath neither ready nor known sourceless."
+  (seq-remove (lambda (g) (or (fenrir/libsrc--gav-ready-p g)
+                              (fenrir/libsrc--gav-no-sources-p g)))
+              (delete-dups (delq nil (mapcar #'fenrir/libsrc--jar-gav
+                                             (plist-get st :jars))))))
+
+(defun fenrir/libsrc--queue-all (root)
+  "Queue every unindexed artifact on ROOT's classpath; report when all land.
+Each ready tree joins ROOT's `:libpath', the same as a lazy `M-.' build,
+so it is searched by later lookups and kept from `fenrir/libsrc-gc'."
+  (let* ((gavs (fenrir/libsrc--unindexed-gavs (fenrir/libsrc--state root)))
+         (left (length gavs))
+         (counts (list (cons 'ok 0) (cons 'no-sources 0) (cons 'error 0))))
+    (if (null gavs)
+        (message "libsrc: every artifact of %s is already indexed or has no sources"
+                 (abbreviate-file-name root))
+      (dolist (g gavs)
+        (fenrir/libsrc-ensure
+         g (lambda (result)
+             (when (eq result 'ok)
+               (fenrir/libsrc--add-libpath root (fenrir/libsrc--gav-dir g)))
+             (cl-incf (alist-get result counts 0))
+             (when (zerop (cl-decf left))
+               (message "libsrc: %s -- %d indexed, %d no sources, %d failed%s"
+                        (abbreviate-file-name root)
+                        (alist-get 'ok counts) (alist-get 'no-sources counts)
+                        (alist-get 'error counts)
+                        (if (> (alist-get 'error counts) 0) " (see *libsrc*)" ""))))))
+      (message "libsrc: queued %d artifact%s for %s -- C-c g L shows progress"
+               (length gavs) (if (= (length gavs) 1) "" "s")
+               (abbreviate-file-name root)))))
+
+(defun fenrir/libsrc-index-all ()
+  "Queue every resolved artifact of the current build root for indexing.
+The eager counterpart of `M-.''s one-artifact-at-a-time builds: fetches
+missing sources jars (network) and builds each tree, `fenrir/libsrc-max-jobs'
+at a time.  Needs a root already synced with \\[fenrir/libsrc-sync] -- it
+never resolves an unsynced root, since that runs the project's build code.
+A stale classpath is re-resolved first."
+  (interactive)
+  (let* ((root (or (fenrir/libsrc--origin-root)
+                   (user-error "libsrc: no pom.xml / Gradle build above %s"
+                               default-directory)))
+         (st (or (fenrir/libsrc--state root)
+                 (user-error "libsrc: library sources are off for %s -- %s first"
+                             (abbreviate-file-name root)
+                             (substitute-command-keys "\\[fenrir/libsrc-sync]")))))
+    (if (fenrir/libsrc--stale-p root st)
+        (fenrir/libsrc--resolve root (lambda () (fenrir/libsrc--queue-all root)))
+      (let ((n (length (fenrir/libsrc--unindexed-gavs st))))
+        (when (or (zerop n)
+                  (not (called-interactively-p 'interactive))
+                  (y-or-n-p (format "libsrc: index %d artifact%s (may download sources jars)? "
+                                    n (if (= n 1) "" "s"))))
+          (fenrir/libsrc--queue-all root))))))
+
 (defun fenrir/libsrc--dir-size (dir)
   "Human-readable disk usage of DIR."
   (if (file-directory-p dir)
