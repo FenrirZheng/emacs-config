@@ -121,7 +121,7 @@ Evidence: libsrc ERT 34/34, search ERT 11/11, `bash .githooks/pre-commit` exit 0
   config's lazy hub does not load it. The SPEC's "nil after a fresh start"
   expectation is stale until combobulate changes.
 
-## Phase 4 — docs + acceptance  [x] `docs: document one-search keys` + `docs: record one-search acceptance results`
+## Phase 4 — docs + acceptance  [ ] reopened: step 2 fails as written (GUI run, `docs: record one-search GUI acceptance run`)
 
 Files: `FEATURES.md`, `SPEC.md` (status → implemented).
 - New "Search" section: Tier 1, the in-prompt table, Tier 3. Add a `<f5> s` row to
@@ -169,5 +169,52 @@ below. The GUI-frame run was not done (see the end of this note).
       change every path and force a native recompile. HEAD's files are restored by
       `git checkout HEAD --` on exit, and `git status lisp/` was clean afterwards.
     - 2 warm-up runs per variant, then 6 alternating runs each.
-  - [ ] Steps 1–8 in a GUI frame: **not run**. The phase is closed without it, on
-        the user's call (2026-10-12): TTY runs only.
+  - GUI frame run, 2026-10-12:
+    - Setup: a throwaway `emacs` (X11/GTK3 build on Xwayland `:0`), never the
+      daemon. It ran with [`scripts/gui-harness.el`](scripts/gui-harness.el),
+      which starts a private server `srchgui`. It exited with `kill-emacs-hook`
+      nil, and its socket was removed.
+    - Input method: `emacsclient -s srchgui` queued real key events into that
+      process's `unread-command-events`. `C-.` is the GUI event 67108910, which a
+      TTY cannot represent. The window system did not deliver the keys: the
+      session is Wayland, no xdotool/ydotool is installed, and XTEST could reach
+      the daemon's X frame. Evidence was read from a `minibuffer-setup-hook` log
+      and from `*Messages*`.
+    - Key check: `C-t` → `fenrir/search-files`, `C-z` → `fenrir/search-text`,
+      dired `C-t` → `fenrir/search-files-here`, `C-.` → `embark-act`, and
+      `display-graphic-p` = t.
+  - [x] GUI step 1: `C-t`, `init`, `C-t` went from `Fd (Project .emacs.d)` with
+        39 candidates to `Fd (~/.emacs.d/lisp)` with 36, and the input stayed `#init`.
+  - [ ] GUI step 2 **fails as written**. "`C-x C-d`, pick `~/code`" cannot pick
+        `~/code` itself.
+    - `~/code/` is not among consult-dir's 129 candidates.
+    - `code` + `RET` picks the first match, `~/code/agent-workflow/`.
+    - Typing `~/code/` + `M-RET` errors with `bookmark-get-bookmark: Invalid
+      bookmark ~/code/`, because `consult-dir--pick` gives free input the
+      bookmark category.
+    - The mechanism itself passes: the rerun happens in the picked folder, and
+      `#init` is kept.
+    - The same limit applies in a TTY frame. The earlier TTY run used `~/cz/`,
+      which is a candidate.
+    - Fix options, not done:
+      1. Accept a typed existing directory in `fenrir/search-prompt-pick-dir`.
+      2. Add `~/code` to the consult-dir quick list.
+      3. Reword SPEC step 2.
+  - [x] GUI step 3: `C-t`, `parser`, `C-z` → `Ripgrep (Project .emacs.d)` with
+        input `#parser` and 466 matches, in the same folder.
+  - [x] GUI step 4: `C-z` from `/usr/share/doc/bash/README`, which is in no
+        project → `Ripgrep (…/doc/bash)`.
+  - [x] GUI step 5: `C-t` in dired on `lisp/languages/` → `Fd (…/lisp/languages)`,
+        and `init-go` finds 1 file.
+  - [x] GUI step 6: in vterm, `C-t` / `C-z` are `vterm--self-insert`. `sleep 30` +
+        `C-z` → `Stopped`, and `abc` + `C-t` → `acb`.
+  - [x] GUI step 7: `<f5> s` → `fenrir/search-menu`. All 21 letters opened their
+        commands' prompts. The exceptions are `e` (eglot notice), `h` ("Must be
+        called from an Org buffer") and `m` ("No global marks"). There is no
+        `void-function`.
+  - [x] GUI step 8: **`C-. E` works in a GUI frame.**
+    - `C-z` + `foo` → `C-.` → `E` gave `*Embark Export: consult-ripgrep - #foo*`
+      with both matches.
+    - `C-c C-p`, `M-%` foo→bar `!`, `C-c C-c` → `Successfully finished.
+      (2 changed)`.
+    - Both scratch files contain `bar` on disk.
