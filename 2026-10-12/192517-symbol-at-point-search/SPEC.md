@@ -1,6 +1,6 @@
 # Spec: C-u C-t / C-u C-z — search the symbol at point
 
-Status: approved
+Status: implemented
 Date: 2026-10-12 (Asia/Taipei)
 
 ## Objective
@@ -108,7 +108,7 @@ Done 2026-10-12 (Asia/Taipei).
 - Commits: `search: seed C-u C-t / C-u C-z with the symbol at point` (2026-10-12) —
   closes Phase 1.
 
-### Phase 2 — docs and acceptance  [ ]
+### Phase 2 — docs and acceptance  [x] `docs: document C-u C-t / C-u C-z symbol seeding`
 
 Files: `FEATURES.md`
 - §1b key table: add rows for `C-u C-t` and `C-u C-z`.
@@ -117,3 +117,27 @@ Files: `FEATURES.md`
   used is recorded `blocked`, never passed with a substitute.
 - Checks: the three Test commands.
 - Commit: `docs: document C-u C-t / C-u C-z symbol seeding`
+
+Done 2026-10-12 (Asia/Taipei).
+- Deviations: none. FEATURES.md §1b gained the `C-u C-t` / `C-u C-z` rows.
+- Evidence: libsrc ERT 34/34; search ERT 18/18; `bash .githooks/pre-commit` exit 0.
+  Acceptance in a throwaway `emacs -nw` (tmux) on `lisp/fenrir-search.el`, every step on
+  its literal input. Point was placed by an `M-:` helper, which reported the symbol at
+  point before each step. A `<f9>` binding, defined in that throwaway Emacs only, logged
+  the prompt state:
+  1. Point on `fenrir/search--run` (line 107), `C-u C-z` → `Ripgrep (Project .emacs.d):`,
+     input `#fenrir/search--run`, 17 matches. Pass.
+  2. Point on `fenrir-search` in `(provide 'fenrir-search)`, `C-u C-t` →
+     `Fd (Project .emacs.d):`, input `#fenrir-search`, candidates
+     `("lisp/fenrir-search.el")`. Pass.
+  3. Point on an empty line (line 2), `C-u C-z` → `Ripgrep (Project .emacs.d):`, input
+     `#` (consult's own). Pass.
+  4. After step 1, `C-z` → `Ripgrep (~/.emacs.d/lisp):`, input still
+     `#fenrir/search--run`, 5 matches. Pass.
+  5. Point on `fenrir/search--run`, `C-z` without `C-u` → input `#`. Pass.
+- Note: the first try at steps 1, 4 and 5 never ran. Typing the positioning sexp into
+  `M-:` got closing parens auto-inserted, which made it an invalid expression. The
+  steps were re-run with a loaded helper (`ah-goto-run`); the inputs under test did not
+  change.
+- Commits: `docs: document C-u C-t / C-u C-z symbol seeding` (2026-10-12) — closes
+  Phase 2 and the spec.

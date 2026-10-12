@@ -233,6 +233,8 @@ what you typed.
 |---|---|---|
 | `C-t` | `fenrir/search-files` | Find a file by name, fuzzy and recursive (`consult-fd`) |
 | `C-z` | `fenrir/search-text` | Search text (`consult-ripgrep`) |
+| `C-u C-t` | `fenrir/search-files` | Same, with the symbol at point already typed (e.g. on `fenrir-search` → finds `fenrir-search.el`) |
+| `C-u C-z` | `fenrir/search-text` | Same, with the symbol at point already typed, regexp-quoted so `foo.bar` matches literally |
 | `C-s` | `consult-line` | Search this buffer (unchanged) |
 | `C-t` *(in dired)* | `fenrir/search-files-here` | Find a file under **this dired folder**. Replaces dired's image-dired prefix; image-dired stays on `M-x` |
 | `<f5> s` | `fenrir/search-menu` | The rarer searches (see the [hub table](#the-f5-scenario-hub-tier-2)) |
