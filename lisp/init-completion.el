@@ -115,7 +115,7 @@
          ("M-g f"   . consult-flymake)        ; list diagnostics with preview
          ;; project search
          ("M-s r"   . consult-ripgrep)        ; grep across the project
-         ("M-s f"   . consult-find))          ; find files by name
+         ("M-s f"   . consult-fd))            ; find files by name (fd/fdfind)
   :custom
   ;; Let `consult-line' etc. drive the live preview at this key:
   (consult-narrow-key "<")
@@ -143,9 +143,14 @@
   ;; below are the ones that actually pay ripgrep / file-read cost per
   ;; keystroke.
   (consult-customize
-   consult-ripgrep consult-grep consult-git-grep consult-find
+   consult-ripgrep consult-grep consult-git-grep consult-find consult-fd
    consult-bookmark consult-recent-file
    :preview-key '(:debounce 0.2 any)))
+
+;; One search system (C-t files / C-z text, WHERE and WHAT switchable in the
+;; prompt): the commands and the prompt keymap live in fenrir-search.el; the
+;; global keys are routed in init-keys.el.
+(require 'fenrir-search)
 
 ;; `:demand t' -- load embark at startup rather than waiting for C-. / C-; /
 ;; C-h B.  Load-bearing for the `prefix-help-command' wiring in

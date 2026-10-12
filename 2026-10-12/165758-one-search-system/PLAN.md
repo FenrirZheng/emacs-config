@@ -1,13 +1,14 @@
 # Plan: one search system
 
 Spec: [SPEC.md](SPEC.md)
-Progress markers: `[ ]` todo · `[x]` done (commit hash appended). The next phase
-is the first `[ ]`.
+Progress markers: `[ ]` todo · `[x]` done (commit subject appended; a commit
+cannot carry its own hash — `git log --grep` finds it). The next phase is the
+first `[ ]`.
 
 ## Gate (before Phase 1)
 
-- [ ] SPEC approved. Open questions settled. Defaults if unanswered: `C-t` = files,
-      `C-z` = text; full parent cycle (project → current → parent … → wrap).
+- [x] SPEC approved 2026-10-12, defaults kept: `C-t` = files, `C-z` = text; full
+      parent cycle (project → current → parent … → `/` → wrap).
 
 ## Test commands (every phase; all must pass)
 
@@ -17,7 +18,7 @@ is the first `[ ]`.
 
 Leave no `.elc` behind. Commit only the paths each phase lists.
 
-## Phase 1 — core commands + in-prompt keymap  [ ]
+## Phase 1 — core commands + in-prompt keymap  [x] `completion: add fenrir/search-files and search-text`
 
 Files: `lisp/init-completion.el`, new `test/search-test.el`.
 - Pure helper `fenrir/search--next-scope (dir root)` → next dir (current → parent
@@ -37,6 +38,28 @@ Files: `lisp/init-completion.el`, new `test/search-test.el`.
 - Extra check: in the daemon, `M-x fenrir/search-files` / `fenrir/search-text` work
   and the in-prompt keys cycle (manual SPEC steps 1–4, reached via `M-x`).
 - Commit: `completion: add fenrir/search-files and search-text`.
+
+Done 2026-10-12 (Asia/Taipei). Deviations from the bullets above:
+- The commands live in a new [`lisp/fenrir-search.el`](../../lisp/fenrir-search.el),
+  which `init-completion.el` requires (the `fenrir-back-forward.el` pattern), because
+  `test/search-test.el` must load them in `emacs -Q` and `init-completion.el` is all
+  `use-package`.
+- The scope helper is `fenrir/search--next-scope (dir root origin)` over
+  `fenrir/search--scopes`; the WHAT toggle is `fenrir/search--next-state`.
+- The keymap is a plain buffer-local minor mode in the minibuffer. Minor-mode maps
+  already beat Vertico's local map, so neither overriding alist was needed.
+- `consult-fd-args` is unchanged: consult's default already picks `fdfind` when it
+  exists.
+
+Evidence: libsrc ERT 34/34, search ERT 11/11, `bash .githooks/pre-commit` exit 0.
+A throwaway `emacs -nw` driven via tmux, starting from `M-: (fenrir/search-files)`
+(global keys come in Phase 2):
+- `C-t` cycles WHERE: root → `lisp/` → `~` (`.emacs.d/` is skipped as the root).
+- `C-z` / `C-t` switch WHAT in the same folder.
+- `C-x C-d` → `~/cz/` reruns there.
+- The typed text survives every switch, with no doubled `#`.
+- A non-project `default-directory` starts there.
+- `M-s f` → `consult-fd`.
 
 ## Phase 2 — global and dired keys  [ ]
 
