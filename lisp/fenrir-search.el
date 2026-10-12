@@ -32,7 +32,10 @@
 
 (declare-function consult-fd "consult")
 (declare-function consult-ripgrep "consult")
-(declare-function consult-dir--pick "consult-dir")
+(declare-function consult--multi "consult")
+(declare-function bookmark-get-filename "bookmark")
+(defvar consult-dir-sources)
+(defvar consult-dir-sort-candidates)
 (declare-function consult-eglot-symbols "consult-eglot")
 (declare-function eglot-current-server "eglot")
 (declare-function project-root "project")
@@ -145,12 +148,38 @@ root and DIR."
   (interactive)
   (fenrir/search--switch 'text))
 
+(defun fenrir/search--picked-dir (cand plist bookmark-file)
+  "Directory for the consult-dir pick CAND with source PLIST, or nil.
+A listed candidate resolves by its category: `bookmark' through the
+function BOOKMARK-FILE, `file' as itself.  Typed input that matches no
+candidate (PLIST has `:match' nil) is accepted when it names an existing
+directory -- `consult-dir--pick' would instead hand it to the bookmark
+source and fail with \"Invalid bookmark\"."
+  (cond ((and (plist-member plist :match) (not (plist-get plist :match)))
+         (let ((dir (expand-file-name (substitute-in-file-name cand))))
+           (and (file-directory-p dir) (fenrir/search--dir dir))))
+        ((eq (plist-get plist :category) 'bookmark) (funcall bookmark-file cand))
+        ((eq (plist-get plist :category) 'file) cand)))
+
+(defun fenrir/search--pick-dir-consult ()
+  "Pick a folder from consult-dir's sources, or type any existing one.
+Same candidates and sort as `consult-dir--pick'; only the result handling
+differs, see `fenrir/search--picked-dir'."
+  (let* ((match (consult--multi consult-dir-sources
+                                :prompt "Search in (pick, or type a folder): "
+                                :sort consult-dir-sort-candidates))
+         (dir (fenrir/search--picked-dir (car match) (cdr match)
+                                         #'bookmark-get-filename)))
+    (or dir (user-error "Not an existing folder: %s" (car match)))))
+
 (defun fenrir/search-prompt-pick-dir ()
-  "In a search prompt: search the same text in a folder picked with consult-dir."
+  "In a search prompt: search the same text in a folder picked with consult-dir.
+A typed path such as `~/code/' works too, even when consult-dir does not
+list it."
   (interactive)
   (let* ((enable-recursive-minibuffers t)
          (dir (if (require 'consult-dir nil t)
-                  (consult-dir--pick "Search in: ")
+                  (fenrir/search--pick-dir-consult)
                 (read-directory-name "Search in: "))))
     (when dir
       (fenrir/search--rerun (plist-get fenrir/search--state :kind) dir))))

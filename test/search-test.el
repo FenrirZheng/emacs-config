@@ -72,6 +72,41 @@
         (should (equal (fenrir/search--root dir) dir))
       (delete-directory dir t))))
 
+;; --- C-x C-d result handling -------------------------------------------------------
+
+(ert-deftest search-picked-dir-typed-existing-dir ()
+  ;; typed input that matches no candidate: accepted when it is a folder
+  (let ((dir (file-name-as-directory (make-temp-file "search-test" t))))
+    (unwind-protect
+        (progn
+          (should (equal (fenrir/search--picked-dir
+                          dir '(:match nil :category bookmark) #'ignore)
+                         dir))
+          ;; no trailing slash, and the bookmark resolver is never consulted
+          (should (equal (fenrir/search--picked-dir
+                          (directory-file-name dir) '(:match nil :category bookmark)
+                          (lambda (_) (error "bookmark resolver called")))
+                         dir)))
+      (delete-directory dir t))))
+
+(ert-deftest search-picked-dir-typed-tilde ()
+  (should (equal (fenrir/search--picked-dir "~/" '(:match nil :category bookmark) #'ignore)
+                 (file-name-as-directory (expand-file-name "~")))))
+
+(ert-deftest search-picked-dir-typed-missing ()
+  ;; not a folder -> nil, so the command reports it instead of erroring
+  (should-not (fenrir/search--picked-dir "/no/such/dir-xyz/" '(:match nil :category bookmark)
+                                         #'ignore))
+  (should-not (fenrir/search--picked-dir (or load-file-name "/etc/hostname")
+                                         '(:match nil :category file) #'ignore)))
+
+(ert-deftest search-picked-dir-listed-candidates ()
+  ;; listed candidates resolve by category, as consult-dir--pick does
+  (should (equal (fenrir/search--picked-dir "~/proj/" '(:category file) #'ignore) "~/proj/"))
+  (should (equal (fenrir/search--picked-dir "work" '(:category bookmark)
+                                            (lambda (b) (concat "/bm/" b "/")))
+                 "/bm/work/")))
+
 ;; --- prompt keymap -----------------------------------------------------------------
 
 (ert-deftest search-prompt-keys ()

@@ -121,7 +121,7 @@ Evidence: libsrc ERT 34/34, search ERT 11/11, `bash .githooks/pre-commit` exit 0
   config's lazy hub does not load it. The SPEC's "nil after a fresh start"
   expectation is stale until combobulate changes.
 
-## Phase 4 — docs + acceptance  [ ] reopened: step 2 fails as written (GUI run, `docs: record one-search GUI acceptance run`)
+## Phase 4 — docs + acceptance  [x] `docs: document one-search keys` + `docs: record one-search acceptance results` + `docs: record one-search GUI acceptance run` + `completion: accept a typed folder in the search C-x C-d`
 
 Files: `FEATURES.md`, `SPEC.md` (status → implemented).
 - New "Search" section: Tier 1, the in-prompt table, Tier 3. Add a `<f5> s` row to
@@ -200,6 +200,27 @@ below. The GUI-frame run was not done (see the end of this note).
       1. Accept a typed existing directory in `fenrir/search-prompt-pick-dir`.
       2. Add `~/code` to the consult-dir quick list.
       3. Reword SPEC step 2.
+    - **Fixed with option 1** (user's choice, 2026-10-12), in
+      `completion: accept a typed folder in the search C-x C-d`:
+      - `fenrir/search-prompt-pick-dir` no longer calls `consult-dir--pick`.
+      - Instead it makes the same `consult--multi` call, over `consult-dir-sources`
+        with `consult-dir-sort-candidates`.
+      - It resolves the result with the new pure helper `fenrir/search--picked-dir`.
+        A listed candidate resolves by category: `bookmark` through
+        `bookmark-get-filename`, `file` as itself.
+      - Typed input (`:match nil`) is accepted when it names an existing folder.
+        Anything else gives a `user-error` "Not an existing folder: …", and the
+        search prompt stays open.
+      - ERT `search-picked-dir-*` (4 tests) covers: a typed existing folder (with
+        and without the trailing slash; the bookmark resolver is never called),
+        `~/`, a missing path or a file, and listed `file` / `bookmark` candidates.
+    - [x] GUI step 2, rerun after the fix (same harness, a throwaway GUI Emacs):
+      - `C-t`, `init`, `C-x C-d`, `~/code/`, `M-RET` → `Fd (~/code)`, input
+        `#init`, 3152 candidates.
+      - A listed candidate still works: `cz` + `RET` → `Fd (Project cz)`, `#init`
+        kept.
+      - `/no/such/dir/` + `M-RET` → `Not an existing folder: /no/such/dir/`, and
+        the `Fd (Project cz)` prompt is still active.
   - [x] GUI step 3: `C-t`, `parser`, `C-z` → `Ripgrep (Project .emacs.d)` with
         input `#parser` and 466 matches, in the same folder.
   - [x] GUI step 4: `C-z` from `/usr/share/doc/bash/README`, which is in no
