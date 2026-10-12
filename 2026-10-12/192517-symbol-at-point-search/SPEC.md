@@ -69,7 +69,8 @@ commit subject (a commit cannot contain its own hash; `git log --grep` finds it)
 
 ### Gate
 
-- [ ] Spec approved; open questions answered (or defaults accepted).
+- [x] Spec approved; open questions answered (or defaults accepted). Approved 2026-10-12,
+      both defaults kept: text seed is regexp-quoted, file seed is the symbol at point.
 
 ### Test commands (every phase; all must pass)
 
