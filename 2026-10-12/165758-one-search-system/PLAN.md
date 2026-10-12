@@ -61,7 +61,7 @@ A throwaway `emacs -nw` driven via tmux, starting from `M-: (fenrir/search-files
 - A non-project `default-directory` starts there.
 - `M-s f` → `consult-fd`.
 
-## Phase 2 — global and dired keys  [ ]
+## Phase 2 — global and dired keys  [x] `keys: bind C-t / C-z to search`
 
 File: `lisp/init-keys.el` (routing only).
 - Global `C-t` → `fenrir/search-files`, `C-z` → `fenrir/search-text`, both
@@ -70,6 +70,22 @@ File: `lisp/init-keys.el` (routing only).
   `with-eval-after-load 'dired`).
 - Check: the SPEC's `emacsclient -e '(list (key-binding …))'`; SPEC steps 5–6.
 - Commit: `keys: bind C-t / C-z to search`.
+
+Done 2026-10-12 (Asia/Taipei). Deviation: the dired key needs a command that
+starts in the dired folder rather than the project root. `fenrir/search-files-here`
+was added to `lisp/fenrir-search.el`, because `init-keys.el` only routes keys.
+
+Evidence: libsrc ERT 34/34, search ERT 11/11, `bash .githooks/pre-commit` exit 0.
+A throwaway `emacs -nw` was driven via tmux, without the daemon:
+- `(key-binding "C-t"/"C-z")` → `fenrir/search-files` / `fenrir/search-text`, and
+  `dired-mode-map` `C-t` → `fenrir/search-files-here`.
+- `C-t` in dired on `lisp/languages/` → `Fd (…/lisp/languages)`, and `init-go`
+  finds `init-go.el`.
+- vterm: `sleep 30` + `C-z` → `Stopped`, and `abc` + `C-t` → `acb`.
+- Note: nothing searches before 3 characters, because consult's
+  `consult-async-min-input` is 3. This is consult behaviour, not this config.
+- Note: `C-t` / `C-z` are now global inside minibuffers too, where they used to
+  run `transpose-chars` / `suspend-frame`. Only the one-search prompts rebind them.
 
 ## Phase 3 — `<f5> s` search menu  [ ]
 

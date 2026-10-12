@@ -177,5 +177,14 @@ pick a folder."
   (fenrir/search--run 'text (or dir (fenrir/search--start-dir)) nil
                       nil (fenrir/search--dir default-directory)))
 
+;;;###autoload
+(defun fenrir/search-files-here ()
+  "Find a file by name under `default-directory' (in dired: its folder).
+Same prompt keys as `fenrir/search-files'; the WHERE cycle still offers
+the project root."
+  (interactive)
+  (let ((here (fenrir/search--dir default-directory)))
+    (fenrir/search--run 'files here nil nil here)))
+
 (provide 'fenrir-search)
 ;;; fenrir-search.el ends here

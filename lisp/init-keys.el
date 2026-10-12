@@ -453,6 +453,21 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
 (global-set-key (kbd "<f7>") #'fenrir/forward)
 (define-key goto-map (kbd "b") #'fenrir/back)
 (define-key goto-map (kbd "B") #'fenrir/forward)
+;; ------------------------------------------------------- ONE SEARCH (L1) ---
+;; ROUTING ONLY.  The commands and their prompt keys (same key = next folder,
+;; other key = files <-> text, `C-x C-d' = any folder) live in
+;; [`fenrir-search.el'](fenrir-search.el), loaded by init-completion.el.
+;; Spec: 2026-10-12/165758-one-search-system/SPEC.md.
+;;
+;; `C-t' (`transpose-chars', 2 keyfreq presses) and `C-z' (`suspend-frame',
+;; harmful under emacsclient -nw) both stay on `M-x'.  Plain global keys, not
+;; `bind-key*': vterm / term keep `C-t' (fzf) and `C-z' (job control).
+(global-set-key (kbd "C-t") #'fenrir/search-files)
+(global-set-key (kbd "C-z") #'fenrir/search-text)
+;; dired: `C-t' is image-dired's prefix there; "find under this folder" is the
+;; dired use case, so it wins.  image-dired stays on `M-x'.
+(with-eval-after-load 'dired
+  (define-key dired-mode-map (kbd "C-t") #'fenrir/search-files-here))
 
 ;; --------------------------------------------- editor-contract release ---
 ;; `C-x C-c' -> release the blocking emacsclient when there is one, else the
