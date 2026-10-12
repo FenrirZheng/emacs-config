@@ -505,6 +505,15 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
 (with-eval-after-load 'dired
   (define-key dired-mode-map (kbd "C-t") #'fenrir/search-files-here))
 
+;; Terminal fallback for `embark-act' (owned by init-completion.el on `C-.').
+;; tmux here runs with `extended-keys off', so a TTY frame receives `C-.' as a
+;; plain `.' and embark -- including the `C-. E' export of a search -- is
+;; unreachable there.  `C-c .' was the obvious pick but is taken by org
+;; (`org-timestamp'), cc-mode (`c-set-style') and eglot (`eglot-code-actions'),
+;; so it would vanish in exactly the buffers that need it.  `C-c y' is bound in
+;; none of the 664 keymaps a fully loaded session defines (checked 2026-10-12).
+(global-set-key (kbd "C-c y") #'embark-act)
+
 ;; --------------------------------------------- editor-contract release ---
 ;; `C-x C-c' -> release the blocking emacsclient when there is one, else the
 ;; stock quit.  In this daemon setup "C-x C-c, get me out" is most often

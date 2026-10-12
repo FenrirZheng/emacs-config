@@ -268,8 +268,13 @@ Keys that work in **every** search prompt:
 | `foo -- -g *.go` | ripgrep / fd: everything after ` -- ` goes to the tool as flags |
 | `#foo#bar` | ripgrep: `foo` goes to rg, `bar` filters its results locally |
 | `<` then a key | narrow by source (`consult-buffer`, `consult-dir`) |
-| `C-.` | embark: act on the candidate (other window, copy path, …) |
-| `C-. E` | export the results; on a grep export, `C-c C-p` = wgrep edit-in-place ([§2](#2--combo--project-wide-search-and-replace-with-undo-init-completionel)) |
+| `C-.` (TTY: `C-c y`) | embark: act on the candidate (other window, copy path, …) |
+| `C-. E` (TTY: `C-c y E`) | export the results; on a grep export, `C-c C-p` = wgrep edit-in-place ([§2](#2--combo--project-wide-search-and-replace-with-undo-init-completionel)) |
+
+**`C-.` works only in a GUI frame, or in a terminal when tmux passes extended keys
+(`extended-keys on`).** Here tmux runs with `extended-keys off`, so a TTY frame receives
+`C-.` as a plain `.`. Use **`C-c y`** there; it runs the same `embark-act`, so
+`C-c y E` is the terminal form of `C-. E`.
 
 ---
 
@@ -280,6 +285,7 @@ The payoff of consult + embark + wgrep wired together:
 ```
 C-z            ; fenrir/search-text (consult-ripgrep) — search the project (M-s r also works)
 C-.            ; embark-act → choose  E  (embark-export) → matches become a grep buffer
+               ; (terminal frame: C-c y instead of C-.)
 C-c C-p        ; wgrep — make that buffer editable
                ; …edit freely, across as many files as the matches span
 C-c C-c        ; write the edits back to every file at once (each file keeps its own undo)
@@ -293,7 +299,8 @@ C-c C-c        ; write the edits back to every file at once (each file keeps its
 
 | Key | Command | What it does |
 |---|---|---|
-| `C-.` | `embark-act` | Act on point / the current minibuffer candidate — the offered actions change with the object type (file → open/rename/grep; symbol → describe/find-def; …) |
+| `C-.` | `embark-act` | Act on point / the current minibuffer candidate — the offered actions change with the object type (file → open/rename/grep; symbol → describe/find-def; …). GUI frame only under tmux `extended-keys off` |
+| `C-c y` | `embark-act` | Terminal fallback for `C-.` — same command, a key a TTY frame inside tmux actually receives ([`init-keys.el`](lisp/init-keys.el)) |
 | `C-;` | `embark-dwim` | "Do What I Mean" — run the single most sensible default action |
 | `C-h B` | `embark-bindings` | Browse every active key binding via `completing-read` |
 
