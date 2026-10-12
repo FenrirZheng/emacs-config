@@ -121,7 +121,7 @@ Evidence: libsrc ERT 34/34, search ERT 11/11, `bash .githooks/pre-commit` exit 0
   config's lazy hub does not load it. The SPEC's "nil after a fresh start"
   expectation is stale until combobulate changes.
 
-## Phase 4 — docs + acceptance  [ ]
+## Phase 4 — docs + acceptance  [x] `docs: document one-search keys` + `docs: record one-search acceptance results`
 
 Files: `FEATURES.md`, `SPEC.md` (status → implemented).
 - New "Search" section: Tier 1, the in-prompt table, Tier 3. Add a `<f5> s` row to
@@ -131,8 +131,8 @@ Files: `FEATURES.md`, `SPEC.md` (status → implemented).
   `emacs-init-time` with the current value.
 - Commit: `docs: document one-search keys`.
 
-Progress 2026-10-12 (Asia/Taipei). The phase stays `[ ]` because the acceptance
-items are still open.
+Progress 2026-10-12 (Asia/Taipei). Closed after the step 8 and init-time runs
+below. The GUI-frame run was not done (see the end of this note).
 - [x] Docs, in `docs: document one-search keys`.
   - `FEATURES.md`: a new §1b "Search" section (Tier 1, the in-prompt table,
     examples, the moved `transpose-chars` / `suspend-frame`, vterm, Tier 3).
@@ -147,6 +147,27 @@ items are still open.
   - [x] Steps 5–6 (Phase 2).
   - [x] Step 7: no `void-function` (Phase 3). Its `(featurep 'transient)` = nil
         part fails for the pre-existing combobulate reason recorded in Phase 3.
-  - [ ] Step 8: wgrep round trip (`C-z`, `C-. E`, `C-c C-p`, edit, `C-c C-c`).
-  - [ ] Steps 1–8 in a GUI frame.
-  - [ ] `emacs-init-time` compared with the value before Phase 1.
+  - [x] Step 8: wgrep round trip, on two scratch files (`a.txt`, `b.txt`, each with
+        one `foo`) in a temp dir outside any project.
+    - `C-z` + `foo` → `Ripgrep (…/scratchpad/wg)` with 2 matches.
+    - `embark-act` → `E` → `*Embark Export: consult-ripgrep - #foo*`.
+    - `C-c C-p`, `M-%` foo→bar `!`, `C-c C-c` → `Successfully finished. (2 changed)`.
+    - On disk: `alpha bar one` and `bar two`.
+    - **TTY caveat:** the `C-.` key itself never reaches a TTY Emacs here. tmux has
+      `extended-keys off`, so tmux delivers it as a plain `.`. The test therefore
+      bound `embark-act` to `C-c .` in the throwaway session only. This is
+      pre-existing (embark's binding, same class as `C-,` / `C-'` in the SPEC), not
+      a search regression. In a TTY frame, FEATURES.md §1b's `C-. E` works only if
+      tmux passes extended keys.
+  - [x] `emacs-init-time`: within noise. HEAD median 0.447 s (0.438–0.497, one
+        outlier). Base median 0.450 s (0.442–0.453).
+    - Method: [`scripts/inittime.sh`](scripts/inittime.sh). The real `emacs -nw` in
+      tmux, `--eval` logs `(emacs-init-time "%f")`, then exits with
+      `kill-emacs-hook` nil.
+    - Base means the `15cc6e1^` versions of `init-completion.el` and `init-keys.el`,
+      written in place, so paths and `.eln` stay comparable; a worktree would
+      change every path and force a native recompile. HEAD's files are restored by
+      `git checkout HEAD --` on exit, and `git status lisp/` was clean afterwards.
+    - 2 warm-up runs per variant, then 6 alternating runs each.
+  - [ ] Steps 1–8 in a GUI frame: **not run**. The phase is closed without it, on
+        the user's call (2026-10-12): TTY runs only.
