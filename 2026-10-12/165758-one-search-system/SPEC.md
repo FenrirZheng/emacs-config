@@ -1,6 +1,9 @@
 # Spec: one search system — single-chord keys, no prefix
 
-Status: draft (rev 2) — awaiting approval
+Status: implemented (rev 2), approved 2026-10-12 with the defaults (`C-t` files,
+`C-z` text, full parent cycle). Commits: `15cc6e1` (commands + prompt keys),
+`bf0f62f` (global / dired keys), `590a2a7` (`<f5> s` menu), plus the docs commit.
+Deviations and evidence: [PLAN.md](PLAN.md).
 Date: 2026-10-12 (Asia/Taipei)
 Author: fenrir (with Claude Code)
 Previous root SPEC.md (dape): [`tasks/done/20260520-dape/SPEC.md`](../../tasks/done/20260520-dape/SPEC.md)

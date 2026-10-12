@@ -39,6 +39,7 @@ chord — the hub duplicates, it never replaces, so Tier-1 habits keep working.
 | key | scenario | contains |
 |---|---|---|
 | `<f5> n` | **Navigate** | definition / references / xref back, LSP symbols, imenu (buffer + project), consult-line, avy menu, last change, global mark ring, breadcrumb jump, ripgrep, project find-file — plus a *Files & buffers* column: `dired-jump`, `recentf-open`, `consult-buffer`, `consult-dir` |
+| `<f5> s` | **Search** | `fenrir/search-menu`, every search by WHAT. Files: find file (`C-t`), recent files, folder. Text: this buffer, open buffers, ripgrep (`C-z`), keep / focus lines. Code: imenu (buffer + project), LSP symbols (`fenrir/search-lsp-symbols`, which says so when eglot is off), references. Notes: outline, org heading, roam node, bookmarks. History: buffers, global marks, kill ring, project TODOs (`consult-todo-project`), key bindings. See [§1b](#1b-search--c-t-files-c-z-text-fenrir-searchel) |
 | `<f5> d` | **Diagnose** | flymake list (buffer + project), hover card, eldoc buffer, DevDocs, TODOs (buffer + project), gtags index check — plus an *LSP / env health* column: `eglot-reconnect`, `eglot-shutdown`, `eglot-events-buffer`, `envrc-reload` (all wrapped, see below) |
 | `<f5> g` | **Git** | magit status / dispatch / file-dispatch, `difftastic-magit-diff`, blame, inline blame, file log, time machine, hunk next/prev/show (repeats in place), copy permalink — plus a *Merge conflicts* column: `smerge-next` / `smerge-prev` (repeat in place), `smerge-keep-upper`, `smerge-keep-lower`, `smerge-keep-all` |
 | `<f5> x` | **Run/Debug** | `dape` start/continue, breakpoint toggle / remove-all, `dape-info`, `dape-repl`; `compile`, `recompile`, `project-compile`, `junit-run-dwim`, `restclient-http-send-current` |
@@ -125,7 +126,7 @@ shows the ranking.
 | `M-x` | run anything by name (Tier 3's entire mechanism) |
 | `C-.` | embark act on the thing at point |
 | `C-s` | `consult-line` search this buffer |
-| `M-s r` | `consult-ripgrep` search the project |
+| `C-t` / `C-z` | find a file / search text, starting at the project root; press either key again in the prompt to change folder or kind ([§1b](#1b-search--c-t-files-c-z-text-fenrir-searchel)) |
 | `C-x B` | fuzzy buffer switcher (`C-x b` is ibuffer) |
 | `C-x g` | magit status |
 | `M-o` | ace-window |
@@ -174,8 +175,8 @@ a candidate).
 | `C-x r b` | `consult-bookmark` | Jump to a bookmark with preview |
 | `C-s` | `consult-line` | Search lines in this buffer (incremental, jumps live) |
 | `M-s L` | `consult-line-multi` | Same, but across every open buffer at once |
-| `M-s r` | `consult-ripgrep` | **ripgrep across the whole project** |
-| `M-s f` | `consult-find` | Find files by name |
+| `M-s r` | `consult-ripgrep` | **ripgrep across the whole project**. Kept; `C-z` ([§1b](#1b-search--c-t-files-c-z-text-fenrir-searchel)) is the main key |
+| `M-s f` | `consult-fd` | Find files by name (fd / `fdfind`). Kept for old muscle memory; `C-t` ([§1b](#1b-search--c-t-files-c-z-text-fenrir-searchel)) is the main key |
 | `M-s k` | `consult-keep-lines` | Filter the current buffer down to lines matching a pattern (destructive — undoable with `C-/`) |
 | `M-s u` | `consult-focus-lines` | Hide non-matching lines via overlays (non-destructive toggle — call again to reveal) |
 | `M-g g` | `consult-goto-line` | Go to line number |
@@ -215,9 +216,60 @@ a candidate).
     capped at 16 (`global-mark-ring-max`). For fixed anchors that never get pushed out, use a
     register (`C-x r SPC a` / `C-x r j a`) or a bookmark (`C-x r b`).
 - **Preview debounce**: expensive previewers (`consult-ripgrep`, `consult-grep`,
-  `consult-find`, `consult-bookmark`, `consult-recent-file`) wait 200 ms of input idle
+  `consult-find`, `consult-fd`, `consult-bookmark`, `consult-recent-file`) wait 200 ms of input idle
   before re-rendering — keeps typing in a large project from queueing a ripgrep per
   keystroke. Tune via `consult-customize` in [`init-completion.el`](lisp/init-completion.el).
+
+---
+
+## 1b. Search — `C-t` files, `C-z` text ([`fenrir-search.el`](lisp/fenrir-search.el))
+
+Spec: [`2026-10-12/165758-one-search-system/SPEC.md`](2026-10-12/165758-one-search-system/SPEC.md).
+Every search is a choice of **WHAT** (file name or text) and **WHERE** (which folder).
+One chord starts either, and the same two keys change WHERE or WHAT while keeping
+what you typed.
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-t` | `fenrir/search-files` | Find a file by name, fuzzy and recursive (`consult-fd`) |
+| `C-z` | `fenrir/search-text` | Search text (`consult-ripgrep`) |
+| `C-s` | `consult-line` | Search this buffer (unchanged) |
+| `C-t` *(in dired)* | `fenrir/search-files-here` | Find a file under **this dired folder**. Replaces dired's image-dired prefix; image-dired stays on `M-x` |
+| `<f5> s` | `fenrir/search-menu` | The rarer searches (see the [hub table](#the-f5-scenario-hub-tier-2)) |
+
+Both start in the **project root**, or in `default-directory` when there is no project.
+The prompt shows where you are, e.g. `Fd (Project .emacs.d):` or `Ripgrep (…/share/doc):`.
+
+Inside a `C-t` / `C-z` prompt:
+
+| press | effect |
+|---|---|
+| the **same** key again | change **WHERE**: project root → current folder → its parent → … → `/` → back to the project root |
+| the **other** key | change **WHAT**: file search ⇄ text search, same folder, same text |
+| `C-x C-d` | change **WHERE** to any folder, picked with `consult-dir` (recent / project / bookmark / quick) |
+
+- Fuzzy-find a file under `~/code`: `C-t`, `C-x C-d`, `code`, `RET`, then type the name.
+- Grep the folder the current file is in: `C-z`, `C-z`, then type.
+- You typed `parser` after `C-t` but it is in the file contents: press `C-z`, and the
+  same `parser` is grepped in the same folder.
+- Nothing is searched until you have typed 3 characters (consult's
+  `consult-async-min-input`).
+
+**Moved off their keys:** `C-t` was `transpose-chars` and `C-z` was `suspend-frame`
+(which suspends an `emacsclient -nw` frame). Both are still on `M-x`. vterm / term are
+not overridden: the shell still gets `C-t` (fzf) and `C-z` (job control).
+
+Keys that work in **every** search prompt:
+
+| in the prompt | effect |
+|---|---|
+| `foo bar` | orderless: both terms, any order |
+| `M-n` | insert the symbol / file name at point |
+| `foo -- -g *.go` | ripgrep / fd: everything after ` -- ` goes to the tool as flags |
+| `#foo#bar` | ripgrep: `foo` goes to rg, `bar` filters its results locally |
+| `<` then a key | narrow by source (`consult-buffer`, `consult-dir`) |
+| `C-.` | embark: act on the candidate (other window, copy path, …) |
+| `C-. E` | export the results; on a grep export, `C-c C-p` = wgrep edit-in-place ([§2](#2--combo--project-wide-search-and-replace-with-undo-init-completionel)) |
 
 ---
 
@@ -226,7 +278,7 @@ a candidate).
 The payoff of consult + embark + wgrep wired together:
 
 ```
-M-s r          ; consult-ripgrep — search the project
+C-z            ; fenrir/search-text (consult-ripgrep) — search the project (M-s r also works)
 C-.            ; embark-act → choose  E  (embark-export) → matches become a grep buffer
 C-c C-p        ; wgrep — make that buffer editable
                ; …edit freely, across as many files as the matches span
@@ -1049,6 +1101,7 @@ Inside a Dired buffer:
 | `S-TAB` | `dired-subtree-cycle` | Cycle fold depth |
 | `N` | `dired-narrow` | Live minibuffer filter over the current Dired listing — `RET` commits the filtered view, `g` (`revert-buffer`) returns to full |
 | `w` | `dired-copy-filename-as-kill` **(built-in)** | Copy file **basename(s)** to kill ring |
+| `C-t` | `fenrir/search-files-here` | Fuzzy-find a file anywhere **under this folder** (`consult-fd`); the prompt keys of [§1b](#1b-search--c-t-files-c-z-text-fenrir-searchel) work |
 | `C-c w` | `fenrir/dired-copy-absolute-path` | Copy **absolute path(s)** of marked files (one per line) — paired with `w` above so both forms are one keystroke apart |
 | `a` | `dired-find-alternate-file` **(built-in)** | Open the entry under point, **reusing the current Dired buffer** instead of stacking a new one (this command is disabled by default; the module turns it on) |
 | `C-x C-q` | `wdired-change-to-wdired-mode` **(built-in)** | Make the Dired buffer **editable as plain text** — rename files by editing their names, then `C-c C-c` writes the renames back (or `C-c ESC` cancels). With `wdired-allow-to-change-permissions 'advanced` (set in this module) the `rwxr-xr-x` columns are editable too — edit them and the save fires `chmod` |

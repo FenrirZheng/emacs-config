@@ -130,3 +130,23 @@ Files: `FEATURES.md`, `SPEC.md` (status → implemented).
 - Run the full SPEC acceptance list (steps 1–8, TTY and GUI) and compare
   `emacs-init-time` with the current value.
 - Commit: `docs: document one-search keys`.
+
+Progress 2026-10-12 (Asia/Taipei). The phase stays `[ ]` because the acceptance
+items are still open.
+- [x] Docs, in `docs: document one-search keys`.
+  - `FEATURES.md`: a new §1b "Search" section (Tier 1, the in-prompt table,
+    examples, the moved `transpose-chars` / `suspend-frame`, vterm, Tier 3).
+  - `FEATURES.md`: a `<f5> s` hub row, and the daily-card `C-t` / `C-z` row in
+    place of `M-s r`.
+  - `FEATURES.md`: §1 `M-s f` → `consult-fd`, plus the debounce list.
+  - `FEATURES.md`: §2's combo starts from `C-z`, and §12 has a dired `C-t` row.
+  - `SPEC.md`: the status is implemented, with the commit list.
+  - `fenrir/features-audit`: no search command shows up as drift.
+- Acceptance coverage so far (TTY only, throwaway `emacs -nw`):
+  - [x] Steps 1–4 (Phase 1).
+  - [x] Steps 5–6 (Phase 2).
+  - [x] Step 7: no `void-function` (Phase 3). Its `(featurep 'transient)` = nil
+        part fails for the pre-existing combobulate reason recorded in Phase 3.
+  - [ ] Step 8: wgrep round trip (`C-z`, `C-. E`, `C-c C-p`, edit, `C-c C-c`).
+  - [ ] Steps 1–8 in a GUI frame.
+  - [ ] `emacs-init-time` compared with the value before Phase 1.
