@@ -397,10 +397,46 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("b" "Backlinks buffer"    org-roam-buffer-toggle)
       ("q" "Quit"                transient-quit-one)]])
 
+  ;; The rarer searches (Tier 2 of the one-search spec,
+  ;; 2026-10-12/165758-one-search-system/SPEC.md); the two everyday ones are
+  ;; `C-t' / `C-z' and appear here as `f' / `g'.  Every command named here is
+  ;; autoloaded or lives in fenrir-search.el, so no wrapper is needed.
+  ;; `<f5> n' keeps its own search entries -- the hub duplicates.
+  (transient-define-prefix fenrir/search-menu ()
+    "Every search, by WHAT you are looking for."
+    [["Files"
+      ("f" "Find file (C-t)"     fenrir/search-files)
+      ("r" "Recent files"        consult-recent-file)
+      ("d" "Folder (dired)"      consult-dir)]
+     ["Text"
+      ("l" "This buffer"         consult-line)
+      ("L" "Open buffers"        consult-line-multi)
+      ("g" "Ripgrep (C-z)"       fenrir/search-text)
+      ("k" "Keep lines"          consult-keep-lines)
+      ("u" "Focus lines"         consult-focus-lines)]
+     ["Code"
+      ("i" "Imenu"               consult-imenu)
+      ("I" "Imenu (project)"     consult-imenu-multi)
+      ("e" "LSP symbols"         fenrir/search-lsp-symbols)
+      ("?" "References"          xref-find-references)]
+     ["Notes"
+      ("o" "Outline"             consult-outline)
+      ("h" "Org heading"         consult-org-heading)
+      ("n" "Roam node"           org-roam-node-find)
+      ("B" "Bookmarks"           consult-bookmark)]
+     ["History"
+      ("b" "Buffers"             consult-buffer)
+      ("m" "Global marks"        consult-global-mark)
+      ("y" "Kill ring"           consult-yank-pop)
+      ("t" "TODOs (project)"     consult-todo-project)
+      ("K" "Key bindings"        embark-bindings)
+      ("q" "Quit"                transient-quit-one)]])
+
   (transient-define-prefix fenrir/hub--dispatch ()
     "Scenario hub -- see `fenrir/hub'."
     [["I want to..."
       ("n" "Navigate   jump, symbols, search" fenrir/hub-navigate)
+      ("s" "Search     files, text, symbols"  fenrir/search-menu)
       ("d" "Diagnose   errors, docs, TODOs"   fenrir/hub-diagnose)
       ("g" "Git        status, blame, hunks"  fenrir/hub-git)
       ("x" "Run/Debug  compile, dape, tests"  fenrir/hub-run)]

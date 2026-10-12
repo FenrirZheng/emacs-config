@@ -33,6 +33,8 @@
 (declare-function consult-fd "consult")
 (declare-function consult-ripgrep "consult")
 (declare-function consult-dir--pick "consult-dir")
+(declare-function consult-eglot-symbols "consult-eglot")
+(declare-function eglot-current-server "eglot")
 (declare-function project-root "project")
 
 (defun fenrir/search--dir (dir)
@@ -185,6 +187,15 @@ the project root."
   (interactive)
   (let ((here (fenrir/search--dir default-directory)))
     (fenrir/search--run 'files here nil nil here)))
+
+;;;###autoload
+(defun fenrir/search-lsp-symbols ()
+  "Search workspace symbols with `consult-eglot-symbols'.
+Says so instead of erroring when this buffer has no eglot server."
+  (interactive)
+  (if (and (fboundp 'eglot-current-server) (eglot-current-server))
+      (call-interactively #'consult-eglot-symbols)
+    (message "No eglot server in this buffer; LSP symbol search needs one (M-x eglot)")))
 
 (provide 'fenrir-search)
 ;;; fenrir-search.el ends here

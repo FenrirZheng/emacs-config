@@ -87,7 +87,7 @@ A throwaway `emacs -nw` was driven via tmux, without the daemon:
 - Note: `C-t` / `C-z` are now global inside minibuffers too, where they used to
   run `transpose-chars` / `suspend-frame`. Only the one-search prompts rebind them.
 
-## Phase 3 — `<f5> s` search menu  [ ]
+## Phase 3 — `<f5> s` search menu  [x] `keys: add <f5> s search menu`
 
 File: `lisp/init-keys.el`.
 - Define `fenrir/search-menu` inside the existing `with-eval-after-load 'transient`
@@ -98,6 +98,28 @@ File: `lisp/init-keys.el`.
 - Check: `(featurep 'transient)` is nil in a fresh daemon; every letter of
   `<f5> s` runs without `void-function` (SPEC step 7).
 - Commit: `keys: add <f5> s search menu`.
+
+Done 2026-10-12 (Asia/Taipei).
+- Deviation: the `e` eglot check is a command, `fenrir/search-lsp-symbols` in
+  `lisp/fenrir-search.el`, because it is more than a require-and-call wrapper.
+- `t` is `consult-todo-project`.
+- `K` is `embark-bindings`.
+- No `fenrir/hub--defwrapper` was needed: every other menu command is in its
+  package's `*-autoloads.el`.
+
+Evidence: libsrc ERT 34/34, search ERT 11/11, `bash .githooks/pre-commit` exit 0.
+- Batch `emacs -Q -l init.el`: every `fenrir/search-menu` suffix is `commandp`, and
+  hub `s` → `fenrir/search-menu`.
+- In a throwaway `emacs -nw` (tmux), `<f5> s` shows the SPEC layout. All 21 letters
+  were pressed, and `*Messages*` has no `void-function`. `e` without eglot prints
+  its notice. `h` outside org gives consult's own "Must be called from an Org
+  buffer".
+- **Check not met, and the cause is not this phase:** `(featurep 'transient)` is
+  already `t` right after init. combobulate's autoloads file requires
+  `combobulate-ui`, which requires transient during `package-initialize`; the
+  backtrace shows `combobulate-autoloads` → `combobulate-ui` → `transient`. This
+  config's lazy hub does not load it. The SPEC's "nil after a fresh start"
+  expectation is stale until combobulate changes.
 
 ## Phase 4 — docs + acceptance  [ ]
 
