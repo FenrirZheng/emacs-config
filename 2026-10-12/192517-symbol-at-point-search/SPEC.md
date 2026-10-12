@@ -1,6 +1,6 @@
 # Spec: C-u C-t / C-u C-z — search the symbol at point
 
-Status: draft
+Status: approved
 Date: 2026-10-12 (Asia/Taipei)
 
 ## Objective
@@ -58,9 +58,10 @@ Run in a throwaway `emacs -nw` inside tmux, not the daemon. Each step starts fro
 
 ## Open questions
 
-- Regexp-quote the text seed? — default if unanswered: yes (literal match).
+- Regexp-quote the text seed? — default if unanswered: yes (literal match). Accepted
+  2026-10-12: default.
 - File seed: symbol at point, or `thing-at-point 'filename`? — default if unanswered:
-  symbol at point.
+  symbol at point. Accepted 2026-10-12: default.
 
 ## Plan
 
