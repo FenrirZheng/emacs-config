@@ -107,6 +107,34 @@
                                             (lambda (b) (concat "/bm/" b "/")))
                  "/bm/work/")))
 
+;; --- C-u seed from the symbol at point ------------------------------------------
+
+(defmacro search-test--at (text marker &rest body)
+  "Run BODY in an `emacs-lisp-mode' buffer holding TEXT, point after MARKER."
+  (declare (indent 2))
+  `(with-temp-buffer
+     (emacs-lisp-mode)
+     (insert ,text)
+     (goto-char (point-min))
+     (search-forward ,marker)
+     ,@body))
+
+(ert-deftest search-seed-dotted-symbol ()
+  ;; text seed is regexp-quoted so the dot matches literally; files seed is raw
+  (search-test--at "(foo.bar 1)\n" "foo."
+    (should (equal (fenrir/search--initial-from-point 'text) "foo\\.bar"))
+    (should (equal (fenrir/search--initial-from-point 'files) "foo.bar"))))
+
+(ert-deftest search-seed-plain-symbol ()
+  (search-test--at "(defun fenrir/search--run (kind dir))\n" "fenrir/sea"
+    (should (equal (fenrir/search--initial-from-point 'text) "fenrir/search--run"))
+    (should (equal (fenrir/search--initial-from-point 'files) "fenrir/search--run"))))
+
+(ert-deftest search-seed-empty-line ()
+  (search-test--at "(a)\n\n(b)\n" "(a)\n"
+    (should-not (fenrir/search--initial-from-point 'text))
+    (should-not (fenrir/search--initial-from-point 'files))))
+
 ;; --- prompt keymap -----------------------------------------------------------------
 
 (ert-deftest search-prompt-keys ()

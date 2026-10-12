@@ -81,7 +81,7 @@ commit subject (a commit cannot contain its own hash; `git log --grep` finds it)
 
 Leave no `.elc` behind. Commit only the paths each phase lists.
 
-### Phase 1 — seed helper and prefix arg  [ ]
+### Phase 1 — seed helper and prefix arg  [x] `search: seed C-u C-t / C-u C-z with the symbol at point`
 
 Files: `lisp/fenrir-search.el`, `test/search-test.el`
 - Add `fenrir/search--initial-from-point (kind)`: `(thing-at-point 'symbol t)`; for
@@ -96,6 +96,17 @@ Files: `lisp/fenrir-search.el`, `test/search-test.el`
   - point on an empty line → both nil.
 - Checks: the three Test commands; search ERT count rises from 15 to at least 18.
 - Commit: `search: seed C-u C-t / C-u C-z with the symbol at point`
+
+Done 2026-10-12 (Asia/Taipei).
+- Deviations: none that need asking. Recorded: the helper uses `when-let*`; the tests
+  share an internal macro `search-test--at` (temp `emacs-lisp-mode` buffer, point after
+  a marker).
+- Evidence: libsrc ERT 34/34; search ERT 18/18 (was 15; new `search-seed-dotted-symbol`,
+  `search-seed-plain-symbol`, `search-seed-empty-line`); `bash .githooks/pre-commit`
+  exit 0; no `.elc` left. Full-init batch: `(interactive-form 'fenrir/search-files)` →
+  `(interactive (list nil current-prefix-arg))`.
+- Commits: `search: seed C-u C-t / C-u C-z with the symbol at point` (2026-10-12) —
+  closes Phase 1.
 
 ### Phase 2 — docs and acceptance  [ ]
 

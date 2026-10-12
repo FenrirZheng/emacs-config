@@ -190,22 +190,33 @@ list it."
   "Where a fresh search starts: the project root, else `default-directory'."
   (fenrir/search--root default-directory))
 
+(defun fenrir/search--initial-from-point (kind)
+  "Seed for a KIND (`files' / `text') search: the symbol at point, or nil.
+For `text' the symbol is `regexp-quote'd, because consult-ripgrep reads
+its input as a regexp and `foo.bar' must match literally."
+  (when-let* ((sym (thing-at-point 'symbol t)))
+    (if (eq kind 'text) (regexp-quote sym) sym)))
+
 ;;;###autoload
-(defun fenrir/search-files (&optional dir)
+(defun fenrir/search-files (&optional dir seed-p)
   "Find a file by name under DIR (default: project root) with `consult-fd'.
+With \\[universal-argument] (SEED-P), start with the symbol at point typed.
 In the prompt: `C-t' next folder, `C-z' search text instead, `C-x C-d'
 pick a folder."
-  (interactive)
-  (fenrir/search--run 'files (or dir (fenrir/search--start-dir)) nil
+  (interactive (list nil current-prefix-arg))
+  (fenrir/search--run 'files (or dir (fenrir/search--start-dir))
+                      (and seed-p (fenrir/search--initial-from-point 'files))
                       nil (fenrir/search--dir default-directory)))
 
 ;;;###autoload
-(defun fenrir/search-text (&optional dir)
+(defun fenrir/search-text (&optional dir seed-p)
   "Search text under DIR (default: project root) with `consult-ripgrep'.
-In the prompt: `C-z' next folder, `C-t' find files instead, `C-x C-d'
-pick a folder."
-  (interactive)
-  (fenrir/search--run 'text (or dir (fenrir/search--start-dir)) nil
+With \\[universal-argument] (SEED-P), start with the symbol at point typed,
+regexp-quoted.  In the prompt: `C-z' next folder, `C-t' find files
+instead, `C-x C-d' pick a folder."
+  (interactive (list nil current-prefix-arg))
+  (fenrir/search--run 'text (or dir (fenrir/search--start-dir))
+                      (and seed-p (fenrir/search--initial-from-point 'text))
                       nil (fenrir/search--dir default-directory)))
 
 ;;;###autoload
