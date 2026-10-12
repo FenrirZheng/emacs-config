@@ -139,5 +139,31 @@ Done 2026-10-12 (Asia/Taipei).
   `M-:` got closing parens auto-inserted, which made it an invalid expression. The
   steps were re-run with a loaded helper (`ah-goto-run`); the inputs under test did not
   change.
+- Supplementary run in the daemon, 2026-10-12 20:50 (Asia/Taipei). Deliberate deviation
+  from "not the daemon": the goal was to confirm that the restarted daemon loads the new
+  keys. It adds to the run above and does not replace it.
+  - Restart: `systemctl --user restart emacs`, rc 0, back to `active`. Old PID 1878781
+    (started 17:52:08, before Phase 1's commit); new PID 1991729 (20:50:21). Before the
+    restart: no modified file buffers, only server connections. The restart closed 3 GUI
+    frames.
+  - New daemon: `(fboundp 'fenrir/search--initial-from-point)` → `t`; `C-t` →
+    `fenrir/search-files`, `C-z` → `fenrir/search-text`.
+  - Setup: `emacsclient -nw ~/.emacs.d/lisp/fenrir-search.el` in a detached tmux session.
+    Point was placed by a helper (`ah-goto`) loaded beforehand with `emacsclient -e`, not
+    typed into `M-:`. Keys went in with `tmux send-keys`; prompts were read with
+    `tmux capture-pane`. Every step used its literal input.
+  1. Point on `fenrir/search--run` (line 107), `C-u C-z` → `Ripgrep (Project .emacs.d):`,
+     input `#fenrir/search--run`, 21 matches (17 in the run above; the count
+     follows the repo's text, not the feature). Pass.
+  2. Point on `fenrir-search` in `(provide 'fenrir-search)` (line 240), `C-u C-t` →
+     `Fd (Project .emacs.d):`, input `#fenrir-search`, candidate `lisp/fenrir-search.el`.
+     Pass.
+  3. Point on an empty line (line 2), `C-u C-z` → `Ripgrep (Project .emacs.d):`, input
+     `#`. Pass.
+  4. After step 1, `C-z` → `Ripgrep (~/.emacs.d/lisp):`, input still
+     `#fenrir/search--run`, 5 matches. Pass.
+  5. Point on `fenrir/search--run`, `C-z` without `C-u` → `Ripgrep (Project .emacs.d):`,
+     input `#`. Pass.
+  - Cleanup: `ah-goto` was `fmakunbound`; the test frame and tmux session were closed.
 - Commits: `docs: document C-u C-t / C-u C-z symbol seeding` (2026-10-12) — closes
   Phase 2 and the spec.
