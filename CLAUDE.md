@@ -26,11 +26,11 @@ knowable trigger lives in [`_doc/`](_doc/README.md) and is read on demand.
 | plans / strategy for in-flight work | [`tasks/`](tasks/) — landed folders are archived under [`tasks/done/`](tasks/done/README.md) |
 | native modules | [`cpp/README.md`](cpp/README.md), [`rust/README.md`](rust/README.md) |
 
-- **Write each new spec with the `phased-spec` skill — one
-  `<YYYY-MM-DD>/<HHMMSS>-<spec-name>/SPEC.md` holding the spec and its phased `## Plan`,
+- **Write each new spec with the `sliced-spec` skill — one
+  `sliced-spec/<YYYY-MM-DD>/<HHMMSS>-<spec-name>/SPEC.md` with a `HANDOFF.md` beside it,
   never a root `SPEC.md` or a separate `PLAN.md`** — when starting a spec or design doc for
   this config. Example:
-  [`2026-10-12/165758-one-search-system/SPEC.md`](2026-10-12/165758-one-search-system/SPEC.md).
+  [`sliced-spec/2026-10-12/165758-one-search-system/SPEC.md`](sliced-spec/2026-10-12/165758-one-search-system/SPEC.md).
 
 ## Architecture rules
 

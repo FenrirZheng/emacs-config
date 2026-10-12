@@ -5,7 +5,7 @@ Status: implemented (rev 2), approved 2026-10-12 with the defaults (`C-t` files,
 Date: 2026-10-12 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 Author: fenrir (with Claude Code)
-Previous root SPEC.md (dape): [`tasks/done/20260520-dape/SPEC.md`](../../tasks/done/20260520-dape/SPEC.md)
+Previous root SPEC.md (dape): [`tasks/done/20260520-dape/SPEC.md`](../../../tasks/done/20260520-dape/SPEC.md)
 
 Rev 2 drops rev 1's `M-s` grid (`M-s f/F`, `M-s r/R`, `M-s M-s`). Its feedback
 was that a prefix plus a letter, plus Shift for the folder variants, is

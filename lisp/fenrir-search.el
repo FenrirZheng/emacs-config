@@ -5,7 +5,7 @@
 
 ;;; Commentary:
 
-;; Spec: [2026-10-12/165758-one-search-system/SPEC.md](../2026-10-12/165758-one-search-system/SPEC.md).
+;; Spec: [sliced-spec/2026-10-12/165758-one-search-system/SPEC.md](../sliced-spec/2026-10-12/165758-one-search-system/SPEC.md).
 ;;
 ;; Two commands, `fenrir/search-files' (`consult-fd') and `fenrir/search-text'
 ;; (`consult-ripgrep'), both starting at the project root, or at

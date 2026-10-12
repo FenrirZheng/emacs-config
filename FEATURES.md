@@ -224,7 +224,7 @@ a candidate).
 
 ## 1b. Search — `C-t` files, `C-z` text ([`fenrir-search.el`](lisp/fenrir-search.el))
 
-Spec: [`2026-10-12/165758-one-search-system/SPEC.md`](2026-10-12/165758-one-search-system/SPEC.md).
+Spec: [`sliced-spec/2026-10-12/165758-one-search-system/SPEC.md`](sliced-spec/2026-10-12/165758-one-search-system/SPEC.md).
 Every search is a choice of **WHAT** (file name or text) and **WHERE** (which folder).
 One chord starts either, and the same two keys change WHERE or WHAT while keeping
 what you typed.

@@ -398,8 +398,8 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("q" "Quit"                transient-quit-one)]])
 
   ;; The rarer searches (Tier 2 of the one-search spec,
-  ;; 2026-10-12/165758-one-search-system/SPEC.md); the two everyday ones are
-  ;; `C-t' / `C-z' and appear here as `f' / `g'.  Every command named here is
+  ;; sliced-spec/2026-10-12/165758-one-search-system/SPEC.md); the two everyday
+  ;; ones are `C-t' / `C-z' and appear here as `f' / `g'.  Every command named here is
   ;; autoloaded or lives in fenrir-search.el, so no wrapper is needed.
   ;; `<f5> n' keeps its own search entries -- the hub duplicates.
   (transient-define-prefix fenrir/search-menu ()
@@ -493,7 +493,7 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
 ;; ROUTING ONLY.  The commands and their prompt keys (same key = next folder,
 ;; other key = files <-> text, `C-x C-d' = any folder) live in
 ;; [`fenrir-search.el'](fenrir-search.el), loaded by init-completion.el.
-;; Spec: 2026-10-12/165758-one-search-system/SPEC.md.
+;; Spec: sliced-spec/2026-10-12/165758-one-search-system/SPEC.md.
 ;;
 ;; `C-t' (`transpose-chars', 2 keyfreq presses) and `C-z' (`suspend-frame',
 ;; harmful under emacsclient -nw) both stay on `M-x'.  Plain global keys, not
