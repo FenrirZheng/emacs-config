@@ -11,9 +11,11 @@
   :bind (("C-x g" . magit-status)
          ("C-x M-g" . magit-dispatch))
   :custom
-  ;; Refine only the hunk at point, not 'all -- 'all turns large diffs into a
-  ;; font-lock circus.
-  (magit-diff-refine-hunk t)
+  ;; In-hunk (word-level) refinement is off: delta already marks the changed
+  ;; words, and `magit-delta-mode' (below) sets this option to nil globally
+  ;; every time it turns on, so nil is what is in effect. Magit's own
+  ;; refinement would only come back with magit-delta off.
+  (magit-diff-refine-hunk nil)
   ;; Commit lines in status buffers show when the commit was made, in the right
   ;; margin: committer (not author) time, absolute local, no author name (16
   ;; columns). The date already comes back with Magit's own log call, so this
