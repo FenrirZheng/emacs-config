@@ -14,6 +14,12 @@
   ;; Refine only the hunk at point, not 'all -- 'all turns large diffs into a
   ;; font-lock circus.
   (magit-diff-refine-hunk t)
+  ;; Commit lines in status buffers show when the commit was made, in the right
+  ;; margin: committer (not author) time, absolute local, no author name (16
+  ;; columns). The date already comes back with Magit's own log call, so this
+  ;; adds no Git command. `L L' toggles it per buffer.
+  (magit-log-margin-show-committer-date t)
+  (magit-status-margin '(t "%Y-%m-%d %H:%M" magit-log-margin-width nil 18))
   ;; Flip to t when investigating slow refreshes -- each section logs its
   ;; elapsed time to *Messages*. M-x magit-toggle-verbose-refresh does the same.
   ;; (magit-refresh-verbose t)

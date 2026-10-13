@@ -1,6 +1,6 @@
 # Spec: Magit — show the commit time beside every hash
 
-Status: approved
+Status: in progress
 Date: 2026-10-13 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
