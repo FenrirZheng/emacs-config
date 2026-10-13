@@ -1,6 +1,6 @@
 # Handoff: Magit — show the commit time beside every hash
 
-Updated: 2026-10-13 23:23 (Asia/Taipei)
+Updated: 2026-10-13 23:28 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
@@ -11,40 +11,47 @@ Spec: [SPEC.md](SPEC.md)
 - Slice 2 — `git: show commit time in Magit log buffers`: log margins show author +
   committer time instead of a relative age; `log-committer-time` encodes 驗收條件 2 (pass);
   FEATURES.md §8 updated.
+- `test: keep magit-time-test's forge database out of the repo`: the suite had been
+  writing `forge-database.sqlite` into the repo root (contrary to the `/tmp`-only 副作用 of
+  驗收條件 1–4); it now goes to the temp dir.
+- Slice 3 — `git: say refine-hunk is off under magit-delta`: `magit-diff-refine-hunk` set
+  to nil with a comment saying magit-delta-mode forces it off. Batch: nil after loading
+  `init-git` and inside a fixture status buffer with delta on. The daemon half of 驗收條件 7
+  runs at the gate.
 
 ## 決定與原因
 
 - The user approved SPEC.md and its 待決問題 defaults on 2026-10-13.
 - Batch tests load Magit from `elpa/` via `package-initialize` and require the real
-  `init-git` (it loads cleanly in batch). Invocation:
+  `init-git`. Invocation:
   `TZ=Asia/Taipei emacs -Q --batch -l test/magit-time-test.el -f ert-run-tests-batch-and-exit`.
-  Leave no `.elc`.
+  Leave no `.elc`. Under `-Q` no-littering is absent, so the suite points
+  `forge-database-file` at the temp dir itself.
 - Settings live in `:custom` of `use-package magit`: `magit-log-margin-show-committer-date t`,
   `magit-status-margin '(t "%Y-%m-%d %H:%M" magit-log-margin-width nil 18)`,
-  `magit-log-margin '(t "%Y-%m-%d %H:%M" magit-log-margin-width t 18)`.
-- `:custom` runs before magit loads, and the reflog / stashes / cherry / log-select margin
-  defcustoms copy STYLE from `magit-log-margin` at load, so those buffers show the absolute
-  time too. Consistent, not a goal; no criterion covers it.
-- The log test runs `magit-log-current` via `call-interactively` (its positional args are
-  revs, args, files — passing args directly errored).
-- `L L` (status map `L` → `magit-log-refresh`, suffix `L` → `magit-toggle-margin`) hides
-  the times by shrinking the window's right margin to 0; the overlays stay. The toggle test
-  measures `window-margins`, not overlays.
+  `magit-log-margin '(t "%Y-%m-%d %H:%M" magit-log-margin-width t 18)`,
+  `magit-diff-refine-hunk nil`.
+- `magit-delta-mode` (`elpa/magit-delta-20220125.50/magit-delta.el:99`) does a global
+  `setq magit-diff-refine-hunk nil` on enable and saves the old value, which after the first
+  Magit buffer is nil too. So nil is the honest setting.
+- Reflog / stashes / cherry / log-select margins copy STYLE from `magit-log-margin` at load,
+  so they show the absolute time too. Consistent, not a goal; no criterion covers it.
+- `L L` hides the times by shrinking the window's right margin to 0; the overlays stay. The
+  toggle test measures `window-margins`.
 - Open Magit buffers keep their margin state from creation; acceptance 5–6 kill
   `magit: .emacs.d` first for that reason.
 
 ## 下一步
 
-Slice 3: make the in-hunk refinement line in `lisp/init-git.el` state what happens while
-magit-delta is on (目標 bullet 5) — `magit-diff-refine-hunk` is overridden to nil by
-magit-delta-mode, so the `t` setting and its comment are misleading. Read magit-delta's
-source in `elpa/` for the override first. Moves 驗收條件 7 toward passing (its daemon half
-runs at the gate). Commit: `git: say refine-hunk is off under magit-delta`.
+The acceptance gate. 5 and 6 are manual (real TTY / GUI frame) → `needs user`; 7 needs the
+daemon (`emacsclient`) after reloading `lisp/init-git.el`.
 
 ## 卡住・待確認
 
-- Unrelated uncommitted changes in the repo (staged rename `SPEC.md` →
-  `tasks/done/20260520-dape/SPEC.md`, modified `tasks/done/README.md`): the user said leave
-  them alone. Slice commits name only their own paths.
-- The running daemon has not reloaded `lisp/init-git.el`; that happens in the setup of
-  驗收條件 5 at the gate.
+- Gate step 1 needs no modified or staged tracked file. Today the tree has: the unrelated
+  staged rename `SPEC.md` → `tasks/done/20260520-dape/SPEC.md` and modified
+  `tasks/done/README.md` (user: leave alone), plus another session's uncommitted edits to
+  `lisp/languages/fenrir-libsrc.el` and `test/libsrc-test.el` (libsrc rust class-lister
+  spec). The gate cannot start until those are committed or set aside — the user's call.
+- A stray `forge-database.sqlite` that this suite created at 22:57 was moved out of the repo
+  to this session's scratchpad, not deleted.
