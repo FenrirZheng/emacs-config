@@ -13,6 +13,9 @@
 (setq package-user-dir (expand-file-name "elpa" magit-time-test--root))
 (package-initialize)
 (add-to-list 'load-path (expand-file-name "lisp" magit-time-test--root))
+;; -Q skips no-littering, so forge would put its database in the repo root.
+(setq forge-database-file
+      (expand-file-name "magit-time-test-forge.sqlite" temporary-file-directory))
 (require 'init-git)
 (require 'magit)
 
