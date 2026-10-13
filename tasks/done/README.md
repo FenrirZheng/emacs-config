@@ -7,6 +7,7 @@ Archive for task directories whose work is **in the config already**. Moved here
 |---|---|
 | `20260519-1650-no-name` | dirvish adoption plan — **superseded, not implemented**: the config went with plain dired + small enhancers instead ([`lisp/init-dired.el`](../../lisp/init-dired.el) documents why, and why `dirvish-side` stays retired). Kept for that rationale. |
 | `20260519-2040-raw` | one-off "what else could this config use" research dump; its recommendations were triaged into the later task folders. |
+| `20260520-dape` | dape DAP-debugger spec (formerly the root `SPEC.md`, commit 2bb0ec4); `use-package dape` landed in [`lisp/init-languages.el`](../../lisp/init-languages.el). Moved here 2026-10-12; new specs no longer use a root `SPEC.md` (see the spec rule in [`CLAUDE.md`](../../CLAUDE.md#where-to-look)). |
 | `20260520-2059-aidermacs` | aidermacs wired in ([`lisp/init-aidermacs.el`](../../lisp/init-aidermacs.el)); all 11 tasks done. |
 | `20260521-2334-tokyo-night-theme` | doom-tokyo-night + transparency + `isearch-fail` colour landed in [`lisp/init-appearance.el`](../../lisp/init-appearance.el). |
 | `20260521-tmux-create-claude` | `lisp/init-tmux-claude.el` landed, daemon tmux-detection fix verified. |
