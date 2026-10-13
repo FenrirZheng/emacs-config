@@ -1,6 +1,6 @@
 # Spec: Magit — show the commit time beside every hash
 
-Status: draft
+Status: approved
 Date: 2026-10-13 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
@@ -52,9 +52,10 @@ commits"). Building it is setup. Batch tests run with `TZ=Asia/Taipei`.
 5. Daemon, TTY frame. Setup: reload `lisp/init-git.el`, kill the buffer `magit: .emacs.d`.
    `C-x g` in `~/.emacs.d` → every commit line shows the time that
    `git -C ~/.emacs.d log -1 --format=%cd --date=format-local:'%Y-%m-%d %H:%M' <hash>`
-   prints for its hash — test: manual (needs a real TTY frame) — 副作用: none
+   prints for its hash — test: manual (needs a real TTY frame) — 副作用: kills buffer
+   `magit: .emacs.d` in the daemon
 6. Same input and step as 5, in the daemon's GUI frame → same result — test: manual (needs
-   a real GUI frame) — 副作用: none
+   a real GUI frame) — 副作用: kills buffer `magit: .emacs.d` in the daemon
 7. `emacsclient -e '(with-current-buffer "magit: .emacs.d" magit-diff-refine-hunk)'` →
    `nil`, and `ug -n refine lisp/init-git.el` shows no line that sets or claims another
    value — test: manual (one command plus a grep) — 副作用: none
@@ -73,7 +74,7 @@ commits"). Building it is setup. Batch tests run with `TZ=Asia/Taipei`.
 
 ## 待決問題
 
-The interview (2026-10-13) got no answer; these are defaults until approval.
+The interview (2026-10-13) got no answer; the user approved these defaults on 2026-10-13.
 
 - Committer time or author time? — default if unanswered: committer.
 - Absolute `YYYY-MM-DD HH:MM` or relative age? — default if unanswered: absolute.
