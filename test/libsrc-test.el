@@ -342,6 +342,84 @@ Returns (STATE . STILL-RESOLVING-P)."
           (should-not (car res))
           (should-not (cdr res)))))))
 
+;; --- 驗收條件 4, 5: the real helper on a broken and a missing jar ------------------
+;; Skipped when the helper is not built or kjw-web's state file (the fixture) is
+;; absent, so the suite still runs from `lisp/' alone.  Writes
+;; /tmp/libsrc-classes-fixture/broken.jar.
+
+(defconst libsrc-test--fixture-state
+  (expand-file-name "~/.cache/fenrir-libsrc/proj/0c3182fdef74a5edb107922b61083d9364653696.eld"))
+(defconst libsrc-test--broken "/tmp/libsrc-classes-fixture/broken.jar")
+(defconst libsrc-test--missing "/tmp/libsrc-classes-fixture/missing.jar")
+
+(defun libsrc-test--fixture-jars (n)
+  "The first N `:jars' of the fixture state file."
+  (with-temp-buffer
+    (insert-file-contents libsrc-test--fixture-state)
+    (seq-take (plist-get (read (current-buffer)) :jars) n)))
+
+(defun libsrc-test--make-bad-jars ()
+  (make-directory (file-name-directory libsrc-test--broken) t)
+  (with-temp-file libsrc-test--broken (insert "not a zip"))
+  (when (file-exists-p libsrc-test--missing) (delete-file libsrc-test--missing)))
+
+(defun libsrc-test--index-real (jars)
+  "Run `--index-classes' on JARS with the real helper.
+Returns (STATE STILL-RESOLVING-P MESSAGES LOG)."
+  (let ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+        (msgs nil)
+        (deadline (+ (float-time) 30)))
+    (make-directory proj t)
+    (with-current-buffer (fenrir/libsrc--log-buffer)
+      (let ((inhibit-read-only t)) (erase-buffer)))
+    (puthash proj nil fenrir/libsrc--resolving)
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args) (push (apply #'format fmt args) msgs))))
+      (fenrir/libsrc--index-classes proj jars 100.0)
+      (while (and (not (eq (gethash proj fenrir/libsrc--resolving 'none) 'none))
+                  (< (float-time) deadline))
+        (accept-process-output nil 0.05)))
+    (list (fenrir/libsrc--state proj)
+          (not (eq (gethash proj fenrir/libsrc--resolving 'none) 'none))
+          msgs
+          (with-current-buffer (fenrir/libsrc--log-buffer) (buffer-string)))))
+
+(ert-deftest libsrc-index-real-broken-and-missing-jars ()
+  (skip-unless (file-executable-p fenrir/libsrc-classes-program))
+  (skip-unless (file-readable-p libsrc-test--fixture-state))
+  (libsrc-test--make-bad-jars)
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((good (libsrc-test--fixture-jars 3))
+             (alone (car (libsrc-test--index-real good)))
+             (res (libsrc-test--index-real
+                   (append (list libsrc-test--broken libsrc-test--missing) good)))
+             (st (nth 0 res))
+             (log (nth 3 res)))
+        (should st)
+        (should-not (nth 1 res))
+        (should (equal (plist-get st :unreadable)
+                       (list libsrc-test--broken libsrc-test--missing)))
+        ;; the good jars' classes, exactly as when listed alone
+        (let ((ix (plist-get st :class-index)) (ax (plist-get alone :class-index)))
+          (should (= (hash-table-count ix) (hash-table-count ax)))
+          (maphash (lambda (k v) (should (equal (gethash k ix) v))) ax))
+        (should (string-match-p (regexp-quote libsrc-test--broken) log))
+        (should (string-match-p (regexp-quote libsrc-test--missing) log))
+        (should (string-match-p "could not list 2 jar(s)" log))))))
+
+(ert-deftest libsrc-index-real-only-unreadable-jars ()
+  (skip-unless (file-executable-p fenrir/libsrc-classes-program))
+  (libsrc-test--make-bad-jars)
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let ((res (libsrc-test--index-real
+                  (list libsrc-test--broken libsrc-test--missing))))
+        (should-not (nth 0 res))          ; no state stored
+        (should-not (nth 1 res))          ; resolving entry released
+        (should (seq-some (lambda (m) (string-match-p "could not list any of 2 jars" m))
+                          (nth 2 res)))))))
+
 ;; --- A5: staleness covers subproject build files and parent poms -----------------
 
 (defun libsrc-test--touch (file &optional time)

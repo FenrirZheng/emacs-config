@@ -45,8 +45,39 @@ The one dependency is `zip` with default features off. `.cargo/config.toml` link
 mold. It is read only when cargo runs with this directory as cwd, which the Makefile
 does; check with `readelf -p .comment ../lib/libsrc-classes`.
 
+## Speed
+
+Measured 2026-10-13 23:4x (Asia/Taipei) on kjw-web's 103 jars (35,212 classes), 12 cores,
+machine load average 3.5–6 from other work, so treat these as upper bounds:
+
+- `sliced-spec/…/bench.el`, medians of 5 runs after one warm-up: the helper alone 73–90 ms,
+  the whole step (process start to the index parsed in Elisp) 130–151 ms, against the
+  0.79 s of `sh` + `unzip -Z1` + Elisp parse it replaced.
+- Inside the helper, medians of 10: reading the jars 36 ms (parallel, one thread per core;
+  the 57 MB `kotlin-compiler-embeddable` jar alone sets the floor), indexing 21 ms, writing
+  the form 11 ms — measured before the FNV hasher and the single write, which cut the
+  shell-timed median from 77 to 70 ms.
+
 ## Build profiles
 
 From the `rust-build-speed` new-workspace scaffold: `release` uses thin LTO, `dev` uses
 `debug = "line-tables-only"`, and `quick` is an incremental, non-LTO release.
-**Unmeasured** — no `measure.sh` run on this crate yet.
+
+`bash ~/.claude/skills/rust-build-speed/scripts/measure.sh --lto --real-edit .`, run
+2026-10-13 23:49 (Asia/Taipei), rustc 1.98.0, mold 2.37.1, 12 cores, load average 6.0, real
+edits (probe functions appended, sources restored byte-identically and checked with
+`diff` against a backup):
+
+| step | time |
+|---|---|
+| no-op build | 0.05 s |
+| edit `main.rs` → `cargo check` | 0.14 s |
+| edit `main.rs` → `cargo build` | 0.34 s |
+| edit `lib.rs` → `cargo build` | 0.67 s |
+| edit `lib.rs` → `cargo build --release` (thin LTO) | 5.63 s |
+| same, `lto = false` / `thin` / `true` | 1.66 s / 5.52 s / 7.10 s |
+| same, `--profile quick` | 0.61 s |
+
+The dev loop is under a second, so there is nothing to tune there. For an optimized build
+while iterating, use `cargo build --profile quick` (9× faster than the thin-LTO release).
+`make` keeps building the thin-LTO `release` that it deploys.

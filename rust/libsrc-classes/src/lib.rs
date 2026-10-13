@@ -7,8 +7,10 @@
 //! `\2-\3` backreference) matched case-insensitively.
 
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, BufReader, Write};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Simple class name for jar entry `entry`, or `None`.
 ///
@@ -73,7 +75,7 @@ pub fn jar_gav(jar: &str) -> Option<String> {
 /// Every entry name in the jar at `path`.  A name the zip crate cannot
 /// decode is skipped: it cannot be a class entry worth indexing.
 pub fn jar_entries(path: &str) -> zip::result::ZipResult<Vec<String>> {
-    let archive = zip::ZipArchive::new(File::open(path)?)?;
+    let archive = zip::ZipArchive::new(BufReader::new(File::open(path)?))?;
     Ok(archive
         .file_names()
         .filter_map(Result::ok)
@@ -81,30 +83,84 @@ pub fn jar_entries(path: &str) -> zip::result::ZipResult<Vec<String>> {
         .collect())
 }
 
+/// The simple class names in the jar at `path`, duplicates included.
+pub fn jar_classes(path: &str) -> zip::result::ZipResult<Vec<String>> {
+    let archive = zip::ZipArchive::new(BufReader::new(File::open(path)?))?;
+    Ok(archive
+        .file_names()
+        .filter_map(Result::ok)
+        .filter_map(|n| class_entry_name(&n).map(str::to_owned))
+        .collect())
+}
+
+/// FNV-1a: the index hashes ~70k short class names per run, where std's
+/// DoS-resistant SipHash costs measurably more; inputs are local jar entries.
+#[derive(Default)]
+pub struct Fnv(u64);
+
+impl Hasher for Fnv {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        let mut h = if self.0 == 0 { 0xcbf2_9ce4_8422_2325 } else { self.0 };
+        for &b in bytes {
+            h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+        }
+        self.0 = h;
+    }
+}
+
 /// Simple name -> GAVs, keys in first-seen order, GAVs in jar order.
+/// GAVs are interned: each class holds small ids, not a string per class.
 #[derive(Default, Debug)]
 pub struct ClassIndex {
+    gavs: Vec<String>,
     keys: Vec<String>,
-    slots: HashMap<String, Vec<String>>,
+    slots: HashMap<String, Vec<u32>, BuildHasherDefault<Fnv>>,
 }
 
 impl ClassIndex {
-    pub fn add(&mut self, name: &str, gav: &str) {
-        match self.slots.get_mut(name) {
-            Some(gavs) => {
-                if !gavs.iter().any(|g| g == gav) {
-                    gavs.push(gav.to_owned());
-                }
-            }
+    /// Id of `gav`, adding it on first sight.  Called once per jar.
+    pub fn intern(&mut self, gav: &str) -> u32 {
+        match self.gavs.iter().position(|g| g == gav) {
+            Some(i) => i as u32,
             None => {
-                self.keys.push(name.to_owned());
-                self.slots.insert(name.to_owned(), vec![gav.to_owned()]);
+                self.gavs.push(gav.to_owned());
+                (self.gavs.len() - 1) as u32
             }
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<&[String]> {
-        self.slots.get(name).map(Vec::as_slice)
+    /// Record that class `name` is defined by the GAV with id `gav`.
+    pub fn add_id(&mut self, name: String, gav: u32) {
+        match self.slots.get_mut(name.as_str()) {
+            Some(ids) => {
+                if !ids.contains(&gav) {
+                    ids.push(gav);
+                }
+            }
+            None => {
+                self.keys.push(name.clone());
+                self.slots.insert(name, vec![gav]);
+            }
+        }
+    }
+
+    pub fn add(&mut self, name: &str, gav: &str) {
+        let id = self.intern(gav);
+        self.add_id(name.to_owned(), id);
+    }
+
+    pub fn get(&self, name: &str) -> Option<Vec<&str>> {
+        self.slots
+            .get(name)
+            .map(|ids| ids.iter().map(|&i| self.gavs[i as usize].as_str()).collect())
+    }
+
+    /// Class names in first-seen order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.keys.iter().map(String::as_str)
     }
 
     pub fn len(&self) -> usize {
@@ -124,20 +180,57 @@ pub struct Listing {
     pub unreadable: Vec<String>,
 }
 
+type Read = zip::result::ZipResult<Vec<String>>;
+
+/// `jar_classes` of every jar, read on up to `available_parallelism` threads
+/// (the 57 MB kotlin-compiler jar alone is ~30 ms); results in input order.
+fn read_all<S: AsRef<str> + Sync>(jars: &[S]) -> Vec<Read> {
+    let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(jars.len());
+    if workers <= 1 {
+        return jars.iter().map(|j| jar_classes(j.as_ref())).collect();
+    }
+    let next = AtomicUsize::new(0);
+    let mut slots: Vec<Option<Read>> = (0..jars.len()).map(|_| None).collect();
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        if i >= jars.len() {
+                            break done;
+                        }
+                        done.push((i, jar_classes(jars[i].as_ref())));
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            for (i, r) in h.join().expect("jar reader thread panicked") {
+                slots[i] = Some(r);
+            }
+        }
+    });
+    slots.into_iter().map(|r| r.expect("every jar read")).collect()
+}
+
 /// List every jar; index the classes of those with a GAV.
 ///
 /// Jars without a GAV are still opened, so an unreadable one is reported the
-/// same way whatever its path looks like.
-pub fn list_jars<S: AsRef<str>>(jars: &[S]) -> Listing {
+/// same way whatever its path looks like.  Reading is parallel; indexing runs
+/// in jar order, so GAV lists keep that order.
+pub fn list_jars<S: AsRef<str> + Sync>(jars: &[S]) -> Listing {
     let mut out = Listing::default();
-    for jar in jars {
+    for (jar, classes) in jars.iter().zip(read_all(jars)) {
         let jar = jar.as_ref();
-        match jar_entries(jar) {
+        match classes {
             Err(_) => out.unreadable.push(jar.to_owned()),
             Ok(names) => {
                 if let Some(gav) = jar_gav(jar) {
-                    for name in names.iter().filter_map(|e| class_entry_name(e)) {
-                        out.index.add(name, &gav);
+                    let id = out.index.intern(&gav);
+                    for name in names {
+                        out.index.add_id(name, id);
                     }
                 }
             }
@@ -172,11 +265,11 @@ pub fn write_lisp(w: &mut impl Write, listing: &Listing) -> io::Result<()> {
         }
         lisp_string(w, k)?;
         w.write_all(b" (")?;
-        for (j, g) in listing.index.slots[k].iter().enumerate() {
+        for (j, &g) in listing.index.slots[k].iter().enumerate() {
             if j > 0 {
                 w.write_all(b" ")?;
             }
-            lisp_string(w, g)?;
+            lisp_string(w, &listing.index.gavs[g as usize])?;
         }
         w.write_all(b")")?;
     }
@@ -269,6 +362,7 @@ mod tests {
         ix.add("Foo", "org.x:a:1.0");
         ix.add("Bar", "org.y:b:2.0");
         assert_eq!(ix.get("Foo").unwrap(), ["org.x:a:1.0", "org.y:b:2.0"]);
+        assert_eq!(ix.get("Bar").unwrap(), ["org.y:b:2.0"]);
         assert_eq!(ix.len(), 2);
     }
 
