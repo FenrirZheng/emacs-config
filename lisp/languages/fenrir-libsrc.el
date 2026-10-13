@@ -25,10 +25,11 @@
 ;;     [init script](fenrir-libsrc/classpath.gradle), offline first with one
 ;;     online retry.  Both execute the project's own build code, so a root
 ;;     is first resolved only by an explicit `C-c g l'; after that, a
-;;     changed build file re-resolves it automatically.  Then `unzip -Z1'
-;;     over every jar maps a simple class name to the artifact(s) defining
-;;     it -- what makes indexing lazy: a miss on `GitProperties' names the
-;;     one jar to fetch.
+;;     changed build file re-resolves it automatically.  Then the
+;;     `libsrc-classes' helper ([rust/libsrc-classes](../../rust/libsrc-classes/README.md))
+;;     reads every jar and maps a simple class name to the artifact(s)
+;;     defining it -- what makes indexing lazy: a miss on `GitProperties'
+;;     names the one jar to fetch.
 ;;   * Fetch, extract and index one artifact -- one shared, immutable tree
 ;;     per artifact version under `lib/<g>/<a>/<v>/': the extracted
 ;;     -sources.jar plus its own GTAGS, built in `<v>.tmp', made read-only,
@@ -85,6 +86,13 @@
                     (file-name-directory (or load-file-name buffer-file-name)))
   "Gradle init script printing the resolved classpath.")
 
+(defcustom fenrir/libsrc-classes-program
+  (expand-file-name "../../rust/lib/libsrc-classes"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "The `libsrc-classes' helper that lists jar classes.
+Built by `make -C rust/libsrc-classes' into the workspace `rust/lib/'."
+  :type 'file)
+
 (defconst fenrir/libsrc--cscope-regex
   "^\\(.+?\\) \\([^ ]+\\) \\([[:digit:]]+\\) \\(.*\\)"
   "One `global --result=cscope' line: file, name, line, code.
@@ -128,14 +136,6 @@ Understands ~/.m2 layout (slashed groupId) and the Gradle module cache
    (expand-file-name (string-join (fenrir/libsrc--gav-parts gav) "/")
                      (fenrir/libsrc--lib-dir))))
 
-(defun fenrir/libsrc--class-entry-name (entry)
-  "Simple class name for jar ENTRY (a `unzip -Z1' line), or nil.
-Strips the package and any `$Inner' suffix; skips module-info / package-info."
-  (when (string-match "\\([^/$]+\\)\\(?:\\$[^/]*\\)?\\.class\\'" entry)
-    (let ((name (match-string 1 entry)))
-      (unless (member name '("module-info" "package-info"))
-        name))))
-
 (defun fenrir/libsrc--parse-maven-classpath (string)
   "Jar paths from a `dependency:build-classpath' output file STRING."
   (delete-dups
@@ -151,35 +151,17 @@ Strips the package and any `$Inner' suffix; skips module-info / package-info."
         (push (substring line (length "FENRIR-LIBSRC-JAR ")) acc)))
     (delete-dups (nreverse acc))))
 
-(defun fenrir/libsrc--parse-listing (string)
-  "Parse the batched listing STRING into an alist (JAR . CLASS-NAMES).
-Each jar starts with an `@@<jar>' line followed by its `unzip -Z1' lines."
-  (let (acc cur)
-    (dolist (line (string-lines string t))
-      (if (string-prefix-p "@@" line)
-          (push (setq cur (list (substring line 2))) acc)
-        (when-let* ((cur) (name (fenrir/libsrc--class-entry-name line)))
-          (setcdr cur (cons name (cdr cur))))))
-    (mapcar (lambda (c) (cons (car c) (delete-dups (cdr c)))) (nreverse acc))))
-
-(defun fenrir/libsrc--listing-failures (string)
-  "Jars the batched listing STRING marks with `!!' (unzip could not list)."
-  (let (acc)
-    (dolist (line (string-lines string t))
-      (when (string-prefix-p "!!" line)
-        (push (substring line 2) acc)))
-    (nreverse acc)))
-
-(defun fenrir/libsrc--build-class-index (listing)
-  "Hash table simple-name -> list of \"g:a:v\" from LISTING (see above).
-Jars with no GAV are skipped -- there is no sources jar to ask for."
-  (let ((index (make-hash-table :test #'equal)))
-    (pcase-dolist (`(,jar . ,names) listing)
-      (when-let* ((g (fenrir/libsrc--jar-gav jar)))
-        (dolist (n names)
-          (unless (member g (gethash n index))
-            (puthash n (append (gethash n index) (list g)) index)))))
-    index))
+(defun fenrir/libsrc--parse-classes-output (string)
+  "(INDEX . UNREADABLE) from the `libsrc-classes' helper's output STRING.
+INDEX is a hash table simple-name -> list of \"g:a:v\", UNREADABLE the jars
+the helper could not read.  nil when STRING is not the one Lisp form the
+helper prints (a crash or a mismatched build)."
+  (when-let* ((form (ignore-errors (car (read-from-string string))))
+              ((plistp form))
+              (index (plist-get form :class-index))
+              ((hash-table-p index))
+              ((proper-list-p (plist-get form :unreadable))))
+    (cons index (plist-get form :unreadable))))
 
 (defun fenrir/libsrc--ready-p (dir)
   "Non-nil when tree DIR finished building."
@@ -305,7 +287,7 @@ to the root's own build files and `:classpath-mtime'."
 ;; --- Per-project state -------------------------------------------------------
 ;; Plist: :root :resolved-at (when the resolution STARTED, so an edit made
 ;; while it ran still reads as stale) :build-files :jars (jar paths)
-;; :unparsed (jars with no GAV) :unreadable (jars unzip could not list)
+;; :unparsed (jars with no GAV) :unreadable (jars the helper could not read)
 ;; :class-index (name -> "g:a:v" list) :libpath (trees used).
 
 (defvar fenrir/libsrc--projects (make-hash-table :test #'equal)
@@ -465,27 +447,31 @@ STARTED is when the resolution began (becomes `:resolved-at')."
          (fenrir/libsrc--resolve-fail root msg))))))
 
 (defun fenrir/libsrc--index-classes (root jars started)
-  "List JARS in one async process, then store ROOT's class index.
-STARTED is when the resolution began.  When unzip could list no jar at
-all (typically: unzip not installed) nothing is stored -- an empty index
-saved as current would make every later sync report \"current (0
-classes)\" and every library miss silent."
-  (fenrir/libsrc--run
-   "classes"
-   `("sh" "-c"
-     "for j; do printf '@@%s\\n' \"$j\"; unzip -Z1 \"$j\" 2>/dev/null || printf '!!%s\\n' \"$j\"; done"
-     "sh" ,@jars)
-   root
-   (lambda (_exit output)
-     (let ((unreadable (fenrir/libsrc--listing-failures output)))
-       (if (>= (length unreadable) (length jars))
+  "List JARS with the `libsrc-classes' helper, then store ROOT's class index.
+STARTED is when the resolution began.  When the helper is not built, or
+could read no jar at all, nothing is stored -- an empty index saved as
+current would make every later sync report \"current (0 classes)\" and
+every library miss silent."
+  (if (not (file-executable-p fenrir/libsrc-classes-program))
+      (fenrir/libsrc--resolve-fail
+       root (format "the class lister %s is not built -- run: make -C rust/libsrc-classes"
+                    (abbreviate-file-name fenrir/libsrc-classes-program)))
+    (fenrir/libsrc--run
+     "classes" (cons fenrir/libsrc-classes-program jars) root
+     (lambda (exit output)
+       (let* ((parsed (and (eq exit 0) (fenrir/libsrc--parse-classes-output output)))
+              (index (car parsed))
+              (unreadable (cdr parsed)))
+         (cond
+          ((not parsed)
            (fenrir/libsrc--resolve-fail
-            root (format "unzip could not list any of %d jars -- is unzip installed?"
-                         (length jars)))
-         (let ((index (fenrir/libsrc--build-class-index
-                       (fenrir/libsrc--parse-listing output))))
+            root (format "libsrc-classes failed (exit %s) -- see *libsrc*" exit)))
+          ((>= (length unreadable) (length jars))
+           (fenrir/libsrc--resolve-fail
+            root (format "libsrc-classes could not list any of %d jars" (length jars))))
+          (t
            (when unreadable
-             (fenrir/libsrc--log "%s: unzip could not list %d jar(s): %s" root
+             (fenrir/libsrc--log "%s: could not list %d jar(s): %s" root
                                  (length unreadable) (string-join unreadable " ")))
            (fenrir/libsrc--state-update
             root
@@ -499,7 +485,7 @@ classes)\" and every library miss silent."
                     (length jars) (hash-table-count index) (abbreviate-file-name root)
                     (if unreadable (format " (%d unreadable)" (length unreadable)) ""))
            (fenrir/libsrc--resolve-done root t)))))
-   (lambda (msg) (fenrir/libsrc--resolve-fail root msg))))
+     (lambda (msg) (fenrir/libsrc--resolve-fail root msg)))))
 
 ;; --- Fetch, extract and index one artifact -----------------------------------
 

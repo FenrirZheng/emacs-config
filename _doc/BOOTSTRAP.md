@@ -34,6 +34,9 @@ After the first launch:
    hint until then.
 5. *(optional, question-queue)* `M-x question-queue-build` — builds
    `rust/question-queue-core` into `rust/lib/`.
+6. *(optional, Java library sources)* `make -C ~/.emacs.d/rust/libsrc-classes` — builds the
+   `libsrc-classes` jar lister into `rust/lib/`. Until then `C-c g l` refuses with that
+   command as its hint; nothing else in the config needs it.
 
 ## Pre-commit hook
 

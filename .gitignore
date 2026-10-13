@@ -63,9 +63,10 @@
 /rust/treesit-grammar-c/build/
 /rust/treesit-grammar-lua/tree-sitter-lua/
 /rust/treesit-grammar-lua/build/
-# deployed dynamic modules (workspace-wide, like cpp/lib/) + cargo target dir.
+# deployed dynamic modules and helper binaries (workspace-wide, like cpp/lib/) + cargo target dirs.
 /rust/lib/
 /rust/question-queue-core/target/
+/rust/libsrc-classes/target/
 # GNU Global index built ad-hoc inside subprojects (generated, not tracked).
 /rust/*/GTAGS
 /rust/*/GRTAGS

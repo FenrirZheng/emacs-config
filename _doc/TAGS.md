@@ -174,8 +174,8 @@ directories, each with its own GTAGS, that `global -d` searches.
   `gradle.properties` / `libs.versions.toml` under the root (`src/`, `build/`,
   `target/` skipped), plus Maven parent poms in consecutive ancestors. The list is
   collected at resolve time, so each `M-.` only stats those files. A resolution where
-  `unzip` can list no jar stores nothing; partly unreadable jars show as `[unreadable]`
-  in `C-c g L`.
+  the helper can read no jar, or where the helper is not built, stores nothing; partly
+  unreadable jars show as `[unreadable]` in `C-c g L`.
 - **Opt-in per build root.** Resolving runs the project's own code — its
   `gradlew`, `build.gradle(.kts)`, Maven plugins — so it never starts on its own in a
   root you haven't synced. The first resolution is always an explicit **`C-c g l`**;
@@ -183,7 +183,10 @@ directories, each with its own GTAGS, that `global -d` searches.
   The `proj/*.eld` state file is the trust record: once it exists, a changed build
   file re-resolves automatically. Delete it to revoke. Fetching sources jars
   (`mvn dependency:get`) runs in the cache directory and never touches project code.
-- **Class index:** `unzip -Z1` over every jar maps simple class name → artifact. That
+- **Class index:** the `libsrc-classes` helper
+  ([`rust/libsrc-classes`](../rust/libsrc-classes/README.md), built with
+  `make -C rust/libsrc-classes`) reads every jar's zip directory and prints simple class
+  name → artifact as one Lisp form; non-ASCII class names keep their real spelling. That
   makes indexing lazy: a miss on `GitProperties` names the one jar to fetch. Sources come
   from `~/.m2`, the Gradle cache, or `mvn dependency:get …:jar:sources` (network).
 - **The hook:** an `:around` on `xref-backend-definitions` for `(head :gtagsroot)`, the

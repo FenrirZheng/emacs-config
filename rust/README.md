@@ -26,6 +26,7 @@ how [cpp/](../cpp/README.md) aggregates C++ dynamic modules via
 | [`treesit-grammar-c/`](treesit-grammar-c/README.md) | ABI-14-pinned **C** tree-sitter grammar deployer (`tree-sitter-c` @ `v0.23.6`; parser-only) | `make -C treesit-grammar-c` |
 | [`treesit-grammar-lua/`](treesit-grammar-lua/README.md) | ABI-14-pinned **Lua** tree-sitter grammar deployer (`tree-sitter-lua` @ `v0.3.0`; has `scanner.c`) | `make -C treesit-grammar-lua` |
 | [`question-queue-core/`](question-queue-core/README.md) | Emacs **dynamic module** (raw emacs-module ABI via bindgen): assemble a region+question markdown file, atomically drop it into a question-queue `input/` dir, parse the answer back. Front-end: [`lisp/question-queue.el`](../lisp/question-queue.el) | `make -C question-queue-core` |
+| [`libsrc-classes/`](libsrc-classes/README.md) | **Helper binary** (cargo bin, `zip` crate): read every jar's zip directory and print simple class name → `g:a:v` as one Lisp form. Run by [`lisp/languages/fenrir-libsrc.el`](../lisp/languages/fenrir-libsrc.el) for `C-c g l` | `make -C libsrc-classes` |
 
 > Why three near-identical grammar Makefiles instead of one parameterized build:
 > each subproject is self-contained per this workspace's convention, and they
@@ -40,7 +41,7 @@ how [cpp/](../cpp/README.md) aggregates C++ dynamic modules via
 rust/
 ├── README.md          # this file (tracked)
 ├── Makefile           # aggregator: forwards targets to each subproject (tracked)
-├── lib/               # deployed dynamic modules, e.g. question-queue-core.so (gitignored)
+├── lib/               # deployed modules + helpers: question-queue-core.so, libsrc-classes (gitignored)
 ├── treesit-grammar/        # Rust grammar deployer — see its own README
 │   ├── Makefile / README.md
 │   ├── tree-sitter-rust/   # cloned upstream grammar source (gitignored)
@@ -53,17 +54,22 @@ rust/
 │   ├── Makefile / README.md
 │   ├── tree-sitter-lua/    # cloned upstream grammar source (gitignored)
 │   └── build/              # parser.o / scanner.o / .so (gitignored)
-└── question-queue-core/    # cargo cdylib Emacs dynamic module — see its own README
-    ├── Cargo.toml / build.rs / wrapper.h / Makefile (tracked)
-    ├── src/                # lib.rs / emacs.rs / request.rs / answer.rs (tracked)
+├── question-queue-core/    # cargo cdylib Emacs dynamic module — see its own README
+│   ├── Cargo.toml / build.rs / wrapper.h / Makefile (tracked)
+│   ├── src/                # lib.rs / emacs.rs / request.rs / answer.rs (tracked)
+│   └── target/             # cargo build dir (gitignored)
+└── libsrc-classes/         # cargo bin helper for fenrir-libsrc — see its own README
+    ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile (tracked)
+    ├── src/                # lib.rs (rules + output) / main.rs (tracked)
     └── target/             # cargo build dir (gitignored)
 ```
 
-Cargo-built modules deploy to the workspace-wide `rust/lib/` (the Make analogue
-of [cpp/lib/](../cpp/README.md)); Emacs `module-load`s them from there.
+Cargo-built modules and helpers deploy to the workspace-wide `rust/lib/` (the Make
+analogue of [cpp/lib/](../cpp/README.md)); Emacs `module-load`s the modules and runs
+the helpers from there.
 Per-subproject generated dirs are excluded in the repo-root
 [.gitignore](../.gitignore) (the `/rust/...` block: `lib/`, each grammar's
-checkout + `build/`, and `question-queue-core/target/`).
+checkout + `build/`, and each crate's `target/`).
 
 ## Usage
 

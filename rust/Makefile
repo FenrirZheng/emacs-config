@@ -25,7 +25,7 @@
 # the grammar's hand-rolled `cc` — so each subproject owns its own recipe and
 # this file stays build-agnostic.  Workspace overview: [README.md](README.md).
 
-SUBPROJECTS := treesit-grammar treesit-grammar-c treesit-grammar-lua question-queue-core
+SUBPROJECTS := treesit-grammar treesit-grammar-c treesit-grammar-lua question-queue-core libsrc-classes
 
 # Targets that fan out to every subproject, each forwarded verbatim via $@.
 FORWARDED := all install verify clean distclean

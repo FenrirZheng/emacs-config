@@ -52,38 +52,28 @@
 
 ;; --- Class index -----------------------------------------------------------------
 
-(ert-deftest libsrc-class-entry-name ()
-  (should (equal (fenrir/libsrc--class-entry-name
-                  "org/springframework/boot/info/GitProperties.class")
-                 "GitProperties"))
-  (should (equal (fenrir/libsrc--class-entry-name
-                  "org/springframework/boot/info/InfoProperties$Entry.class")
-                 "InfoProperties"))
-  (should (equal (fenrir/libsrc--class-entry-name "a/Outer$1.class") "Outer"))
-  (should (equal (fenrir/libsrc--class-entry-name "Top.class") "Top"))
-  (should-not (fenrir/libsrc--class-entry-name "module-info.class"))
-  (should-not (fenrir/libsrc--class-entry-name "META-INF/versions/9/module-info.class"))
-  (should-not (fenrir/libsrc--class-entry-name "org/x/package-info.class"))
-  (should-not (fenrir/libsrc--class-entry-name "org/x/"))
-  (should-not (fenrir/libsrc--class-entry-name "META-INF/MANIFEST.MF")))
+;; Simple-name and GAV rules for the index live in the helper
+;; (rust/libsrc-classes, `cargo test'); this side only reads its output.
 
-(ert-deftest libsrc-listing-and-index ()
-  (let* ((m2 "/h/.m2/repository/org/x/a/1.0/a-1.0.jar")
-         (m2b "/h/.m2/repository/org/y/b/2.0/b-2.0.jar")
-         (out (concat "@@" m2 "\n"
-                      "org/x/Foo.class\norg/x/Foo$Inner.class\norg/x/\nmodule-info.class\n"
-                      "@@" m2b "\n"
-                      "org/y/Foo.class\norg/y/Bar.class\n"
-                      "@@/work/target/classes\nWhatever.class\n"))
-         (listing (fenrir/libsrc--parse-listing out))
-         (index (fenrir/libsrc--build-class-index listing)))
-    (should (equal (assoc m2 listing) (list m2 "Foo")))
-    (should (= (length listing) 3))
-    (should (equal (gethash "Foo" index) '("org.x:a:1.0" "org.y:b:2.0")))
-    (should (equal (gethash "Bar" index) '("org.y:b:2.0")))
-    (should-not (gethash "Inner" index))
-    (should-not (gethash "Whatever" index))   ; no GAV -> skipped
-    (should-not (gethash "module-info" index))))
+(ert-deftest libsrc-parse-classes-output ()
+  (let ((p (fenrir/libsrc--parse-classes-output
+            (concat "(:class-index #s(hash-table test equal data"
+                    " (\"Foo\" (\"org.x:a:1.0\" \"org.y:b:2.0\")\n\"Bar\" (\"org.y:b:2.0\")))\n"
+                    " :unreadable (\"/r/b-1.jar\"))\n"))))
+    (should (equal (gethash "Foo" (car p)) '("org.x:a:1.0" "org.y:b:2.0")))
+    (should (equal (gethash "Bar" (car p)) '("org.y:b:2.0")))
+    (should (= (hash-table-count (car p)) 2))
+    (should (equal (cdr p) '("/r/b-1.jar"))))
+  ;; nothing unreadable is still a result
+  (let ((p (fenrir/libsrc--parse-classes-output
+            "(:class-index #s(hash-table test equal data ()) :unreadable ())")))
+    (should (hash-table-p (car p)))
+    (should-not (cdr p)))
+  ;; not the helper's form -> nil
+  (should-not (fenrir/libsrc--parse-classes-output ""))
+  (should-not (fenrir/libsrc--parse-classes-output "error: boom"))
+  (should-not (fenrir/libsrc--parse-classes-output "(:unreadable ())"))
+  (should-not (fenrir/libsrc--parse-classes-output "(:class-index #s(hash-table test equal data ())")))
 
 ;; --- Classpath output parsing ------------------------------------------------------
 
@@ -279,23 +269,25 @@
 (ert-deftest libsrc-rejump-after-successful-build ()
   (should (= 1 (libsrc-test--definitions-with-result 'ok))))
 
-;; --- A3: an unzip that lists nothing must not store an empty index ------------
+;; --- A3: a listing that reads nothing must not store an empty index ------------
 
-(ert-deftest libsrc-listing-failures ()
-  (let ((out "@@/r/a-1.jar\norg/x/Foo.class\n@@/r/b-1.jar\n!!/r/b-1.jar\n"))
-    (should (equal (fenrir/libsrc--listing-failures out) '("/r/b-1.jar")))
-    ;; the failure marker is not a class entry
-    (should (equal (fenrir/libsrc--parse-listing out)
-                   '(("/r/a-1.jar" "Foo") ("/r/b-1.jar"))))))
+(defun libsrc-test--classes-output (unreadable &rest index)
+  "The helper's output form: INDEX is NAME GAVS pairs, UNREADABLE a jar list."
+  (let ((h (make-hash-table :test #'equal)))
+    (while index (puthash (pop index) (pop index) h))
+    (prin1-to-string (list :class-index h :unreadable unreadable))))
 
-(defun libsrc-test--index-with-output (jars output)
-  "Run `--index-classes' for JARS with the listing process faked to OUTPUT.
+(defun libsrc-test--index-with-output (jars output &optional exit program)
+  "Run `--index-classes' for JARS with the helper faked to print OUTPUT.
+EXIT is its exit status (default 0); PROGRAM the helper path (default an
+executable that exists, so the not-built check passes).
 Returns (STATE . STILL-RESOLVING-P)."
-  (let ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir))))
+  (let ((proj (file-name-as-directory (expand-file-name "proj" fenrir/libsrc-cache-dir)))
+        (fenrir/libsrc-classes-program (or program (executable-find "true"))))
     (make-directory proj t)
     (puthash proj nil fenrir/libsrc--resolving)
     (cl-letf (((symbol-function 'fenrir/libsrc--run)
-               (lambda (_name _cmd _dir cb _on-error) (funcall cb 0 output))))
+               (lambda (_name _cmd _dir cb _on-error) (funcall cb (or exit 0) output))))
       (fenrir/libsrc--index-classes proj jars 100.0))
     (cons (fenrir/libsrc--state proj)
           (not (eq (gethash proj fenrir/libsrc--resolving 'none) 'none)))))
@@ -306,7 +298,7 @@ Returns (STATE . STILL-RESOLVING-P)."
       (let* ((a "/h/.m2/repository/org/x/a/1/a-1.jar")
              (b "/h/.m2/repository/org/x/b/1/b-1.jar")
              (res (libsrc-test--index-with-output
-                   (list a b) (concat "@@" a "\n!!" a "\n@@" b "\n!!" b "\n"))))
+                   (list a b) (libsrc-test--classes-output (list a b)))))
         (should-not (car res))          ; no state -> not "current (0 classes)"
         (should-not (cdr res))))))      ; resolving entry released
 
@@ -317,10 +309,38 @@ Returns (STATE . STILL-RESOLVING-P)."
              (b "/h/.m2/repository/org/x/b/1/b-1.jar")
              (st (car (libsrc-test--index-with-output
                        (list a b)
-                       (concat "@@" a "\norg/x/Foo.class\n@@" b "\n!!" b "\n")))))
+                       (libsrc-test--classes-output (list b) "Foo" '("org.x:a:1"))))))
         (should (equal (plist-get st :unreadable) (list b)))
         (should (equal (gethash "Foo" (plist-get st :class-index)) '("org.x:a:1")))
         (should (equal (plist-get st :resolved-at) 100.0))))))
+
+(ert-deftest libsrc-index-helper-not-built ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let* ((msgs nil)
+             (res (cl-letf (((symbol-function 'message)
+                             (lambda (fmt &rest args) (push (apply #'format fmt args) msgs))))
+                    (libsrc-test--index-with-output
+                     (list "/h/.m2/repository/org/x/a/1/a-1.jar")
+                     "never read" 0 "/nonexistent/libsrc-classes"))))
+        (should-not (car res))
+        (should-not (cdr res))
+        (should (seq-some (lambda (m) (string-match-p "make -C rust/libsrc-classes" m))
+                          msgs))))))
+
+(ert-deftest libsrc-index-helper-failure-stores-nothing ()
+  (libsrc-test--with-cache
+    (libsrc-test--with-queue
+      (let ((jars (list "/h/.m2/repository/org/x/a/1/a-1.jar")))
+        ;; non-zero exit, even with a well-formed form
+        (let ((res (libsrc-test--index-with-output
+                    jars (libsrc-test--classes-output nil "Foo" '("org.x:a:1")) 101)))
+          (should-not (car res))
+          (should-not (cdr res)))
+        ;; exit 0 but not the helper's form
+        (let ((res (libsrc-test--index-with-output jars "thread 'main' panicked")))
+          (should-not (car res))
+          (should-not (cdr res)))))))
 
 ;; --- A5: staleness covers subproject build files and parent poms -----------------
 

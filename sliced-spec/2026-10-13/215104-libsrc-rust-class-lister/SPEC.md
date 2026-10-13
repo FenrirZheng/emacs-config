@@ -1,6 +1,6 @@
 # Spec: libsrc — list jar classes with a Rust helper binary
 
-Status: approved
+Status: in progress
 Date: 2026-10-13 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
@@ -34,8 +34,8 @@ Handoff: [HANDOFF.md](HANDOFF.md)
 
 Fixture input, used by 2, 3 and 7: the `:jars` list stored in kjw-web's state file
 `~/.cache/fenrir-libsrc/proj/0c3182fdef74a5edb107922b61083d9364653696.eld` (root
-`/home/fenrir/code/ig_lottery/repos/lottery/kjw-web/`, 103 jars under `~/.m2`, as of
-2026-10-13). Batch runs use `emacs -Q --batch`; no `.elc` is left behind.
+`/home/fenrir/code/ig_lottery/repos/lottery/kjw-web/`, 103 jars, all in the Gradle cache
+`~/.gradle/caches/modules-2/files-2.1/`, as of 2026-10-13). Batch runs use `emacs -Q --batch`; no `.elc` is left behind.
 
 1. `make -C rust/libsrc-classes distclean`, then `make -C rust/libsrc-classes verify` → exits
    0, and `rust/lib/libsrc-classes` exists and is executable — test: the crate Makefile's
@@ -43,7 +43,9 @@ Fixture input, used by 2, 3 and 7: the `:jars` list stored in kjw-web's state fi
    `rust/lib/libsrc-classes` (both gitignored)
 2. Fixture input → the class index, `:unreadable` and `:unparsed` produced by the new step
    are `equal` to those produced by a frozen copy of today's `sh` + `unzip -Z1` + Elisp parse
-   pipeline (same keys, same `g:a:v` lists in the same order) — test:
+   pipeline (same keys, same `g:a:v` lists in the same order) — except a class whose entry
+   name `unzip -Z1` cannot print (non-ASCII, shown as one `+` per byte): it appears under its
+   real name, and the script lists each such pair — test:
    `sliced-spec/2026-10-13/215104-libsrc-rust-class-lister/check-equivalence.el` — 副作用:
    none
 3. Fixture input, 5 runs after one warm-up → median wall time of the whole new step (process
@@ -63,10 +65,11 @@ Fixture input, used by 2, 3 and 7: the `:jars` list stored in kjw-web's state fi
    state, releases the resolving entry, and the message names `make -C rust/libsrc-classes`
    — test: `test/libsrc-test.el` — 副作用: none
 7. Daemon: reload `lisp/languages/fenrir-libsrc.el`, open
-   `/home/fenrir/code/ig_lottery/repos/lottery/kjw-web/pom.xml`, `C-c g l` → `*Messages*`
+   `/home/fenrir/code/ig_lottery/repos/lottery/kjw-web/build.gradle.kts`, `C-c g l` → `*Messages*`
    shows `libsrc: 103 jars, <N> classes indexed`, with `<N>` equal to the class count
-   criterion 2 printed — test: manual (needs the live daemon and network-free Maven) —
-   副作用: runs `mvn -o dependency:build-classpath` in kjw-web, rewrites
+   criterion 2 printed — test: manual (needs the live daemon and an offline-capable Gradle) —
+   副作用: runs kjw-web's `gradlew` with the libsrc init script (may write kjw-web's
+   `.gradle/` and `build/`), rewrites
    `~/.cache/fenrir-libsrc/proj/0c3182fdef74a5edb107922b61083d9364653696.eld`
 8. `emacs -Q --batch -l test/libsrc-test.el -f ert-run-tests-batch-and-exit` → 0 unexpected
    results; `cargo test --manifest-path rust/libsrc-classes/Cargo.toml` → all pass — test:
@@ -87,8 +90,8 @@ Fixture input, used by 2, 3 and 7: the `:jars` list stored in kjw-web's state fi
     subproject exposing `all` / `install` / `verify` / `clean` / `distclean`, listed in
     [`rust/Makefile`](../../../rust/Makefile)'s `SUBPROJECTS`; build output gitignored;
   - rustup `rustc 1.98.0` and `/usr/bin/mold`, already installed;
-  - the Emacs 30.1 daemon, and kjw-web with its jars in `~/.m2` as the literal acceptance
-    input.
+  - the Emacs 30.1 daemon, and kjw-web with its jars in the Gradle module cache as the
+    literal acceptance input.
   Nothing else is created.
 - One crates.io dependency is allowed: `zip`, default features off (user approved
   2026-10-13). Any other crate is a SPEC change.
@@ -102,5 +105,5 @@ Fixture input, used by 2, 3 and 7: the `:jars` list stored in kjw-web's state fi
 
 ## 待決問題
 
-- kjw-web is Maven-only, so the Gradle-cache GAV layout is covered only by unit tests, not
-  by the literal fixture — default if unanswered: unit-test coverage is enough.
+- kjw-web's jars are all Gradle-cache jars, so the `~/.m2` layout is covered only by unit
+  tests — default if unanswered: unit-test coverage is enough.

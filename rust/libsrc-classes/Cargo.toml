@@ -1,0 +1,25 @@
+[package]
+name = "libsrc-classes"
+version = "0.1.0"
+edition = "2021"
+description = "List the classes in Java jars and print a simple-name -> g:a:v index as one Lisp form, for the fenrir-libsrc engine."
+license = "GPL-3.0-or-later"
+publish = false
+
+# Only the zip central directory is read (entry names), never entry data, so
+# no compression backend is compiled in.
+[dependencies]
+zip = { version = "9.0.2", default-features = false }
+
+# Profiles: the rust-build-speed new-workspace scaffold, measured in README.md.
+[profile.release]
+lto = "thin"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.quick]            # local optimized runs; the three lines travel together
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
