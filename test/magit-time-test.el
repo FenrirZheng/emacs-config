@@ -100,4 +100,26 @@ MARGIN is the right-margin text Magit put on that line, or nil."
       (should (equal (mapcar #'caddr (magit-time-test--commit-lines))
                      '("2026-02-03 04:05" "2026-02-03 04:05"))))))
 
+;; Matches Magit's relative ages ("3 days", "1 year"), and nothing in a fixed time.
+(defconst magit-time-test--age-re
+  "[0-9]+ \\(second\\|minute\\|hour\\|day\\|week\\|month\\|year\\)")
+
+(ert-deftest log-committer-time ()
+  ;; 驗收條件 2: log lines show committer time and author, no relative age
+  (magit-time-test--status)             ; rebuilds the fixture
+  (let ((buf (get-buffer "magit-log: magit-time-fixture")))
+    (when buf (kill-buffer buf)))
+  (let ((default-directory magit-time-test--fixture))
+    (call-interactively #'magit-log-current))
+  (with-current-buffer "magit-log: magit-time-fixture"
+    (let ((lines (magit-time-test--commit-lines)))
+      (should (= (length lines) 2))
+      (dolist (l lines)
+        (pcase-let ((`(,hash ,text ,margin) l))
+          (should (string-search hash text))
+          (should (string-search "2026-02-03 04:05" margin))
+          (should (string-search "Fixture Author" margin))
+          (should-not (string-search "2026-01-02" (concat text margin)))
+          (should-not (string-match-p magit-time-test--age-re margin)))))))
+
 ;;; magit-time-test.el ends here

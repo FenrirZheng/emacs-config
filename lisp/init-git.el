@@ -17,9 +17,11 @@
   ;; Commit lines in status buffers show when the commit was made, in the right
   ;; margin: committer (not author) time, absolute local, no author name (16
   ;; columns). The date already comes back with Magit's own log call, so this
-  ;; adds no Git command. `L L' toggles it per buffer.
+  ;; adds no Git command. `L L' toggles it per buffer. Log buffers show the same
+  ;; time, with the author before it, instead of a relative age ("3 days").
   (magit-log-margin-show-committer-date t)
   (magit-status-margin '(t "%Y-%m-%d %H:%M" magit-log-margin-width nil 18))
+  (magit-log-margin '(t "%Y-%m-%d %H:%M" magit-log-margin-width t 18))
   ;; Flip to t when investigating slow refreshes -- each section logs its
   ;; elapsed time to *Messages*. M-x magit-toggle-verbose-refresh does the same.
   ;; (magit-refresh-verbose t)
