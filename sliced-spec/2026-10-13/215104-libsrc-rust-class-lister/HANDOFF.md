@@ -1,10 +1,13 @@
 # Handoff: libsrc — list jar classes with a Rust helper binary
 
-Updated: 2026-10-13 23:52 (Asia/Taipei)
+Updated: 2026-10-14 00:01 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
 
+- Acceptance gate at `9570501`: criteria 1–6, 8–10 pass (verifier); 7 pass by the user
+  (daemon `C-c g l`: 103 jars, 35212 classes = criterion 2's count). `Status: implemented` —
+  commit `spec: mark libsrc-rust-class-lister implemented`.
 - Slice 2: `bench.el`, real-helper broken/missing-jar tests (cargo + ERT), helper speed-ups,
   dated `measure.sh` numbers in the crate README — commit
   `libsrc: benchmark and test the class lister`. Checked: criterion 3 (helper 75 ms, step
@@ -40,8 +43,7 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 下一步
 
-The acceptance gate. Criterion 7 (daemon `C-c g l` on kjw-web's `build.gradle.kts`) is
-manual and runs kjw-web's `gradlew`; every other criterion has a script or test.
+None — the spec is implemented. `ship` can record where it went.
 
 ## 卡住・待確認
 
@@ -49,8 +51,6 @@ manual and runs kjw-web's `gradlew`; every other criterion has a script or test.
   (2.7 MB, 2026-10-13 21:45) — a copy of kjw-web's state keyed by `/tmp/x`, written by a
   timing probe of `fenrir/libsrc--write-state` in the session before this spec. Harmless
   (no root `/tmp/x` exists); delete on the user's yes.
-- Unrelated uncommitted changes in the repo (staged rename `SPEC.md` →
-  `tasks/done/20260520-dape/SPEC.md`, modified `tasks/done/README.md`, untracked
-  `AGENTS.md`, `plans/`, `records/`): not this spec's; slice commits name only their own
-  paths. The acceptance gate needs no modified or staged tracked file, so the staged rename
-  and `tasks/done/README.md` must be committed or set aside first — the user's call.
+- Untracked, not this spec's: `AGENTS.md`, `plans/`, `records/`. (The staged dape-spec
+  rename and `tasks/done/README.md` were committed as `docs: archive the dape spec under
+  tasks/done`, on the user's yes.)
