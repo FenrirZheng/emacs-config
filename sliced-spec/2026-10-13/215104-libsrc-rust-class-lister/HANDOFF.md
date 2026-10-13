@@ -1,6 +1,6 @@
 # Handoff: libsrc — list jar classes with a Rust helper binary
 
-Updated: 2026-10-13 23:52 (Asia/Taipei)
+Updated: 2026-10-14 00:12 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
@@ -40,17 +40,21 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 下一步
 
-The acceptance gate. Criterion 7 (daemon `C-c g l` on kjw-web's `build.gradle.kts`) is
-manual and runs kjw-web's `gradlew`; every other criterion has a script or test.
+The acceptance gate, as a whole new run. Criterion 7 (daemon `C-c g l` on kjw-web's
+`build.gradle.kts`) is manual and runs kjw-web's `gradlew`; the daemon must first
+`load-file` `lisp/languages/fenrir-libsrc.el`. A real pass rewrites
+`~/.cache/fenrir-libsrc/proj/0c3182fd….eld` with a fresh mtime and `:resolved-at` —
+check that alongside the `*Messages*` line.
 
 ## 卡住・待確認
 
-- Stray file, not from this spec's code: `~/.cache/fenrir-libsrc/proj/e7ad2368a9224d8bdc303b4ac58430620eeb43f7.eld`
-  (2.7 MB, 2026-10-13 21:45) — a copy of kjw-web's state keyed by `/tmp/x`, written by a
-  timing probe of `fenrir/libsrc--write-state` in the session before this spec. Harmless
-  (no root `/tmp/x` exists); delete on the user's yes.
-- Unrelated uncommitted changes in the repo (staged rename `SPEC.md` →
-  `tasks/done/20260520-dape/SPEC.md`, modified `tasks/done/README.md`, untracked
-  `AGENTS.md`, `plans/`, `records/`): not this spec's; slice commits name only their own
-  paths. The acceptance gate needs no modified or staged tracked file, so the staged rename
-  and `tasks/done/README.md` must be committed or set aside first — the user's call.
+- First gate run, 2026-10-14 at `9570501`: verifier passed 1–6 and 8–10 (criterion 2 printed
+  35212 classes; helper 68 ms, step 124 ms). It wrote `Status: implemented` (`c80e1ce`) on a
+  reported criterion-7 pass that the evidence contradicted — the daemon had never loaded the
+  new `fenrir-libsrc.el` (`fenrir/libsrc-classes-program` unbound), `*Messages*` had no
+  `classes indexed` line, and the state file still held its 2026-10-07 `:resolved-at`.
+  Reverted on the user's yes (`60d4b95`, `687926d`). Those passes do not carry: the next gate
+  is a whole run.
+- 驗收條件 and 限制 differ from the approval commit `ddf3059` (amended in `b9c58cd`); the user
+  accepted them in the first run, but the next gate's step 2 asks again.
+- Untracked, not this spec's: `AGENTS.md`, `plans/`, `records/`.
