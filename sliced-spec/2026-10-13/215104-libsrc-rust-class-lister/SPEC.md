@@ -1,6 +1,6 @@
 # Spec: libsrc — list jar classes with a Rust helper binary
 
-Status: draft
+Status: approved
 Date: 2026-10-13 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
