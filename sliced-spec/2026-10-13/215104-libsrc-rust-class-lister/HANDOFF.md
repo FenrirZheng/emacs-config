@@ -1,10 +1,14 @@
 # Handoff: libsrc — list jar classes with a Rust helper binary
 
-Updated: 2026-10-14 00:12 (Asia/Taipei)
+Updated: 2026-10-14 00:34 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
 
+- Acceptance gate (second run) at `2c15f32`: verifier passed 1–6 and 8–10; criterion 7 passed
+  in daemon pid 3290934, checked by this session (`*Messages*` line, state file rewritten
+  2026-10-14 00:31, 103 jars, 35212 classes = criterion 2's count). `Status: implemented` —
+  commit `spec: mark libsrc-rust-class-lister implemented` (`d9982a2`).
 - Slice 2: `bench.el`, real-helper broken/missing-jar tests (cargo + ERT), helper speed-ups,
   dated `measure.sh` numbers in the crate README — commit
   `libsrc: benchmark and test the class lister`. Checked: criterion 3 (helper 75 ms, step
@@ -40,21 +44,10 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 下一步
 
-The acceptance gate, as a whole new run. Criterion 7 (daemon `C-c g l` on kjw-web's
-`build.gradle.kts`) is manual and runs kjw-web's `gradlew`; the daemon must first
-`load-file` `lisp/languages/fenrir-libsrc.el`. A real pass rewrites
-`~/.cache/fenrir-libsrc/proj/0c3182fd….eld` with a fresh mtime and `:resolved-at` —
-check that alongside the `*Messages*` line.
+None — the spec is implemented. `ship` can record where it went.
 
 ## 卡住・待確認
 
-- First gate run, 2026-10-14 at `9570501`: verifier passed 1–6 and 8–10 (criterion 2 printed
-  35212 classes; helper 68 ms, step 124 ms). It wrote `Status: implemented` (`c80e1ce`) on a
-  reported criterion-7 pass that the evidence contradicted — the daemon had never loaded the
-  new `fenrir-libsrc.el` (`fenrir/libsrc-classes-program` unbound), `*Messages*` had no
-  `classes indexed` line, and the state file still held its 2026-10-07 `:resolved-at`.
-  Reverted on the user's yes (`60d4b95`, `687926d`). Those passes do not carry: the next gate
-  is a whole run.
-- 驗收條件 and 限制 differ from the approval commit `ddf3059` (amended in `b9c58cd`); the user
-  accepted them in the first run, but the next gate's step 2 asks again.
+- The first gate run (`c80e1ce`) was reverted in `60d4b95`: it recorded a criterion-7 pass
+  with no evidence behind it. Superseded by `d9982a2`.
 - Untracked, not this spec's: `AGENTS.md`, `plans/`, `records/`.
