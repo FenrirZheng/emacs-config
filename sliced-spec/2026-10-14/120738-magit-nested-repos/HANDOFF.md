@@ -44,6 +44,7 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 決定與原因
 
+- Criterion 11's `副作用` now names the rename of `rust/lib/git-nested-status` (user approval, 2026-10-14, before the gate); the gate also accepted the post-approval criterion changes (git-tools paths, 29 clones, criterion 10's input).
 - Route: a sliced spec. The work is three natural slices: a crate, a Lisp module, and docs
   with the live timing (user answer, 2026-10-14).
 - Scope:
@@ -88,15 +89,11 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 下一步
 
-The acceptance gate (criteria 1–14). Before it runs, the user decides the open SPEC question
-under 卡住 (criterion 11's `副作用`). Criteria 8 and 14 are manual: 8 needs the daemon with
+The acceptance gate (criteria 1–14). Criteria 8 and 14 are manual: 8 needs the daemon with
 `magit: yeeya` open; the run in slice 3 is evidence, and the gate reruns it literally.
 
 ## 卡住・待確認
 
-- Nothing blocked. Criterion 11's test moves the real `rust/lib/git-nested-status` aside for
-  about 0.3 s. That path is gitignored and is restored by `unwind-protect`. SPEC's `副作用`
-  for 11 names only `/tmp/magit-nested-fixture`. Whether to add the binary rename there is a
-  SPEC change for the user's approval before the gate.
+- Nothing blocked.
 - Untracked in the repo, but not this spec's: `AGENTS.md`, `plans/`, `records/`, and `cpp/.claude/` (the Ralph loop state file).
 - The scripts leave `/tmp/magit-nested-fixture` in place (the criteria's declared 副作用).

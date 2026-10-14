@@ -82,7 +82,8 @@ at depth 3). Building it is setup. The exact values below are the fixture's.
     test: `test/magit-nested-test.el::none-remembered` — 副作用: none
 11. With `rust/lib/git-nested-status` absent, `magit-status` on `/tmp/magit-nested-fixture`
     → no section and no error in `*Messages*` — test: `test/magit-nested-test.el::unbuilt` —
-    副作用: writes `/tmp/magit-nested-fixture`
+    副作用: writes `/tmp/magit-nested-fixture`; moves `rust/lib/git-nested-status` (gitignored)
+    aside and restores it
 12. `make -C ~/.emacs.d/rust verify` → exit 0, and its output includes the new crate;
     `cargo test -p git-nested-status` run in `rust/git-tools` → every test passes — test: those two
     commands — 副作用: writes `rust/lib/git-nested-status` and
