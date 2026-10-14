@@ -171,3 +171,6 @@ One line each; the evidence is in [_doc/GOTCHAS.md](_doc/GOTCHAS.md) and
   the advice.
 - **Don't override `interprogram-cut-function`** anywhere else — [`init-defaults.el`](lisp/init-defaults.el)
   owns it for the OSC 52 clipboard bridge.
+- **Extending the Magit status buffer: a folded section has no children, the refresh cache
+  doesn't cover `git status`, and timing must use one `magit-refresh-buffer`** —
+  ([why](_doc/GOTCHAS.md#extending-the-magit-status-buffer)).

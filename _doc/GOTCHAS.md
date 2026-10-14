@@ -122,6 +122,27 @@ Wired in [`init-defaults.el`](../lisp/init-defaults.el): `interprogram-cut-funct
 `\e]52;c;…\a` so cuts cross the tmux/SSH boundary to the host clipboard. Don't override
 `interprogram-cut-function` in another module.
 
+## Extending the Magit status buffer
+
+From building [`fenrir-magit-subtree.el`](../lisp/fenrir-magit-subtree.el) (2026-10-14):
+
+- **A collapsed section has no child sections.** `magit-insert-section-body`
+  defers the body, so walking `(oref section children)` of a folded Untracked
+  group returns nil. Get the data from the function that built it instead.
+- **Magit's refresh cache does not cover `git status`.** If you call
+  `magit-list-untracked-files` again during a refresh, the command runs again
+  (~70 ms on ig_lottery). `fenrir-magit-subtree.el` instead records Magit's own
+  result with a `:filter-return` advice.
+- **A defcustom default must not depend on `load-file-name` alone.** Outside a
+  load, for example `custom-reevaluate-setting` run through `emacsclient -e`,
+  both `load-file-name` and `buffer-file-name` are nil, and `expand-file-name`
+  errors. `user-emacs-directory` works in every case.
+  `fenrir-libsrc.el`'s `fenrir/libsrc-classes-program` uses the same pattern, but
+  it has never failed, so it is left as it is.
+- **Time one `magit-refresh-buffer`, not `magit-status-setup-buffer` plus a
+  refresh.** The pair refreshes twice and doubles any per-refresh cost (this
+  session's first figure, 0.52 → 0.77 s, was that error; one refresh is ~+0.09 s).
+
 ## See also
 
 - [CLAUDE.md](../CLAUDE.md) — the one-line rules
