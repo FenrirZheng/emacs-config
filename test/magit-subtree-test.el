@@ -116,6 +116,30 @@ g subtree add -q --squash --prefix=libs/sq ../up main >/dev/null 2>&1"
                                         (re-search-forward "\\broot\\b" nil t))))
         (kill-buffer buf)))))
 
+(ert-deftest magit-subtree-status-counts-untracked-from-magit ()
+  (magit-subtree-test--with-fixture dir
+    ;; An untracked file under libs/sq: U comes from Magit's Untracked section,
+    ;; since the CLI runs with --no-status.
+    (with-temp-file (expand-file-name "libs/sq/new.txt" dir) (insert "new\n"))
+    (let ((buf (magit-status-setup-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (goto-char (point-min))
+            (should (re-search-forward "^Subtrees (1 changed of 2)" nil t))
+            (should (re-search-forward "^libs/sq +U:1" nil t)))
+        (kill-buffer buf)))))
+
+(ert-deftest magit-subtree-revision-shows-owner ()
+  (magit-subtree-test--with-fixture dir
+    (let* ((sha (string-trim (shell-command-to-string
+                              "git log --format=%H --grep='^up1$' -1")))
+           (buf (magit-revision-setup-buffer sha nil nil)))
+      (unwind-protect
+          (with-current-buffer buf
+            (goto-char (point-min))
+            (should (re-search-forward "^Subtree: libs/full$" nil t)))
+        (kill-buffer buf)))))
+
 (ert-deftest magit-subtree-no-subtree-repo-shows-nothing ()
   (skip-unless (executable-find fenrir/magit-subtree-program))
   (let ((dir (file-name-as-directory (make-temp-file "magit-subtree-plain" t))))

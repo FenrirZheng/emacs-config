@@ -52,7 +52,26 @@ your last `git fetch`.
 
 ```
 -C <dir>  --since <rev|date>  --filter <substr>  --all  --porcelain  --exit-code
+--no-status         skip the working-tree scan (uncommitted = '-'); Magit counts it itself
+--owner-of <rev>    print the subtree prefix(es) a commit belongs to
 ```
+
+`--owner-of` answers from the commit's own diff when the commit is on HEAD's first-parent
+chain. That chain holds umbrella commits, and their paths carry the prefix. For any other
+commit, which means an imported project commit, it answers with every subtree whose own history
+contains that commit: the upstream ref, or else the last import. A project commit that sits only
+on another branch (UAT, say, while the mainline is hg-config) belongs to neither, so it gets no
+owner.
+
+Discovery walks HEAD's whole history once, then caches the result in
+`<git-dir>/git-subtree-status.cache`, keyed by the HEAD commit. Measured on ig_lottery
+(55 subtrees, 2026-10-14):
+
+| run | time |
+|---|---|
+| full report | 100 ms |
+| `--no-status` | 25 ms |
+| `--owner-of` | 15–33 ms |
 
 With `--porcelain` the tool writes a `# git-subtree-status v1` line, then one tab-separated line
 per subtree. Run `git subtree-status --help` for the exact field list. The Emacs/Magit front end

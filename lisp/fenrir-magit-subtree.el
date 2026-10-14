@@ -7,10 +7,13 @@
 ;; for repositories built from `git subtree'.  Where the CLI finds no subtree
 ;; nothing here shows, so ordinary repos are unaffected.
 ;;
-;; * Status buffer: a "Subtrees" section above Untracked, one line per subtree
+;; * Status buffer: a "Subtrees" section after Staged changes, one line per subtree
 ;;   with a change -- U uncommitted paths, P files not yet on the branch's
 ;;   upstream (e.g. github/main), and drift from the subtree's own upstream ref.
-;;   RET on a line opens that subtree's log.
+;;   RET on a line opens that subtree's log.  U is counted from the sections
+;;   Magit already drew, so the CLI runs with --no-status (~25 ms).
+;; * Commit buffer: a `Subtree:' line under the headers -- an imported commit's
+;;   paths are project-relative, so this says which project it belongs to.
 ;; * `fenrir/magit-subtree-log' (`l S' in the log menu): pick a subtree, log
 ;;   its own history.  Imported commits carry project-relative paths, so a log
 ;;   of the umbrella limited to `repos/<prefix>' cannot show them; the subtree's
@@ -32,6 +35,7 @@
 
 (declare-function magit-toplevel "magit-git")
 (declare-function magit-get-upstream-branch "magit-git")
+(declare-function magit-list-untracked-files "magit-git")
 (declare-function magit-log-setup-buffer "magit-log")
 (declare-function magit-log-arguments "magit-log")
 (declare-function magit-current-section "magit-section")
@@ -111,16 +115,18 @@ Return nil unless OUTPUT starts with the v1 header."
 
 ;;;; Running the CLI
 
-(defun fenrir/magit-subtree--rows (&optional since)
+(defun fenrir/magit-subtree--rows (&optional since no-status)
   "Rows for every subtree of the current repo, or nil.
-SINCE, when non-nil, is passed as --since (a revision or a date)."
+SINCE, when non-nil, is passed as --since (a revision or a date).
+NO-STATUS skips the CLI's own working-tree scan; :uncommitted is then nil."
   (when-let* ((top (magit-toplevel))
               ((not (gethash top fenrir/magit-subtree--none)))
               (program (executable-find fenrir/magit-subtree-program)))
     (with-temp-buffer
       (let* ((default-directory top)
              (args (append (list "-C" top "--porcelain" "--all")
-                           (and since (list "--since" since))))
+                           (and since (list "--since" since))
+                           (and no-status (list "--no-status"))))
              (status (apply #'process-file program nil '(t nil) nil args))
              (rows (and (eq status 0)
                         (fenrir/magit-subtree--parse (buffer-string)))))
@@ -141,7 +147,7 @@ SINCE, when non-nil, is passed as --since (a revision or a date)."
 
 (defun fenrir/magit-subtree--line (row width)
   "A status line for ROW, its prefix padded to WIDTH."
-  (let ((u (plist-get row :uncommitted))
+  (let ((u (or (plist-get row :uncommitted) 0))
         (p (plist-get row :since)))
     (concat
      (propertize (string-pad (plist-get row :prefix) width) 'font-lock-face 'magit-filename)
@@ -155,11 +161,60 @@ SINCE, when non-nil, is passed as --since (a revision or a date)."
            (t (propertize (format "  changed since import (%d)" (plist-get row :import-files))
                           'font-lock-face 'warning))))))
 
+(defun fenrir/magit-subtree--status-paths ()
+  "Paths in the Untracked, Unstaged and Staged sections Magit already inserted.
+Reading them back costs no Git command, unlike asking the CLI to scan the
+working tree again.  Untracked directories come back with a trailing slash,
+which `fenrir/magit-subtree--owner' tolerates once it is stripped."
+  (when (boundp 'magit-insert-section--parent)
+    (let (paths untracked-drawn)
+      (dolist (group (oref magit-insert-section--parent children))
+        (when (memq (oref group type) '(untracked unstaged staged))
+          (dolist (file (oref group children))
+            (when (and (eq (oref file type) 'file) (stringp (oref file value)))
+              (when (eq (oref group type) 'untracked)
+                (setq untracked-drawn t))
+              (push (string-remove-suffix "/" (oref file value)) paths)))))
+      ;; A collapsed Untracked section has no children to read back.  Reuse the
+      ;; list Magit just computed for it (recorded by
+      ;; `fenrir/magit-subtree--remember-untracked'); only when Magit did not
+      ;; list untracked files this refresh is Git asked again.
+      (unless untracked-drawn
+        (dolist (f (if (equal (car fenrir/magit-subtree--untracked) default-directory)
+                       (cdr fenrir/magit-subtree--untracked)
+                     (magit-list-untracked-files)))
+          (push (string-remove-suffix "/" f) paths)))
+      (setq fenrir/magit-subtree--untracked nil)
+      paths)))
+
+(defvar fenrir/magit-subtree--untracked nil
+  "(DIRECTORY . FILES) from the latest `magit-list-untracked-files' call.")
+
+(defun fenrir/magit-subtree--remember-untracked (files)
+  "Record FILES, the untracked list Magit just computed; return it unchanged.
+Magit's refresh cache does not cover `git status', so without this the
+Subtrees section would run that command a second time (measured on
+ig_lottery: ~70 ms of the section's 104 ms)."
+  (setq fenrir/magit-subtree--untracked (cons default-directory files))
+  files)
+
+(defun fenrir/magit-subtree--count-uncommitted (rows paths)
+  "Set :uncommitted on each of ROWS from Magit's PATHS; return ROWS."
+  (let ((counts (make-hash-table :test #'equal)))
+    (dolist (p paths)
+      (when-let* ((row (fenrir/magit-subtree--owner p rows)))
+        (cl-incf (gethash (plist-get row :prefix) counts 0))))
+    (mapcar (lambda (row)
+              (plist-put row :uncommitted (gethash (plist-get row :prefix) counts 0)))
+            rows)))
+
 (defun fenrir/magit-subtree-insert-section ()
   "Insert the Subtrees section when the repo has subtrees with a change.
-P counts files that differ from the current branch's upstream."
+U is counted from the Untracked/Unstaged/Staged sections above it (so this
+runs after them); P counts files that differ from the branch's upstream."
   (when fenrir/magit-subtree-show-in-status
-    (when-let* ((rows (fenrir/magit-subtree--rows (magit-get-upstream-branch))))
+    (when-let* ((rows (fenrir/magit-subtree--rows (magit-get-upstream-branch) t)))
+      (fenrir/magit-subtree--count-uncommitted rows (fenrir/magit-subtree--status-paths))
       (let ((changed (seq-filter #'fenrir/magit-subtree--changed-p rows)))
         (when changed
           (magit-insert-section (fenrir-subtrees nil)
@@ -220,13 +275,43 @@ Defaults to the subtree line at point or the file being visited."
     (fenrir/magit-subtree--log
      row (list (string-remove-prefix (concat (plist-get row :prefix) "/") rel)))))
 
+;;;; Commit (revision) buffer
+
+(defvar magit-buffer-revision)
+
+(defun fenrir/magit-subtree--owners-of (rev)
+  "Prefixes of the subtree(s) commit REV belongs to, or nil."
+  (when-let* ((top (magit-toplevel))
+              ((not (gethash top fenrir/magit-subtree--none)))
+              (program (executable-find fenrir/magit-subtree-program)))
+    (with-temp-buffer
+      (let ((default-directory top))
+        (when (eq 0 (process-file program nil '(t nil) nil "-C" top "--owner-of" rev))
+          (split-string (buffer-string) "\n" t))))))
+
+(defun fenrir/magit-subtree-insert-revision-owner ()
+  "Insert a `Subtree:' line under the commit headers, when the commit has one.
+Imported commits carry project-relative paths (`src/...'), so this line is
+what says which project they came from."
+  (when-let* ((rev (bound-and-true-p magit-buffer-revision))
+              (owners (fenrir/magit-subtree--owners-of rev)))
+    (magit-insert-section (fenrir-subtree-owner owners)
+      (insert (propertize "Subtree: " 'font-lock-face 'magit-header-line-key)
+              (propertize (string-join owners ", ") 'font-lock-face 'magit-filename)
+              "\n"))))
+
 ;;;; Wiring
 
 (defun fenrir/magit-subtree--install ()
   "Add the status section and `S' in the log menu, once."
   (magit-add-section-hook 'magit-status-sections-hook
                           #'fenrir/magit-subtree-insert-section
-                          'magit-insert-untracked-files)
+                          'magit-insert-staged-changes t)
+  (advice-add 'magit-list-untracked-files :filter-return
+              #'fenrir/magit-subtree--remember-untracked)
+  (magit-add-section-hook 'magit-revision-sections-hook
+                          #'fenrir/magit-subtree-insert-revision-owner
+                          'magit-insert-revision-headers t)
   (let ((existing (ignore-errors (transient-get-suffix 'magit-log "S"))))
     (unless existing
       (condition-case err

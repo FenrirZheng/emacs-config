@@ -32,6 +32,10 @@ usage: git-subtree-status [options]
   --all                list every subtree, not only those with a change
   --porcelain          tab-separated output for scripts (format below)
   --exit-code          exit 1 if any subtree has a change
+  --no-status          skip the uncommitted count (reported as '-'); for callers
+                       such as Magit that already know the working tree state
+  --owner-of <rev>     print the prefix(es) of the subtree(s) a commit belongs
+                       to, one per line, and nothing else
   -h, --help           this help
   -V, --version        print the version
 
@@ -43,6 +47,9 @@ Upstream refs are optional git config, one per subtree:
   since is '-' without --since; import is same|changed|unknown; upstream is
   same|differs|missing|-; project_rev holds the subtree's own history: the
   upstream ref if set, else the last imported commit.
+
+Discovery walks HEAD's whole history once, then is cached in
+<git-dir>/git-subtree-status.cache, keyed by the HEAD commit.
 ";
 
 #[derive(Default)]
@@ -53,6 +60,8 @@ struct Opts {
     all: bool,
     porcelain: bool,
     exit_code: bool,
+    no_status: bool,
+    owner_of: Option<String>,
 }
 
 fn parse_args() -> Opts {
@@ -67,6 +76,8 @@ fn parse_args() -> Opts {
             "--all" => o.all = true,
             "--porcelain" => o.porcelain = true,
             "--exit-code" => o.exit_code = true,
+            "--no-status" => o.no_status = true,
+            "--owner-of" => o.owner_of = Some(value("--owner-of")),
             "-h" | "--help" => {
                 print!("{USAGE}");
                 exit(0)
@@ -97,7 +108,7 @@ struct Import {
 
 struct Row {
     prefix: String,
-    uncommitted: usize,
+    uncommitted: Option<usize>,
     since: Option<usize>,
     import: &'static str,
     import_files: usize,
@@ -117,7 +128,7 @@ impl Row {
         } else {
             self.import == "changed"
         };
-        self.uncommitted > 0 || self.since.unwrap_or(0) > 0 || drift
+        self.uncommitted.unwrap_or(0) > 0 || self.since.unwrap_or(0) > 0 || drift
     }
 }
 
@@ -164,6 +175,44 @@ fn discover(repo: &gix::Repository) -> Res<HashMap<String, Import>> {
         }
     }
     Ok(newest.into_iter().map(|(d, (_, i))| (d, i)).collect())
+}
+
+const CACHE_FILE: &str = "git-subtree-status.cache";
+
+/// `discover`, cached on disk per HEAD commit: the walk reads every commit, the
+/// cache file is one line per subtree.  A stale or unreadable cache is ignored.
+fn discover_cached(repo: &gix::Repository) -> Res<HashMap<String, Import>> {
+    let head = repo.head_id()?.detach();
+    let path = repo.git_dir().join(CACHE_FILE);
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        let mut lines = text.lines();
+        if lines.next() == Some(&format!("v1 {head}")) {
+            let parsed: Option<HashMap<String, Import>> = lines
+                .map(|l| {
+                    let mut f = l.split('\t');
+                    let (p, t, r) = (f.next()?, f.next()?, f.next()?);
+                    Some((p.to_string(), Import {
+                        tree: ObjectId::from_hex(t.as_bytes()).ok()?,
+                        project_rev: ObjectId::from_hex(r.as_bytes()).ok()?,
+                    }))
+                })
+                .collect();
+            if let Some(map) = parsed {
+                return Ok(map);
+            }
+        }
+    }
+    let found = discover(repo)?;
+    let mut text = format!("v1 {head}\n");
+    for (p, i) in &found {
+        text.push_str(&format!("{p}\t{}\t{}\n", i.tree, i.project_rev));
+    }
+    // Best effort: a read-only .git only costs the next run another walk.
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, text).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    }
+    Ok(found)
 }
 
 /// `subtree.<prefix>.upstream` entries from git config.
@@ -257,7 +306,7 @@ fn run(o: &Opts) -> Res<Vec<Row>> {
     let repo = gix::discover(o.dir.as_deref().unwrap_or(Path::new(".")))?;
     let head_tree = repo.head_commit()?.tree()?;
 
-    let mut found: Vec<(String, Import)> = discover(&repo)?.into_iter().collect();
+    let mut found: Vec<(String, Import)> = discover_cached(&repo)?.into_iter().collect();
     found.sort_by(|a, b| a.0.cmp(&b.0));
     // Keep only subtrees still present at HEAD, with their current tree.
     let mut present = Vec::new();
@@ -274,7 +323,11 @@ fn run(o: &Opts) -> Res<Vec<Row>> {
     }
     let prefixes: Vec<String> = present.iter().map(|(p, ..)| p.clone()).collect();
 
-    let uncommitted = count_by_owner(&status_paths(&repo)?, &prefixes);
+    let uncommitted = if o.no_status {
+        None
+    } else {
+        Some(count_by_owner(&status_paths(&repo)?, &prefixes))
+    };
     let since = match &o.since {
         Some(s) => {
             let base = since_commit(&repo, s)?;
@@ -303,7 +356,7 @@ fn run(o: &Opts) -> Res<Vec<Row>> {
         };
         rows.push(Row {
             prefix: prefix.clone(),
-            uncommitted: uncommitted.get(prefix).copied().unwrap_or(0),
+            uncommitted: uncommitted.as_ref().map(|m| m.get(prefix).copied().unwrap_or(0)),
             since: since.as_ref().map(|m| m.get(prefix).copied().unwrap_or(0)),
             import: imp,
             import_files,
@@ -316,6 +369,58 @@ fn run(o: &Opts) -> Res<Vec<Row>> {
     Ok(rows)
 }
 
+/// Prefixes of the subtree(s) commit `rev` belongs to.
+///
+/// An umbrella commit touches paths under a prefix, so its own diff answers.
+/// An imported project commit has project-relative paths; it belongs to every
+/// subtree whose own history (upstream ref, else last import) contains it.
+/// A project commit only on another branch (say UAT when the mainline is
+/// hg-config) is in neither, so it gets no owner.
+fn owner_of(repo: &gix::Repository, rev: &str) -> Res<Vec<String>> {
+    let commit = repo.rev_parse_single(rev)?.object()?.peel_to_commit()?;
+    let found = discover_cached(repo)?;
+    let mut prefixes: Vec<String> = found.keys().cloned().collect();
+    prefixes.sort();
+
+    let tree = commit.tree()?.id;
+    let parent_tree = match commit.parent_ids().next() {
+        Some(p) => p.object()?.peel_to_commit()?.tree()?.id,
+        None => repo.empty_tree().id,
+    };
+    let mut owners: Vec<String> = count_by_owner(&changed_paths(repo, parent_tree, tree)?, &prefixes)
+        .into_keys()
+        .collect();
+    // On HEAD's first-parent chain it is an umbrella commit: its paths are the
+    // whole answer.  Imported project commits only ever arrive as second parents.
+    let on_mainline = {
+        let mut hit = false;
+        for info in repo.head_id()?.ancestors().first_parent_only().all()? {
+            if info?.id == commit.id {
+                hit = true;
+                break;
+            }
+        }
+        hit
+    };
+    if owners.is_empty() && !on_mainline {
+        let ups = upstreams(repo);
+        for p in &prefixes {
+            let tip = match ups.get(p) {
+                Some(r) => match repo.rev_parse_single(r.as_str()) {
+                    Ok(id) => id.detach(),
+                    Err(_) => continue,
+                },
+                None => found[p].project_rev,
+            };
+            if repo.merge_base(commit.id, tip)?.is_some_and(|b| b == commit.id) {
+                owners.push(p.clone());
+            }
+        }
+    }
+    owners.sort();
+    Ok(owners)
+}
+
 fn print_porcelain(out: &mut impl Write, rows: &[&Row]) -> std::io::Result<()> {
     writeln!(out, "# git-subtree-status v1")?;
     for r in rows {
@@ -323,7 +428,7 @@ fn print_porcelain(out: &mut impl Write, rows: &[&Row]) -> std::io::Result<()> {
             out,
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             r.prefix,
-            r.uncommitted,
+            r.uncommitted.map_or_else(|| "-".to_string(), |n| n.to_string()),
             r.since.map_or_else(|| "-".to_string(), |n| n.to_string()),
             r.import,
             r.import_files,
@@ -347,7 +452,8 @@ fn print_table(out: &mut impl Write, rows: &[&Row], with_since: bool) -> std::io
     }
     writeln!(out, "  {:<15} upstream", "import")?;
     for r in rows {
-        write!(out, "{:<w$}  {:>11}", r.prefix, r.uncommitted)?;
+        let u = r.uncommitted.map_or_else(|| "-".to_string(), |n| n.to_string());
+        write!(out, "{:<w$}  {:>11}", r.prefix, u)?;
         if with_since {
             write!(out, "  {:>5}", r.since.unwrap_or(0))?;
         }
@@ -367,6 +473,16 @@ fn print_table(out: &mut impl Write, rows: &[&Row], with_since: bool) -> std::io
 
 fn main() {
     let o = parse_args();
+    if let Some(rev) = &o.owner_of {
+        let owners = gix::discover(o.dir.as_deref().unwrap_or(Path::new(".")))
+            .map_err(Into::into)
+            .and_then(|repo| owner_of(&repo, rev))
+            .unwrap_or_else(|e: Box<dyn std::error::Error + Send + Sync>| die(&e.to_string()));
+        for p in owners {
+            println!("{p}");
+        }
+        return;
+    }
     let rows = run(&o).unwrap_or_else(|e| die(&e.to_string()));
     let listed: Vec<&Row> = rows.iter().filter(|r| o.all || r.changed()).collect();
     let changed = rows.iter().filter(|r| r.changed()).count();

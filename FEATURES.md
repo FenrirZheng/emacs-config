@@ -963,19 +963,21 @@ Expanding a large Untracked group would insert up to `magit-status-file-list-lim
 **Context hints:** Magit status, log, revision and diff buffers show a default-on, one-row toolbar: muted context on the left, bold themed keys beside action labels, and `TAB Fold` / `? Help` on the right. Narrow windows omit whole items, preserving Help and the first action when they fit; existing titles appear when space permits. Active selections are labeled Region. The layout supports GUI and TTY frames.
 Toggle per buffer with `M-x fenrir/magit-hints-mode`; customize `fenrir/magit-hints-default` for new buffers or `fenrir/magit-hints-alist` to extend the hints. Menu labels open transients. Status buffers also advertise `j Jump menu` after the context actions — it is the last item added, so a narrow window drops it before it drops a stage/unstage action.
 
-**Subtrees** ([`fenrir-magit-subtree.el`](lisp/fenrir-magit-subtree.el)): this applies to a repo built with `git subtree`, such as `~/code/ig_lottery` with its 55 projects. Its status buffer gets a **Subtrees** section above Untracked. The section lists only the subtrees that changed, one line each, and the heading counts them (`Subtrees (5 changed of 55)`). Each line can show:
+**Subtrees** ([`fenrir-magit-subtree.el`](lisp/fenrir-magit-subtree.el)): this applies to a repo built with `git subtree`, such as `~/code/ig_lottery` with its 55 projects. Its status buffer gets a **Subtrees** section after Staged changes. The section lists only the subtrees that changed, one line each, and the heading counts them (`Subtrees (5 changed of 55)`). Each line can show:
 
-- `U:n`: uncommitted paths.
+- `U:n`: uncommitted paths, counted from the Untracked/Unstaged/Staged sections Magit already drew, so no extra `git status` runs.
 - `P:n`: files that differ from the current branch's upstream (for example `github/main`), that is, not pushed yet.
 - A warning when the subtree differs from its own upstream ref (`git config subtree.<prefix>.upstream <ref>`), or, when no ref is set, from what its last import brought in.
 
 `RET` on a line opens that subtree's log. `l S` does the same from anywhere: it picks the subtree at point or the one owning the visited file, and `C-u l S` asks.
 
+A commit buffer (`RET` on a commit) shows a `Subtree: <prefix>` line under its headers. That line names the project an imported commit came from, since its paths (`src/…`) don't say. A project commit that is only on another branch (say UAT when the mainline is hg-config) gets no line.
+
 That log matters because the imported commits carry project-relative paths (`src/…`, not `repos/<prefix>/src/…`), so limiting the umbrella log to `repos/<prefix>` cannot show them. The subtree's own ref can. `M-x fenrir/magit-subtree-file-log` does the same for the visited file, with the prefix stripped from its path.
 
 The data comes from the [`git-subtree-status`](rust/git-subtree-status/README.md) helper (gix, read-only, never fetches), built by `make -C rust/git-subtree-status` into `rust/lib/`. Without it, or in a repo with no subtree, nothing shows. A repo found to have none is not asked again this session; `M-x fenrir/magit-subtree-forget` resets that.
 
-Cost: on ig_lottery a status refresh went from 0.52 s to 0.77 s (measured 2026-10-14). Set `fenrir/magit-subtree-show-in-status` to nil to turn the section off and keep the commands.
+Cost: on ig_lottery one status refresh takes about 0.03 s longer, 0.25 s → 0.27–0.28 s (measured 2026-10-14). The helper runs with `--no-status` and caches subtree discovery per HEAD, and the untracked list Magit already computed is reused. Set `fenrir/magit-subtree-show-in-status` to nil to turn the section off and keep the commands.
 
 **`C-x v …` — Magit on the retired `vc.el` prefix.** `vc-handled-backends` is
 `(Git)` — vc.el keeps just the one backend, because diff-hl computes its gutter
