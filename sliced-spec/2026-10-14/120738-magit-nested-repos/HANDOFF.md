@@ -1,10 +1,16 @@
 # Handoff: Magit — a Nested repos section for independent clones inside a repo
 
-Updated: 2026-10-14 12:55 (Asia/Taipei)
+Updated: 2026-10-14 13:04 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
 
+- Acceptance gate: all 14 criteria pass on their literal inputs, run by a separate verifier
+  at `43b8935`; `Status: implemented` in `spec: mark magit-nested-repos implemented`
+  (`fdb3b92`), whose body holds the verifier's report. Gate re-measurements: criterion 7
+  median 52.9 ms; criterion 8 on 0.142 s vs off 0.073 s (+0.068 s).
+- Before the gate: criterion 11's `副作用` names the binary rename, in
+  `spec: declare criterion 11's binary rename as a side effect` (`43b8935`).
 - Slice 3, the live timing and the docs (criteria 8 and 14):
   - commit `docs: record the Nested repos section's cost on yeeya` (`73d1fce`);
   - the daemon loaded the module with `require`; the hook order is staged (10) → subtree
@@ -89,8 +95,9 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 下一步
 
-The acceptance gate (criteria 1–14). Criteria 8 and 14 are manual: 8 needs the daemon with
-`magit: yeeya` open; the run in slice 3 is evidence, and the gate reruns it literally.
+None. The spec is implemented. Optionally record where it went with
+`/sliced-spec ship` (this is a local config repo; no deploy beyond the daemon loading the
+module).
 
 ## 卡住・待確認
 
