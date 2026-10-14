@@ -985,6 +985,8 @@ Cost: on ig_lottery one status refresh takes about 0.03 s longer, 0.25 s → 0.2
 
 Ahead/behind is as of each clone's last fetch, because the [`git-nested-status`](rust/git-tools/git-nested-status/README.md) helper (gix, read-only) never fetches. The helper is built by `make -C rust/git-tools` into `rust/lib/`. Until it is built the section is absent and a one-time message says how to build it. By default the scan goes two levels deep (`<repo>/*/.git`, `<repo>/*/*/.git`). Per repo, `git config nested.depth N` changes that, and `0` turns it off. `git config --add nested.path <dir>` scans only the immediate children of the listed directories instead. `fenrir/magit-nested-skip-directories` (default `~/`) is never scanned, because `$HOME` holds about 100 clones. A repo found to have no clone is not asked again this session; `M-x fenrir/magit-nested-forget` resets that. Set `fenrir/magit-nested-show-in-status` to nil to turn the section off.
 
+Cost: on yeeya one status refresh takes about 0.055 s longer, 0.100 s → 0.155 s (median of 11, measured 2026-10-14).
+
 **`C-x v …` — Magit on the retired `vc.el` prefix.** `vc-handled-backends` is
 `(Git)` — vc.el keeps just the one backend, because diff-hl computes its gutter
 through it — but every interactive VC task goes through Magit, so vc.el's stock

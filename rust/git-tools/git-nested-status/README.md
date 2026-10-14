@@ -80,6 +80,19 @@ entries), 12 cores, warm page cache, `tests/check-repo.sh`:
 | first run after a reboot or cache eviction (cold) | ~240 ms |
 | `git status --porcelain` over the same 29 clones, in parallel, for comparison | 34 ms |
 
+The Magit **Nested repos** section runs this helper once per status refresh. Measured on
+2026-10-14 (Asia/Taipei) in the running daemon on the `magit: yeeya` buffer (heading
+`Nested repos (8 changed of 29)`), one `magit-refresh-buffer` per sample, as
+[`_doc/GOTCHAS.md`](../../../_doc/GOTCHAS.md#extending-the-magit-status-buffer) says, one
+warm-up then 11 samples each:
+
+| `fenrir/magit-nested-show-in-status` | median refresh | range |
+|---|---|---|
+| `t` (section on) | 0.155 s | 0.113–0.201 s |
+| `nil` (section off) | 0.100 s | 0.092–0.163 s |
+
+The section costs about 0.055 s per refresh on yeeya; the spec's bound is 0.15 s.
+
 ## Build and install
 
 A member of the [`git-tools` cargo workspace](../README.md) in this Emacs config's
