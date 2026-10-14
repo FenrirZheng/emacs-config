@@ -140,6 +140,87 @@ g subtree add -q --squash --prefix=libs/sq ../up main >/dev/null 2>&1"
             (should (re-search-forward "^Subtree: libs/full$" nil t)))
         (kill-buffer buf)))))
 
+(defun magit-subtree-test--section (prefix)
+  "The Subtrees line section for PREFIX in the current status buffer."
+  (seq-find (lambda (c) (equal (oref c value) prefix))
+            (oref (seq-find (lambda (c) (eq (oref c type) 'fenrir-subtrees))
+                            (oref magit-root-section children))
+                  children)))
+
+(defun magit-subtree-test--visible-text (section)
+  "SECTION's text with hidden (folded) parts removed."
+  (let ((out ""))
+    (save-excursion
+      (goto-char (oref section start))
+      (while (< (point) (oref section end))
+        (let ((next (next-single-char-property-change (point) 'invisible nil (oref section end))))
+          (unless (invisible-p (point))
+            (setq out (concat out (buffer-substring-no-properties (point) next))))
+          (goto-char next))))
+    out))
+
+(defun magit-subtree-test--git (dir &rest args)
+  (let ((default-directory dir))
+    (apply #'call-process "git" nil nil nil "-c" "user.name=t" "-c" "user.email=t@t" args)))
+
+(ert-deftest magit-subtree-tab-lists-files-by-kind ()
+  (magit-subtree-test--with-fixture dir
+    ;; libs/full: a.txt staged AND further edited (unstaged); src/x.rs unstaged.
+    ;; libs/sq: an untracked file.
+    (with-temp-file (expand-file-name "libs/full/a.txt" dir) (insert "staged\n"))
+    (magit-subtree-test--git dir "add" "libs/full/a.txt")
+    (with-temp-file (expand-file-name "libs/full/a.txt" dir) (insert "staged then edited\n"))
+    (with-temp-file (expand-file-name "libs/full/src/x.rs" dir) (insert "edited\n"))
+    (with-temp-file (expand-file-name "libs/sq/new.txt" dir) (insert "new\n"))
+    (let ((buf (magit-status-setup-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (let ((full (magit-subtree-test--section "libs/full"))
+                  (sq (magit-subtree-test--section "libs/sq")))
+              ;; a.txt counted once although it is both staged and unstaged.
+              (should (string-match-p "^libs/full +U:2" (magit-subtree-test--visible-text full)))
+              ;; Folded by default: no file lines visible.
+              (should-not (string-match-p "a\\.txt" (magit-subtree-test--visible-text full)))
+              (magit-section-show full)
+              (let ((text (magit-subtree-test--visible-text full)))
+                (should (string-match-p "^  staged +libs/full/a\\.txt$" text))
+                (should (string-match-p "^  unstaged +libs/full/a\\.txt$" text))
+                (should (string-match-p "^  unstaged +libs/full/src/x\\.rs$" text)))
+              (magit-section-show sq)
+              (should (string-match-p "^  untracked +libs/sq/new\\.txt$"
+                                      (magit-subtree-test--visible-text sq)))))
+        (kill-buffer buf)))))
+
+(ert-deftest magit-subtree-tab-state-survives-refresh ()
+  (magit-subtree-test--with-fixture dir
+    (with-temp-file (expand-file-name "libs/full/a.txt" dir) (insert "edited\n"))
+    (let ((buf (magit-status-setup-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (magit-section-show (magit-subtree-test--section "libs/full"))
+            ;; A second change alters the row's counts; the section must stay open.
+            (with-temp-file (expand-file-name "libs/full/src/x.rs" dir) (insert "edited\n"))
+            (magit-refresh-buffer)
+            (let ((full (magit-subtree-test--section "libs/full")))
+              (should-not (oref full hidden))
+              (should (string-match-p "src/x\\.rs" (magit-subtree-test--visible-text full)))))
+        (kill-buffer buf)))))
+
+(ert-deftest magit-subtree-ret-on-file-visits-it ()
+  (magit-subtree-test--with-fixture dir
+    (with-temp-file (expand-file-name "libs/sq/new.txt" dir) (insert "new\n"))
+    (let ((buf (magit-status-setup-buffer dir)) visited)
+      (unwind-protect
+          (with-current-buffer buf
+            (let ((sq (magit-subtree-test--section "libs/sq")))
+              (magit-section-show sq)
+              (goto-char (oref (car (oref sq children)) start))
+              (call-interactively (key-binding (kbd "RET")))
+              (setq visited (current-buffer))
+              (should (equal buffer-file-name (expand-file-name "libs/sq/new.txt" dir)))))
+        (when (buffer-live-p visited) (kill-buffer visited))
+        (kill-buffer buf)))))
+
 (ert-deftest magit-subtree-no-subtree-repo-shows-nothing ()
   (skip-unless (executable-find fenrir/magit-subtree-program))
   (let ((dir (file-name-as-directory (make-temp-file "magit-subtree-plain" t))))

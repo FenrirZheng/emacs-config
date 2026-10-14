@@ -969,7 +969,7 @@ Toggle per buffer with `M-x fenrir/magit-hints-mode`; customize `fenrir/magit-hi
 - `P:n`: files that differ from the current branch's upstream (for example `github/main`), that is, not pushed yet.
 - A warning when the subtree differs from its own upstream ref (`git config subtree.<prefix>.upstream <ref>`), or, when no ref is set, from what its last import brought in.
 
-`RET` on a line opens that subtree's log. `l S` does the same from anywhere: it picks the subtree at point or the one owning the visited file, and `C-u l S` asks.
+`TAB` on a line unfolds its uncommitted files, one per line and marked `untracked`, `unstaged` or `staged`. A file that is both staged and further edited shows twice but counts once in `U`. `RET` on a file line visits that file. The lines start folded, and a line you unfold stays unfolded across `g`. `RET` on the subtree line itself opens that subtree's log. `l S` does the same from anywhere: it picks the subtree at point or the one owning the visited file, and `C-u l S` asks.
 
 A commit buffer (`RET` on a commit) shows a `Subtree: <prefix>` line under its headers. That line names the project an imported commit came from, since its paths (`src/…`) don't say. A project commit that is only on another branch (say UAT when the mainline is hg-config) gets no line.
 

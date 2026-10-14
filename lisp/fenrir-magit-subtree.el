@@ -142,8 +142,23 @@ NO-STATUS skips the CLI's own working-tree scan; :uncommitted is then nil."
 ;;;; Status section
 
 (defvar-keymap magit-fenrir-subtree-section-map
-  :doc "Keymap for a subtree line in the Subtrees status section."
+  :doc "Keymap for a subtree line in the Subtrees status section.
+TAB (Magit's own) folds the list of its uncommitted files."
   "<remap> <magit-visit-thing>" #'fenrir/magit-subtree-log)
+
+(defvar-keymap magit-fenrir-subtree-file-section-map
+  :doc "Keymap for an uncommitted file listed under a subtree line.
+Its own section type, not Magit's `file': Magit's stage/unstage commands read
+the diff type off the parent section, which here is a Subtrees line."
+  "<remap> <magit-visit-thing>" #'fenrir/magit-subtree-visit-file)
+
+(defun fenrir/magit-subtree-visit-file ()
+  "Visit the uncommitted file at point, listed under a Subtrees line."
+  (interactive)
+  (let ((section (magit-current-section)))
+    (unless (eq (oref section type) 'fenrir-subtree-file)
+      (user-error "No subtree file at point"))
+    (find-file (expand-file-name (oref section value) (magit-toplevel)))))
 
 (defun fenrir/magit-subtree--line (row width)
   "A status line for ROW, its prefix padded to WIDTH."
@@ -162,10 +177,10 @@ NO-STATUS skips the CLI's own working-tree scan; :uncommitted is then nil."
                           'font-lock-face 'warning))))))
 
 (defun fenrir/magit-subtree--status-paths ()
-  "Paths in the Untracked, Unstaged and Staged sections Magit already inserted.
-Reading them back costs no Git command, unlike asking the CLI to scan the
-working tree again.  Untracked directories come back with a trailing slash,
-which `fenrir/magit-subtree--owner' tolerates once it is stripped."
+  "(KIND . PATH) for each file Magit already listed as untracked/unstaged/staged.
+KIND is the symbol `untracked', `unstaged' or `staged'.  Reading them back
+costs no Git command, unlike asking the CLI to scan the working tree again.
+Untracked directories come back with their trailing slash stripped."
   (when (boundp 'magit-insert-section--parent)
     (let (paths untracked-drawn)
       (dolist (group (oref magit-insert-section--parent children))
@@ -174,7 +189,8 @@ which `fenrir/magit-subtree--owner' tolerates once it is stripped."
             (when (and (eq (oref file type) 'file) (stringp (oref file value)))
               (when (eq (oref group type) 'untracked)
                 (setq untracked-drawn t))
-              (push (string-remove-suffix "/" (oref file value)) paths)))))
+              (push (cons (oref group type) (string-remove-suffix "/" (oref file value)))
+                    paths)))))
       ;; A collapsed Untracked section has no children to read back.  Reuse the
       ;; list Magit just computed for it (recorded by
       ;; `fenrir/magit-subtree--remember-untracked'); only when Magit did not
@@ -183,7 +199,7 @@ which `fenrir/magit-subtree--owner' tolerates once it is stripped."
         (dolist (f (if (equal (car fenrir/magit-subtree--untracked) default-directory)
                        (cdr fenrir/magit-subtree--untracked)
                      (magit-list-untracked-files)))
-          (push (string-remove-suffix "/" f) paths)))
+          (push (cons 'untracked (string-remove-suffix "/" f)) paths)))
       (setq fenrir/magit-subtree--untracked nil)
       paths)))
 
@@ -198,14 +214,23 @@ ig_lottery: ~70 ms of the section's 104 ms)."
   (setq fenrir/magit-subtree--untracked (cons default-directory files))
   files)
 
-(defun fenrir/magit-subtree--count-uncommitted (rows paths)
-  "Set :uncommitted on each of ROWS from Magit's PATHS; return ROWS."
-  (let ((counts (make-hash-table :test #'equal)))
-    (dolist (p paths)
-      (when-let* ((row (fenrir/magit-subtree--owner p rows)))
-        (cl-incf (gethash (plist-get row :prefix) counts 0))))
+(defun fenrir/magit-subtree--count-uncommitted (rows entries)
+  "Attach Magit's ENTRIES, (KIND . PATH) pairs, to the ROWS owning them.
+Each row gets :files, its entries sorted by path then kind, and
+:uncommitted, the number of distinct paths -- a file both staged and
+unstaged counts once.  Return ROWS."
+  (let ((files (make-hash-table :test #'equal)))
+    (dolist (e entries)
+      (when-let* ((row (fenrir/magit-subtree--owner (cdr e) rows)))
+        (push e (gethash (plist-get row :prefix) files))))
     (mapcar (lambda (row)
-              (plist-put row :uncommitted (gethash (plist-get row :prefix) counts 0)))
+              (let ((mine (sort (gethash (plist-get row :prefix) files)
+                                (lambda (a b)
+                                  (if (equal (cdr a) (cdr b))
+                                      (string< (symbol-name (car a)) (symbol-name (car b)))
+                                    (string< (cdr a) (cdr b)))))))
+                (setq row (plist-put row :files mine))
+                (plist-put row :uncommitted (length (delete-dups (mapcar #'cdr mine))))))
             rows)))
 
 (defun fenrir/magit-subtree-insert-section ()
@@ -222,8 +247,16 @@ runs after them); P counts files that differ from the branch's upstream."
               (format "Subtrees (%d changed of %d)" (length changed) (length rows)))
             (let ((width (apply #'max (mapcar (lambda (r) (length (plist-get r :prefix))) changed))))
               (dolist (row changed)
-                (magit-insert-section (fenrir-subtree row)
-                  (insert (fenrir/magit-subtree--line row width) "\n"))))
+                ;; The value is the prefix, not the row: Magit keeps a section's
+                ;; folded/expanded state across refreshes by type and value, and
+                ;; the row's counts change from one refresh to the next.
+                (magit-insert-section (fenrir-subtree (plist-get row :prefix) t)
+                  (magit-insert-heading (fenrir/magit-subtree--line row width))
+                  (dolist (f (plist-get row :files))
+                    (magit-insert-section (fenrir-subtree-file (cdr f))
+                      (insert (format "  %-9s  " (car f))
+                              (propertize (cdr f) 'font-lock-face 'magit-filename)
+                              "\n"))))))
             (insert "\n")))))))
 
 ;;;; Log commands
@@ -237,8 +270,10 @@ runs after them); P counts files that differ from the branch's upstream."
 (defun fenrir/magit-subtree--at-point (rows)
   "The row for the subtree line at point, or the file being visited."
   (or (when-let* ((section (and (derived-mode-p 'magit-mode) (magit-current-section)))
-                  ((eq (oref section type) 'fenrir-subtree)))
-        (oref section value))
+                  (section (pcase (oref section type)
+                             ('fenrir-subtree section)
+                             ('fenrir-subtree-file (oref section parent)))))
+        (fenrir/magit-subtree--owner (oref section value) rows))
       (when-let* ((file buffer-file-name)
                   (top (magit-toplevel)))
         (fenrir/magit-subtree--owner (file-relative-name file top) rows))))
