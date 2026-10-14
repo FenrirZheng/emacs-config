@@ -1,6 +1,6 @@
 # Spec: Magit — a Nested repos section for independent clones inside a repo
 
-Status: draft
+Status: approved
 Date: 2026-10-14 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
@@ -130,3 +130,5 @@ at depth 3). Building it is setup. The exact values below are the fixture's.
   unanswered: yes.
 - Which directories does the Lisp skip? — default if unanswered: `~/` only, as a defcustom.
 - Show the clone's HEAD subject on the row? — default if unanswered: no.
+
+The user approved these defaults on 2026-10-14.
