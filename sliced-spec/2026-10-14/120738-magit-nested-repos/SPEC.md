@@ -1,6 +1,6 @@
 # Spec: Magit — a Nested repos section for independent clones inside a repo
 
-Status: in progress
+Status: implemented
 Date: 2026-10-14 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
