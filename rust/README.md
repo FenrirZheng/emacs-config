@@ -26,6 +26,7 @@ how [cpp/](../cpp/README.md) aggregates C++ dynamic modules via
 | [`treesit-grammar-c/`](treesit-grammar-c/README.md) | ABI-14-pinned **C** tree-sitter grammar deployer (`tree-sitter-c` @ `v0.23.6`; parser-only) | `make -C treesit-grammar-c` |
 | [`treesit-grammar-lua/`](treesit-grammar-lua/README.md) | ABI-14-pinned **Lua** tree-sitter grammar deployer (`tree-sitter-lua` @ `v0.3.0`; has `scanner.c`) | `make -C treesit-grammar-lua` |
 | [`question-queue-core/`](question-queue-core/README.md) | Emacs **dynamic module** (raw emacs-module ABI via bindgen): assemble a region+question markdown file, atomically drop it into a question-queue `input/` dir, parse the answer back. Front-end: [`lisp/question-queue.el`](../lisp/question-queue.el) | `make -C question-queue-core` |
+| [`git-subtree-status/`](git-subtree-status/README.md) | **Helper binary** (cargo bin, `gix`): find the git subtrees of a repo from their trailers and report which changed — uncommitted, since a revision, against an upstream ref — as porcelain. Run by [`lisp/fenrir-magit-subtree.el`](../lisp/fenrir-magit-subtree.el) for the Magit Subtrees section and `l S`; also a terminal CLI (`git subtree-status`) | `make -C git-subtree-status` |
 | [`libsrc-classes/`](libsrc-classes/README.md) | **Helper binary** (cargo bin, `zip` crate): read every jar's zip directory and print simple class name → `g:a:v` as one Lisp form. Run by [`lisp/languages/fenrir-libsrc.el`](../lisp/languages/fenrir-libsrc.el) for `C-c g l` | `make -C libsrc-classes` |
 
 > Why three near-identical grammar Makefiles instead of one parameterized build:
@@ -41,7 +42,7 @@ how [cpp/](../cpp/README.md) aggregates C++ dynamic modules via
 rust/
 ├── README.md          # this file (tracked)
 ├── Makefile           # aggregator: forwards targets to each subproject (tracked)
-├── lib/               # deployed modules + helpers: question-queue-core.so, libsrc-classes (gitignored)
+├── lib/               # deployed modules + helpers: question-queue-core.so, libsrc-classes, git-subtree-status (gitignored)
 ├── treesit-grammar/        # Rust grammar deployer — see its own README
 │   ├── Makefile / README.md
 │   ├── tree-sitter-rust/   # cloned upstream grammar source (gitignored)
@@ -58,9 +59,13 @@ rust/
 │   ├── Cargo.toml / build.rs / wrapper.h / Makefile (tracked)
 │   ├── src/                # lib.rs / emacs.rs / request.rs / answer.rs (tracked)
 │   └── target/             # cargo build dir (gitignored)
-└── libsrc-classes/         # cargo bin helper for fenrir-libsrc — see its own README
+├── libsrc-classes/         # cargo bin helper for fenrir-libsrc — see its own README
+│   ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile (tracked)
+│   ├── src/                # lib.rs (rules + output) / main.rs (tracked)
+│   └── target/             # cargo build dir (gitignored)
+└── git-subtree-status/     # cargo bin helper for fenrir-magit-subtree — see its own README
     ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile (tracked)
-    ├── src/                # lib.rs (rules + output) / main.rs (tracked)
+    ├── src/                # main.rs (tracked)
     └── target/             # cargo build dir (gitignored)
 ```
 

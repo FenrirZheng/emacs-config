@@ -784,5 +784,11 @@ the definition before the `add-hook' references it."
   :bind (("M-g t" . consult-todo)
          ("M-g T" . consult-todo-all)))
 
+;; Subtrees: which `git subtree' prefixes changed, in Magit -- a Subtrees status
+;; section, `l S' (subtree log) and `M-x fenrir/magit-subtree-file-log'.  Front
+;; end of the git-subtree-status CLI; repos without subtrees are untouched.
+(with-eval-after-load 'magit
+  (require 'fenrir-magit-subtree))
+
 (provide 'init-git)
 ;;; init-git.el ends here

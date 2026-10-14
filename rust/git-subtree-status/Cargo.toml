@@ -1,0 +1,22 @@
+[package]
+name = "git-subtree-status"
+version = "0.1.0"
+edition = "2024"
+description = "Show which git subtrees in a repo have changed: uncommitted, since a revision, since the last import, and against a configured upstream ref"
+license = "MIT"
+
+[dependencies]
+gix = { version = "0.89.0", default-features = false, features = ["max-performance-safe", "sha1", "status", "revision"] }
+
+[profile.release]
+strip = true
+lto = "thin"               # most of the runtime benefit at a lower build cost
+
+[profile.dev]
+debug = "line-tables-only" # readable backtraces, less to link
+
+[profile.quick]            # local optimized runs; these three lines travel together
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true

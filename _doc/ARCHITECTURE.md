@@ -35,7 +35,7 @@ Top-level `init-<area>` modules under [`lisp/`](../lisp/):
 | `init-ide` | the cross-cutting modern-IDE layer (below) |
 | `init-languages` | **language-agnostic** infra only (below) |
 | `init-tags` | GNU Global: `gtags-mode` xref fallback, `C-c g` index management, daemon-wide `GTAGSCONF`/`GTAGSLABEL` — see [TAGS.md](TAGS.md) |
-| `init-git` | Magit, diff-hl, magit-todos, delta, difftastic, `smerge-mode` auto-enable, `consult-todo` |
+| `init-git` | Magit, diff-hl, magit-todos, delta, difftastic, `smerge-mode` auto-enable, `consult-todo`; loads `fenrir-magit-subtree` after Magit |
 | `init-terminal` | vterm + `vterm-toggle` (`C-c T`) |
 | `init-docker` | `dockerfile-mode` + `docker.el` container UI (`C-c D`) |
 | `init-diagrams` | `plantuml-mode` (local `java -jar`, jar at `var/plantuml/plantuml.jar`) + `mermaid-mode` / `ob-mermaid` (`mmdc` CLI), both wired into `org-babel` |
