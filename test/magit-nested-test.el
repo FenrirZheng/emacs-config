@@ -143,9 +143,16 @@ Skip without the helper."
 (ert-deftest magit-nested-status-section ()
   "驗收條件 4."
   (magit-nested-test--with-fixture
+    ;; A staged edit in the umbrella, so a Staged changes section exists to
+    ;; come after.
+    (let ((default-directory magit-nested-test--fixture))
+      (with-temp-file "README.md" (insert "umbrella, edited\n"))
+      (call-process "git" nil nil nil "add" "README.md"))
     (let ((buf (magit-status-setup-buffer magit-nested-test--fixture)))
       (unwind-protect
           (with-current-buffer buf
+            (should (memq 'staged (mapcar (lambda (c) (oref c type))
+                                          (oref magit-root-section children))))
             (let ((section (magit-nested-test--section)))
               (should section)
               (let ((text (buffer-substring-no-properties (oref section start)
@@ -244,22 +251,27 @@ Skip without the helper."
         (kill-buffer buf)))))
 
 (ert-deftest magit-nested-unbuilt ()
-  "驗收條件 11."
+  "驗收條件 11: the real rust/lib/git-nested-status is moved aside for the test."
   (magit-nested-test--with-fixture
     (let* ((fenrir/magit-nested-program
-            (expand-file-name "rust/lib/git-nested-status-absent" magit-nested-test--root))
+            (expand-file-name "rust/lib/git-nested-status" magit-nested-test--root))
+           (aside (concat fenrir/magit-nested-program ".test-aside"))
            (fenrir/magit-nested--hinted nil)
            (messages (get-buffer-create "*Messages*"))
            (mark (with-current-buffer messages (point-max)))
-           (buf (magit-status-setup-buffer magit-nested-test--fixture)))
+           buf)
+      (rename-file fenrir/magit-nested-program aside)
       (unwind-protect
           (progn
+            (should-not (file-exists-p fenrir/magit-nested-program))
+            (setq buf (magit-status-setup-buffer magit-nested-test--fixture))
             (with-current-buffer buf
               (should-not (magit-nested-test--section)))
             (let ((new (with-current-buffer messages
                          (buffer-substring-no-properties mark (point-max)))))
               (should-not (string-match-p "[Ee]rror" new))
               (should (string-match-p "Nested repos: .* is not built" new))))
-        (kill-buffer buf)))))
+        (rename-file aside fenrir/magit-nested-program)
+        (when (buffer-live-p buf) (kill-buffer buf))))))
 
 ;;; magit-nested-test.el ends here
