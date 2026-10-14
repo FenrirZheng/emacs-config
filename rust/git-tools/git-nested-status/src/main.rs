@@ -226,7 +226,10 @@ fn count_commits(repo: &gix::Repository, tip: gix::ObjectId, hide: gix::ObjectId
 
 /// Open the clone at `root/rel` (at that path, never discovering upward) and read its state.
 fn inspect(root: &Path, rel: &Path) -> Res<Row> {
-    let repo = gix::open_opts(root.join(rel), gix::open::Options::isolated())?;
+    // Default options, not `isolated()`: the global config and the XDG ignore file
+    // (~/.config/git/ignore) must apply, or the untracked list disagrees with the
+    // clone's own `git status` (seen 2026-10-14: `.claude` ignored globally).
+    let repo = gix::open(root.join(rel))?;
     let head = repo.head()?;
     let head_id = head.id();
     let branch = if head.is_detached() {

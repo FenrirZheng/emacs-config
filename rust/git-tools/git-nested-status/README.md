@@ -63,8 +63,8 @@ F  kind  file                               kind = staged | unstaged | untracked
 
 `branch` is `-` when detached, `head` is the abbreviated commit (`-` when unborn), `upstream`
 is `-` without one, and `ahead`/`behind` are `-` without an upstream or when its ref is gone.
-`git nested-status --help` has the same description. The Emacs/Magit front end
-([`lisp/fenrir-magit-nested.el`](../../../lisp/fenrir-magit-nested.el)) reads this format.
+`git nested-status --help` has the same description. The Emacs/Magit front end,
+`lisp/fenrir-magit-nested.el` (the next slice of its spec), reads this format.
 
 ## Performance
 
