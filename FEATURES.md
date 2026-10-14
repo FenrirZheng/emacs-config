@@ -975,7 +975,7 @@ A commit buffer (`RET` on a commit) shows a `Subtree: <prefix>` line under its h
 
 That log matters because the imported commits carry project-relative paths (`src/…`, not `repos/<prefix>/src/…`), so limiting the umbrella log to `repos/<prefix>` cannot show them. The subtree's own ref can. `M-x fenrir/magit-subtree-file-log` does the same for the visited file, with the prefix stripped from its path.
 
-The data comes from the [`git-subtree-status`](rust/git-subtree-status/README.md) helper (gix, read-only, never fetches), built by `make -C rust/git-subtree-status` into `rust/lib/`. Without it, or in a repo with no subtree, nothing shows. A repo found to have none is not asked again this session; `M-x fenrir/magit-subtree-forget` resets that.
+The data comes from the [`git-subtree-status`](rust/git-tools/git-subtree-status/README.md) helper (gix, read-only, never fetches), built by `make -C rust/git-tools` into `rust/lib/`. Without it, or in a repo with no subtree, nothing shows. A repo found to have none is not asked again this session; `M-x fenrir/magit-subtree-forget` resets that.
 
 Cost: on ig_lottery one status refresh takes about 0.03 s longer, 0.25 s → 0.27–0.28 s (measured 2026-10-14). The helper runs with `--no-status` and caches subtree discovery per HEAD, and the untracked list Magit already computed is reused. Set `fenrir/magit-subtree-show-in-status` to nil to turn the section off and keep the commands.
 

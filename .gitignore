@@ -67,7 +67,7 @@
 /rust/lib/
 /rust/question-queue-core/target/
 /rust/libsrc-classes/target/
-/rust/git-subtree-status/target/
+/rust/git-tools/target/
 # GNU Global index built ad-hoc inside subprojects (generated, not tracked).
 /rust/*/GTAGS
 /rust/*/GRTAGS

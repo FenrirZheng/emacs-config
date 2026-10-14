@@ -79,12 +79,13 @@ reads this format.
 
 ## Build and install
 
-A subproject of this Emacs config's [`rust/` workspace](../README.md). Its front end is
-[`lisp/fenrir-magit-subtree.el`](../../lisp/fenrir-magit-subtree.el).
+A member of the [`git-tools` cargo workspace](../README.md) in this Emacs config's
+[`rust/` workspace](../../README.md). Its front end is
+[`lisp/fenrir-magit-subtree.el`](../../../lisp/fenrir-magit-subtree.el).
 
 ```bash
-make -C rust/git-subtree-status            # cargo build --release, deploy to rust/lib/
-make -C rust/git-subtree-status verify     # also check the porcelain header
+make -C rust/git-tools                     # cargo build --release (all members), deploy to rust/lib/
+make -C rust/git-tools verify              # also check each bin's porcelain header
 ln -sfn ~/.emacs.d/rust/lib/git-subtree-status ~/.local/bin/git-subtree-status   # terminal use
 ```
 
@@ -92,10 +93,10 @@ The Emacs front end runs `rust/lib/git-subtree-status` directly and does not nee
 The symlink is only for the terminal. Because the binary is named `git-subtree-status`, git
 also runs it as `git subtree-status`.
 
-Build settings:
-- `.cargo/config.toml` links with mold.
-- `Cargo.toml` adds a `quick` profile (`cargo build --profile quick`) for fast optimized local
-  builds.
+Build settings (workspace-level, in [`../Cargo.toml`](../Cargo.toml) and
+[`../.cargo/config.toml`](../.cargo/config.toml)):
+- the linker is mold;
+- a `quick` profile (`cargo build --profile quick`) gives fast optimized local builds.
 
 Measured on 2026-10-14 (Asia/Taipei), 12 cores, rustc 1.98.0, real-edit rebuilds:
 

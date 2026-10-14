@@ -1,0 +1,9 @@
+[package]
+name = "git-subtree-status"
+version = "0.1.0"
+edition = "2024"
+description = "Show which git subtrees in a repo have changed: uncommitted, since a revision, since the last import, and against a configured upstream ref"
+license = "MIT"
+
+[dependencies]
+gix = { workspace = true }

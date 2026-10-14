@@ -1,11 +1,15 @@
-[package]
-name = "git-subtree-status"
-version = "0.1.0"
-edition = "2024"
-description = "Show which git subtrees in a repo have changed: uncommitted, since a revision, since the last import, and against a configured upstream ref"
-license = "MIT"
+# Cargo workspace for the git helper binaries of this Emacs config.
+# Each member is one bin run by a lisp/ module (and usable as a `git <name>`
+# subcommand from the terminal).  They share gix, the profiles and the mold
+# linker config, so the workspace compiles gix once and keeps one lockfile.
+#
+# Build and deploy: `make` here (see Makefile); workspace overview: README.md.
 
-[dependencies]
+[workspace]
+resolver = "3"
+members = ["git-subtree-status"]
+
+[workspace.dependencies]
 gix = { version = "0.89.0", default-features = false, features = ["max-performance-safe", "sha1", "status", "revision"] }
 
 [profile.release]

@@ -2,8 +2,8 @@
 
 ;;; Commentary:
 ;; A front end for the `git-subtree-status' helper binary
-;; ([rust/git-subtree-status](../rust/git-subtree-status/README.md), built by
-;; `make -C rust/git-subtree-status' into rust/lib/),
+;; ([rust/git-tools/git-subtree-status](../rust/git-tools/git-subtree-status/README.md),
+;; built by `make -C rust/git-tools' into rust/lib/),
 ;; for repositories built from `git subtree'.  Where the CLI finds no subtree
 ;; nothing here shows, so ordinary repos are unaffected.
 ;;
@@ -52,7 +52,7 @@
 (defcustom fenrir/magit-subtree-program
   (expand-file-name "rust/lib/git-subtree-status" user-emacs-directory)
   "The `git-subtree-status' helper binary.
-Built by `make -C rust/git-subtree-status' into the workspace `rust/lib/'.
+Built by `make -C rust/git-tools' into the workspace `rust/lib/'.
 Until then the Subtrees section stays absent and the commands say so."
   :type 'file)
 
