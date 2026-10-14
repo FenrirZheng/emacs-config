@@ -1,7 +1,8 @@
 # Makefile — build & deploy the git helper binaries (one cargo workspace).
 #
 # Each member crate is a bin run by a lisp/ module: git-subtree-status by
-# lisp/fenrir-magit-subtree.el.  They are also plain CLIs: symlinked into
+# lisp/fenrir-magit-subtree.el, git-nested-status by lisp/fenrir-magit-nested.el.
+# They are also plain CLIs: symlinked into
 # ~/.local/bin they run as `git subtree-status' and so on.  The aggregator
 # [../Makefile](../Makefile) just forwards the standard phony targets here.
 #
@@ -20,7 +21,7 @@
 # ---- config -------------------------------------------------------------
 HERE       := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 LIB_DIR    := $(abspath $(HERE)/../lib)
-BINS       := git-subtree-status
+BINS       := git-subtree-status git-nested-status
 DEPLOYED   := $(addprefix $(LIB_DIR)/,$(BINS))
 SOURCES    := $(wildcard $(HERE)/*/src/*.rs) $(wildcard $(HERE)/*/Cargo.toml) \
               $(HERE)/Cargo.toml $(HERE)/Cargo.lock $(HERE)/.cargo/config.toml

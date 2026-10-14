@@ -1,13 +1,13 @@
 # Spec: Magit — a Nested repos section for independent clones inside a repo
 
-Status: approved
+Status: in progress
 Date: 2026-10-14 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
 ## 目標
 
 - A repo that holds independent clones — a subdirectory with its own `.git`, such as
-  `~/code/yeeya`'s `repos/*` (30 clones on 2026-10-14) — gets a `Nested repos` section in its
+  `~/code/yeeya`'s `repos/*` (29 clones on 2026-10-14) — gets a `Nested repos` section in its
   Magit status buffer, after the Subtrees section. Today that buffer says nothing about them,
   and the Subtrees section does not apply: yeeya has no `git subtree` trailer.
 - The heading counts every clone found; the rows are the clones with something to act on:
@@ -42,16 +42,16 @@ at depth 3). Building it is setup. The exact values below are the fixture's.
    `repos/dirty`, in that order; the `repos/dirty` row says branch `main`, upstream
    `origin/main`, ahead 1, behind 0, staged 0, unstaged 1, untracked 1; the `repos/detached`
    row says detached; no row for `repos/plain` or `deep/x/y` — test:
-   `rust/git-nested-status/tests/fixture.sh` — 副作用: writes `/tmp/magit-nested-fixture`
+   `rust/git-tools/git-nested-status/tests/fixture.sh` — 副作用: writes `/tmp/magit-nested-fixture`
 2. After `git -C /tmp/magit-nested-fixture config nested.depth 3`, the command of 1 → a
    `deep/x/y` row is added; after `git -C /tmp/magit-nested-fixture config nested.depth 0` →
    the header line only; after `git -C /tmp/magit-nested-fixture config --unset nested.depth`
    and `git -C /tmp/magit-nested-fixture config --add nested.path deep/x` → the `deep/x/y`
-   row only, no `repos/*` row — test: `rust/git-nested-status/tests/fixture.sh` — 副作用:
+   row only, no `repos/*` row — test: `rust/git-tools/git-nested-status/tests/fixture.sh` — 副作用:
    edits `/tmp/magit-nested-fixture/.git/config`
 3. `git-nested-status -C /tmp/magit-nested-fixture --porcelain --files` → under the
    `repos/dirty` row, one file line per uncommitted path with its kind (`unstaged`,
-   `untracked`); none under `repos/clean` — test: `rust/git-nested-status/tests/fixture.sh` —
+   `untracked`); none under `repos/clean` — test: `rust/git-tools/git-nested-status/tests/fixture.sh` —
    副作用: writes `/tmp/magit-nested-fixture`
 4. `magit-status` on `/tmp/magit-nested-fixture` (batch Emacs with the packages in `elpa/`)
    → a section headed `Nested repos (2 changed of 3)`, placed after Staged changes (and after
@@ -64,11 +64,11 @@ at depth 3). Building it is setup. The exact values below are the fixture's.
    a Magit status buffer for `/tmp/magit-nested-fixture/repos/dirty/` — test:
    `test/magit-nested-test.el::row-actions` — 副作用: writes `/tmp/magit-nested-fixture`
 6. `git-nested-status -C ~/code/yeeya --porcelain` → the row paths are exactly the `repos/<d>`
-   for which `~/code/yeeya/repos/<d>/.git` exists, sorted (30 on 2026-10-14), and none of
+   for which `~/code/yeeya/repos/<d>/.git` exists, sorted (29 on 2026-10-14), and none of
    `repos/android_yeeya_apk`, `repos/logs`, `repos/opus-rewrite` (directories without `.git`)
-   — test: `rust/git-nested-status/tests/check-repo.sh ~/code/yeeya`, which compares against
+   — test: `rust/git-tools/git-nested-status/tests/check-repo.sh ~/code/yeeya`, which compares against
    `find ~/code/yeeya -mindepth 2 -maxdepth 3 -name .git` — 副作用: none
-7. `rust/git-nested-status/tests/check-repo.sh ~/code/yeeya` → prints the 10-run median of
+7. `rust/git-tools/git-nested-status/tests/check-repo.sh ~/code/yeeya` → prints the 10-run median of
    `git-nested-status -C ~/code/yeeya --porcelain --files`, warm, and that median is
    ≤ 100 ms — test: the same script — 副作用: none
 8. The daemon with `magit: yeeya` open: one `magit-refresh-buffer`, timed as
@@ -77,21 +77,21 @@ at depth 3). Building it is setup. The exact values below are the fixture's.
    into the crate README — test: manual (needs the daemon) — 副作用: none
 9. `C-x g` in `~` (the dotfiles repo) → no `Nested repos` section, and the helper is not run
    — test: `test/magit-nested-test.el::home-skipped` — 副作用: none
-10. `magit-status` on `~/.emacs.d` (no nested clone) → no section; a second refresh does not
+10. `magit-status` on `/tmp/magit-nested-fixture/repos/clean` (a clone with nothing nested) → no section; a second refresh does not
     run the helper again; `M-x fenrir/magit-nested-forget` and a refresh run it once more —
     test: `test/magit-nested-test.el::none-remembered` — 副作用: none
 11. With `rust/lib/git-nested-status` absent, `magit-status` on `/tmp/magit-nested-fixture`
     → no section and no error in `*Messages*` — test: `test/magit-nested-test.el::unbuilt` —
     副作用: writes `/tmp/magit-nested-fixture`
 12. `make -C ~/.emacs.d/rust verify` → exit 0, and its output includes the new crate;
-    `cargo test` run in `rust/git-nested-status` → every test passes — test: those two
+    `cargo test -p git-nested-status` run in `rust/git-tools` → every test passes — test: those two
     commands — 副作用: writes `rust/lib/git-nested-status` and
-    `rust/git-nested-status/target/` (both gitignored)
+    `rust/git-tools/target/` (both gitignored)
 13. `emacs -Q --batch -l test/libsrc-test.el -f ert-run-tests-batch-and-exit`, and the same
     for `test/search-test.el`, `test/magit-subtree-test.el`, `test/magit-time-test.el` → all
     pass; `fdfind --no-ignore -e elc --exclude elpa --exclude eln-cache .` in `~/.emacs.d`
     lists nothing — test: those commands — 副作用: none
-14. `ug -n "Nested repos" FEATURES.md rust/README.md _doc/ARCHITECTURE.md rust/git-nested-status/README.md`
+14. `ug -n "Nested repos" FEATURES.md rust/README.md _doc/ARCHITECTURE.md rust/git-tools/git-nested-status/README.md`
     in `~/.emacs.d` → a hit in each of the four files; the crate README carries the dated
     measurements of 7 and 8 — test: manual (one grep plus a read) — 副作用: none
 
@@ -103,7 +103,7 @@ at depth 3). Building it is setup. The exact values below are the fixture's.
   and its rules (a self-contained Makefile per subproject with `all` / `install` / `verify` /
   `clean` / `distclean`, deployment into `rust/lib/`, the aggregator's subproject list, a
   `/rust/<name>/target/` line in the root [`.gitignore`](../../../.gitignore)); rustc 1.98 with
-  mold, set up as in [`rust/git-subtree-status`](../../../rust/git-subtree-status/README.md);
+  mold, as a member of the [`rust/git-tools`](../../../rust/git-tools/README.md) cargo workspace beside `git-subtree-status`;
   gix 0.89 from the local cargo registry; `~/code/yeeya` as the real repo. Nothing else is
   created; fixtures live under `/tmp`.
 - The helper never runs `git`, never fetches and never writes into any repo.

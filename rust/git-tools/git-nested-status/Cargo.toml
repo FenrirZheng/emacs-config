@@ -1,0 +1,9 @@
+[package]
+name = "git-nested-status"
+version = "0.1.0"
+edition = "2024"
+description = "List the independent git clones nested inside a repository and their state: branch, ahead/behind the upstream, staged, unstaged and untracked paths"
+license = "MIT"
+
+[dependencies]
+gix = { workspace = true }
