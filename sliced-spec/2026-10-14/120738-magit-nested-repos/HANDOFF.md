@@ -1,6 +1,6 @@
 # Handoff: Magit — a Nested repos section for independent clones inside a repo
 
-Updated: 2026-10-14 12:36 (Asia/Taipei)
+Updated: 2026-10-14 12:40 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
@@ -17,6 +17,11 @@ Spec: [SPEC.md](SPEC.md)
   44.5 ms (bound 100 ms; the cold first run was 242 ms); criterion 12: `make -C rust verify`
   green with both bins. The fixture script's FAIL path was exercised once with a wrapper that
   dropped a row (3 FAILs, exit 1).
+- Fix after the slice's advisor review: clones are opened with gix's default options, not
+  `isolated()`, so `~/.config/git/ignore` applies; yeeya's three dirty clones now list the
+  same paths as their own `git status` (before, `.claude` showed as untracked in two of them);
+  warm median 39.5 ms — commit `rust: let git-nested-status honour the global ignore file`
+  (`ab73c73`).
 - Workspace move, before the slice: `rust/git-subtree-status/` became a member of the new cargo
   workspace `rust/git-tools/` (one `Cargo.lock`, one `target/`, workspace-level profiles and
   mold config, one Makefile deploying every bin to `rust/lib/`); deployed paths unchanged,
@@ -48,8 +53,9 @@ Spec: [SPEC.md](SPEC.md)
   changed row from its columns); `--all` only widens the table. Criterion 1 reads that way.
 - One noun, `nested`: crate `rust/git-tools/git-nested-status/` deployed to
   `rust/lib/git-nested-status`, module `lisp/fenrir-magit-nested.el`, heading `Nested repos`.
-- Discovery tests for a `.git` entry and opens that path with `gix::open_opts(..,
-  Options::isolated())`, never `gix::discover` from a subdirectory — probed 2026-10-14: `git -C`
+- Discovery tests for a `.git` entry and opens that path with `gix::open` (default options,
+  so the global config and `~/.config/git/ignore` apply), never `gix::discover` from a
+  subdirectory — probed 2026-10-14: `git -C`
   on yeeya's `repos/logs` (no `.git`) reports the umbrella's own branch. The umbrella itself is
   opened with `gix::discover`, so `-C` may name a subdirectory and global config applies.
 - Ahead/behind: two `rev_walk(..).with_hidden(..)` counts (exact `^tip` semantics), skipped
