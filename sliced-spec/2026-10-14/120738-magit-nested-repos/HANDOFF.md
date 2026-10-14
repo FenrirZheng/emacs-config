@@ -1,10 +1,20 @@
 # Handoff: Magit — a Nested repos section for independent clones inside a repo
 
-Updated: 2026-10-14 12:51 (Asia/Taipei)
+Updated: 2026-10-14 12:55 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
 
+- Slice 3, the live timing and the docs (criteria 8 and 14):
+  - commit `docs: record the Nested repos section's cost on yeeya` (`73d1fce`);
+  - the daemon loaded the module with `require`; the hook order is staged (10) → subtree
+    (11) → nested (12);
+  - on `magit: yeeya` (`Nested repos (8 changed of 29)`), one `magit-refresh-buffer`, one
+    warm-up then 11 samples: median 0.155 s with the section on, 0.100 s with
+    `fenrir/magit-nested-show-in-status` nil → +0.055 s, bound 0.15 s;
+  - both numbers are in the crate README's Performance section, and a cost line is in
+    FEATURES.md;
+  - `ug -c "Nested repos"` hits all four files of criterion 14.
 - Slice 2, the Magit section:
   - `lisp/fenrir-magit-nested.el` adds the `Nested repos (N changed of M)` section after
     Subtrees.
@@ -78,23 +88,9 @@ Spec: [SPEC.md](SPEC.md)
 
 ## 下一步
 
-Slice 3, the live timing and the docs (criteria 8 and 14):
-
-1. Make the running daemon load the module, because it predates `e437ed1`. Either restart it
-   or run `emacsclient -e '(require (quote fenrir-magit-nested))'`.
-2. Confirm that `fenrir/magit-nested-insert-section` sits after the subtree hook in
-   `magit-status-sections-hook`. Otherwise both timings are equal and look like a pass.
-3. With `magit: yeeya` open, time one `magit-refresh-buffer` as
-   [`_doc/GOTCHAS.md`](../../../_doc/GOTCHAS.md) says. Time it with the section on, then with
-   `fenrir/magit-nested-show-in-status` nil. The difference must be ≤ 0.15 s.
-4. Write both numbers, dated, into the crate README, beside the slice-1 helper medians that
-   criterion 7 needs. Add the phrase `Nested repos` there: the crate README is the one file
-   of criterion 14's four that lacks it today. FEATURES.md, `rust/README.md` and
-   `_doc/ARCHITECTURE.md` already hit.
-5. Add a cost line to the FEATURES.md Nested repos paragraph.
-
-Commit subject: `docs: record the Nested repos section's cost on yeeya`.
-After that slice, 下一步 is the acceptance gate.
+The acceptance gate (criteria 1–14). Before it runs, the user decides the open SPEC question
+under 卡住 (criterion 11's `副作用`). Criteria 8 and 14 are manual: 8 needs the daemon with
+`magit: yeeya` open; the run in slice 3 is evidence, and the gate reruns it literally.
 
 ## 卡住・待確認
 
@@ -102,5 +98,5 @@ After that slice, 下一步 is the acceptance gate.
   about 0.3 s. That path is gitignored and is restored by `unwind-protect`. SPEC's `副作用`
   for 11 names only `/tmp/magit-nested-fixture`. Whether to add the binary rename there is a
   SPEC change for the user's approval before the gate.
-- Untracked in the repo, but not this spec's: `AGENTS.md`, `plans/`, `records/`.
+- Untracked in the repo, but not this spec's: `AGENTS.md`, `plans/`, `records/`, and `cpp/.claude/` (the Ralph loop state file).
 - The scripts leave `/tmp/magit-nested-fixture` in place (the criteria's declared 副作用).
