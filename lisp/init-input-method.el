@@ -42,6 +42,17 @@ SELECT-LABELS, when a schema has them, still win."
       (format "%s. " (nth (1- num) select-labels))
     (format "%c. " (+ ?A (1- num)))))
 
+(defun fenrir/rime-clear-minibuffer-leftover (content)
+  "Erase candidates left in ` *Minibuf-0*' once CONTENT is blank.
+In a TTY frame the posframe display falls back to popup, and while popup.el
+is not loaded on to `rime--minibuffer-display-content', which writes into
+the inactive minibuffer.  Clearing in a GUI frame only hides the posframe, so that text
+stayed visible at the bottom of every frame after rime was turned off."
+  (when (string-blank-p content)
+    (when-let* ((buf (get-buffer " *Minibuf-0*")))
+      (with-current-buffer buf
+        (erase-buffer)))))
+
 (use-package rime
   :defer t
   :init
@@ -62,6 +73,7 @@ SELECT-LABELS, when a schema has them, still win."
   (rime-disable-predicates '(rime-predicate-prog-in-code-p
                              rime-predicate-after-alphabet-char-p))
   :config
+  (advice-add 'rime--show-content :after #'fenrir/rime-clear-minibuffer-leftover)
   (fenrir/rime-link-fcitx5-patches))
 
 (provide 'init-input-method)
