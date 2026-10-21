@@ -1,21 +1,24 @@
 # Handoff: Magit — one commit timeline across every git subtree
 
-Updated: 2026-10-21 21:37 (Asia/Taipei)
+Updated: 2026-10-21 21:50 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
 
-- The whole feature in one slice: parser, labeller, mode, command, `l A`, ERT and FEATURES.md.
-  Commit `magit-subtree: add a cross-subtree commit timeline (l A)`.
+- The whole timeline feature in one slice: parser, labeller, mode, command, `l A`, ERT and
+  FEATURES.md. Commit `magit-subtree: add a cross-subtree commit timeline (l A)`.
+- One git menu: `<f5> g` gains a second row with the subtree commands and every `C-x v`
+  command, plus the approved SPEC change (goal "one git menu", 驗收條件 8 reworded, 9–11
+  added, the `init-keys.el` limit changed). Commit
+  `keys: make <f5> g the one git menu, subtree commands included`.
   - Self-checks on 2026-10-21 (not yet the acceptance gate):
     - ERT: 16/16 pass.
-    - Daemon, on `ig_lottery_hotfix` over 30 days: 578 rows, equal to the `git log` count;
-      times are non-increasing.
-    - Labels: `78e0443ed` → `odds-web-ag`, `fdf134a7e` → `clawer`,
-      `29b40f061` → `clawer,(umbrella)`; `c8098f07b` is absent.
-    - `RET` opens the revision buffer with `Subtree: repos/lottery/odds/odds-web-ag`.
-    - Narrowing to `odds-server` leaves 1 row.
-    - `l A` is present; a refresh takes 0.188 s.
+    - `check-hub-git.el` after a full batch init: `magit loaded: nil`, 37 suffix commands,
+      `missing: none`, `not callable: none`. With `fenrir/magit-subtree-log` unbound first
+      it prints `not callable: fenrir/magit-subtree-log`, so the check is not vacuous.
+    - Daemon, after reloading `init-git.el` and `init-keys.el`: `fenrir/hub-git` key `A`
+      is `fenrir/magit-subtree-commits`; magit-log `A` is still present.
+    - No `.elc` left.
 
 ## 決定與原因
 
@@ -28,21 +31,21 @@ Spec: [SPEC.md](SPEC.md)
   read as nil, which once made the list empty.
 - Known label limit: a project commit imported by a subtree merge has project-relative
   paths, so it shows as `(umbrella)`. This is noted in FEATURES.md.
+- The three subtree commands get plain `autoload` forms in `init-git.el`, not
+  `fenrir/hub--defwrapper` wrappers: SPEC 限制 says no command is defined in
+  `init-keys.el`. Loading the module before Magit was tested in batch; no recursive-require
+  error.
+- Menu letters: `C-x v` letters are kept where free in `fenrir/hub-git`; the clashes took
+  `U` (revert file), `i` (diff menu), `C` (log current), `j` (merge), `T` (tag).
+- The previous gate run (2026-10-21 21:37, `24361ac`) failed 驗收條件 8 only on the old
+  "`l A` next to `l S`" wording, which the approved SPEC change replaced. It is superseded;
+  the next gate is a whole new run.
 
 ## 下一步
 
-Run the acceptance gate (`/sliced-spec next`) again, as a whole run, once 驗收條件 8's
-FEATURES.md placement is resolved (see 卡住). 驗收條件 4–7 use the live daemon and the real
-repo.
+Run the acceptance gate (`/sliced-spec next`), a whole run over 驗收條件 1–11. 4–7 use the
+live daemon and the real repo; 11 is the user pressing `<f5> g` and the timeline key.
 
 ## 卡住・待確認
 
-- Gate run 2026-10-21 21:37, `verified=24361ac9da0d289dea55062247930eed1d4393da`, no
-  criterion skipped. 1–7 pass. The verifier line other than `pass`, verbatim:
-  > 8 fail: the `l A` row is not directly next to `l S` in FEATURES.md. Line 950 is the
-  > `l S` row, line 951 is `| — | fenrir/magit-subtree-file-log | ...`, and line 952 is the
-  > `l A` row, so one unkeyed row sits between them. The other two checks pass: the suite ran
-  > 16 tests, "16 results as expected, 0 unexpected", exit 0, and
-  > `fdfind --no-ignore -e elc --exclude elpa --exclude eln-cache .` printed nothing.
-  - The user decides: move the `l A` row to directly below `l S` (a FEATURES.md-only
-    commit, then a new gate run), or approve a SPEC.md change to 驗收條件 8's wording.
+(none)
