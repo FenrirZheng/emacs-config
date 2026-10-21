@@ -1,6 +1,6 @@
 # Handoff: Magit — one commit timeline across every git subtree
 
-Updated: 2026-10-21 21:50 (Asia/Taipei)
+Updated: 2026-10-21 22:09 (Asia/Taipei)
 Spec: [SPEC.md](SPEC.md)
 
 ## 已完成
@@ -11,41 +11,31 @@ Spec: [SPEC.md](SPEC.md)
   command, plus the approved SPEC change (goal "one git menu", 驗收條件 8 reworded, 9–11
   added, the `init-keys.el` limit changed). Commit
   `keys: make <f5> g the one git menu, subtree commands included`.
-  - Self-checks on 2026-10-21 (not yet the acceptance gate):
-    - ERT: 16/16 pass.
-    - `check-hub-git.el` after a full batch init: `magit loaded: nil`, 37 suffix commands,
-      `missing: none`, `not callable: none`. With `fenrir/magit-subtree-log` unbound first
-      it prints `not callable: fenrir/magit-subtree-log`, so the check is not vacuous.
-    - Daemon, after reloading `init-git.el` and `init-keys.el`: `fenrir/hub-git` key `A`
-      is `fenrir/magit-subtree-commits`; magit-log `A` is still present.
-    - No `.elc` left.
+- Acceptance gate, 2026-10-21, verified at `9dbae8e`: 驗收條件 1–10 pass (verifier), 11 pass
+  (the user, manually). `Status: implemented` in commit
+  `spec: mark subtree-commit-timeline implemented`, whose body holds the full report.
+  Measured there: 579 rows for 30 days, refresh 0.206 s.
 
 ## 決定與原因
 
-- Elisp, not Rust. The refresh measured 0.19 s for 30 days, under 驗收條件 7's 0.5 s bound.
+- Elisp, not Rust. The refresh measured 0.206 s for 30 days at the gate, under 驗收條件 7's
+  0.5 s bound. Rust is the follow-up if that bound is ever missed.
 - The default revs are `--branches`. The `p/*` refs are remote-tracking refs
   (`refs/remotes/p/...`) in this repo, not local heads, so no `--exclude` is needed.
-- git is run with `process-file`, not `magit-git-insert`: the latter turned the `%x00`
-  separators into spaces.
-- The timeline's buffer-locals are read before entering `with-temp-buffer`. Inside it they
-  read as nil, which once made the list empty.
 - Known label limit: a project commit imported by a subtree merge has project-relative
   paths, so it shows as `(umbrella)`. This is noted in FEATURES.md.
 - The three subtree commands get plain `autoload` forms in `init-git.el`, not
   `fenrir/hub--defwrapper` wrappers: SPEC 限制 says no command is defined in
-  `init-keys.el`. Loading the module before Magit was tested in batch; no recursive-require
-  error.
-- Menu letters: `C-x v` letters are kept where free in `fenrir/hub-git`; the clashes took
-  `U` (revert file), `i` (diff menu), `C` (log current), `j` (merge), `T` (tag).
-- The previous gate run (2026-10-21 21:37, `24361ac`) failed 驗收條件 8 only on the old
-  "`l A` next to `l S`" wording, which the approved SPEC change replaced. It is superseded;
-  the next gate is a whole new run.
+  `init-keys.el`.
 
 ## 下一步
 
-Run the acceptance gate (`/sliced-spec next`), a whole run over 驗收條件 1–11. 4–7 use the
-live daemon and the real repo; 11 is the user pressing `<f5> g` and the timeline key.
+None: the spec is `implemented`. Follow-ups named in SPEC 不做的事 (listing `p/*`
+project-side commits with patch-id dedup; a Rust parser if 驗收條件 7 fails) would each be a
+new spec. `/sliced-spec ship` can record where it went.
 
 ## 卡住・待確認
 
-(none)
+- Open question raised while explaining the UI, not a 驗收條件: the label column pads with
+  `length`, not `string-width` (`lisp/fenrir-magit-subtree.el:486`), so a non-ASCII project
+  name would misalign. All labels today are ASCII.
