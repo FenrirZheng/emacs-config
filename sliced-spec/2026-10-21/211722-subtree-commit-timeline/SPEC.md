@@ -4,6 +4,7 @@ Status: implemented
 Date: 2026-10-21 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 Shipped: 2026-10-21 ddecae5 → origin/main
+Shipped: 2026-10-21 probe `emacsclient -e (list (symbol-file (quote fenrir/magit-subtree-commits) (quote defun)) (and (transient-get-suffix (quote magit-log) "A") t) (plist-get (cdr (transient-get-suffix (quote fenrir/hub-git) "A")) :command))` → `("/home/fenrir/.emacs.d/lisp/fenrir-magit-subtree.el" t fenrir/magit-subtree-commits)` → local Emacs daemon
 
 ## 目標
 
