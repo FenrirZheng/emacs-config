@@ -28,8 +28,8 @@
               nerd-icons-dired nerd-icons-ibuffer no-littering
               nyan-mode ob-mermaid olivetti orderless org-appear
               org-download org-modern org-roam-ui plantuml-mode popper
-              prism pulsar rainbow-delimiters restclient separedit
-              sideline-flymake solaire-mode spacious-padding
+              prism pulsar rainbow-delimiters restclient rime
+              separedit sideline-flymake solaire-mode spacious-padding
               string-inflection symbol-overlay system-packages
               tabspaces tempel transient-posframe treesit-auto
               treesit-fold undo-fu-session valign vertico-posframe

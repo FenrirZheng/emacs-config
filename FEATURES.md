@@ -1339,6 +1339,23 @@ key binding. Pick this one when Emacs is a GUI/daemon outside any tmux; pick
 
 ---
 
+## 16. Chinese input — emacs-rime ([`init-input-method.el`](lisp/init-input-method.el))
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-\` | `toggle-input-method` | Toggle emacs-rime (`bopomofo_tw` 注音) in the current buffer; the state is per-buffer |
+| `RET` | `rime--return` | Commit the converted text (`su3cl3 RET` → 你好), as in fcitx5; `S-RET` commits the 注音 symbols |
+
+Keep fcitx5 in English while in Emacs — composing in fcitx5 swallows `C-x` / `M-x`. Same
+librime as fcitx5, separate user dir (`var/rime/`, its own word frequencies); the
+`*.custom.yaml` patches there are symlinks to `~/.local/share/fcitx5/rime/`, so the
+schema list and page size are edited once. Candidates show in a posframe in a GUI frame
+and in the minibuffer in a TTY frame. Switches to English by itself in code outside
+strings/comments and right after a Latin letter. Needs `librime-dev` (apt) for the
+`librime-emacs.so` module; `make lib` in `elpa/rime-*/` rebuilds it by hand.
+
+---
+
 ## Operational notes
 
 - **No package-archive refresh at startup** (network-free boot). Before installing a new

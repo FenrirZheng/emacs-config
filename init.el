@@ -38,6 +38,7 @@
 ;;   init-alacritty-claude -- launch external alacritty + tmux + `claude' CLI
 ;;   init-audit          -- config self-audit (`fenrir/features-audit',
 ;;                          `fenrir/package-usage-audit')
+;;   init-input-method   -- emacs-rime: Emacs-native 注音 input (`C-\')
 ;;
 ;; Conventions:
 ;;   * `use-package-always-ensure' is t, so plain `(use-package foo ...)' will
@@ -216,6 +217,7 @@ only for a throwaway experiment -- it costs a little on every startup.")
         init-tmux-claude
         init-alacritty-claude
         init-audit              ; self-audit commands (FEATURES.md drift, package usage)
+        init-input-method       ; emacs-rime Chinese input (C-\ toggles)
         ;; LAST on purpose: init-keys is a routing layer OVER the modules above
         ;; (the `<f5>' scenario hub, keyfreq measurement, extra repeat maps).
         ;; It reads the rest of the config; nothing reads it.
