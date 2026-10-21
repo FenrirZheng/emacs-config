@@ -794,5 +794,14 @@ the definition before the `add-hook' references it."
   (require 'fenrir-magit-subtree)
   (require 'fenrir-magit-nested))
 
+;; The subtree commands are also `<f5> g' entries, which must be callable in a
+;; fresh session before Magit loads.  `lisp/' is not a package, so the
+;; module's `;;;###autoload' cookies generate nothing; these forms are them.
+;; Loading the module pulls in Magit, whose after-load block above then
+;; requires it again -- harmless, it is already being provided.
+(autoload 'fenrir/magit-subtree-commits "fenrir-magit-subtree" nil t)
+(autoload 'fenrir/magit-subtree-log "fenrir-magit-subtree" nil t)
+(autoload 'fenrir/magit-subtree-file-log "fenrir-magit-subtree" nil t)
+
 (provide 'init-git)
 ;;; init-git.el ends here

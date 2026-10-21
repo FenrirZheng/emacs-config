@@ -41,7 +41,7 @@ chord — the hub duplicates, it never replaces, so Tier-1 habits keep working.
 | `<f5> n` | **Navigate** | definition / references / xref back, LSP symbols, imenu (buffer + project), consult-line, avy menu, last change, global mark ring, breadcrumb jump, ripgrep, project find-file — plus a *Files & buffers* column: `dired-jump`, `recentf-open`, `consult-buffer`, `consult-dir` |
 | `<f5> s` | **Search** | `fenrir/search-menu`, every search by WHAT. Files: find file (`C-t`), recent files, folder. Text: this buffer, open buffers, ripgrep (`C-z`), keep / focus lines. Code: imenu (buffer + project), LSP symbols (`fenrir/search-lsp-symbols`, which says so when eglot is off), references. Notes: outline, org heading, roam node, bookmarks. History: buffers, global marks, kill ring, project TODOs (`consult-todo-project`), key bindings. See [§1b](#1b-search--c-t-files-c-z-text-fenrir-searchel) |
 | `<f5> d` | **Diagnose** | flymake list (buffer + project), hover card, eldoc buffer, DevDocs, TODOs (buffer + project), gtags index check — plus an *LSP / env health* column: `eglot-reconnect`, `eglot-shutdown`, `eglot-events-buffer`, `envrc-reload` (all wrapped, see below) |
-| `<f5> g` | **Git** | magit status / dispatch / file-dispatch, `difftastic-magit-diff`, blame, inline blame, file log, time machine, hunk next/prev/show (repeats in place), copy permalink — plus a *Merge conflicts* column: `smerge-next` / `smerge-prev` (repeat in place), `smerge-keep-upper`, `smerge-keep-lower`, `smerge-keep-all` |
+| `<f5> g` | **Git** | magit status / dispatch / file-dispatch, `difftastic-magit-diff`, blame, inline blame, file log, time machine, hunk next/prev/show (repeats in place), copy permalink — plus a *Merge conflicts* column: `smerge-next` / `smerge-prev` (repeat in place), `smerge-keep-upper`, `smerge-keep-lower`, `smerge-keep-all` — and a second row: *Subtrees* (`A` timeline `fenrir/magit-subtree-commits`, `S` subtree log, `F` subtree log of this file, `o` status file overview) and the whole `C-x v` map (*This file*: ediff, diff, stage, revert, visit at revision, delete; *Branches & remote*: diff menu, log branch, checkout, pull, push, merge, tag, gitignore). The one git menu — see [§8](#8-git--magit--diff-hl-init-gitel) |
 | `<f5> x` | **Run/Debug** | `dape` start/continue, breakpoint toggle / remove-all, `dape-info`, `dape-repl`; `compile`, `recompile`, `project-compile`, `junit-run-dwim`, `restclient-http-send-current` |
 | `<f5> r` | **Refactor** | eglot rename / code actions / organize-imports / extract, case-style cycle, format buffer, occurrences menu, `jinx-correct`, `tempel-insert`, combobulate, fold toggle, edit comment block, `vundo` |
 | `<f5> w` | **Workspace** | tabspaces switch/open/buffer, file sidebar, imenu sidebar, popup toggle, ace-window, vterm toggle, docker, GUI popup toggle |
@@ -940,6 +940,8 @@ expression syntax is the debuggee's language. An empty message removes the logpo
 ---
 
 ## 8. Git — Magit + diff-hl ([`init-git.el`](lisp/init-git.el))
+
+**Don't memorise these: press `<f5> g`** (or `C-c ?` `g`). That one menu lists every git command in this section, each with its description — the subtree commands (`fenrir/magit-subtree-commits`, `fenrir/magit-subtree-log`, `fenrir/magit-subtree-file-log`, `fenrir/magit-status-overview`) and the whole `C-x v` map included. The chords below still work; the menu duplicates them.
 
 | Key | Command | What it does |
 |---|---|---|

@@ -299,7 +299,34 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("u" "Keep upper (ours)"   smerge-keep-upper)
       ("L" "Keep lower (theirs)" smerge-keep-lower)
       ("a" "Keep all"            smerge-keep-all)
-      ("q" "Quit"                transient-quit-one)]])
+      ("q" "Quit"                transient-quit-one)]]
+    ;; Second row: everything else git, so this menu is the one place to look
+    ;; instead of a chord to recall.  The subtree commands are autoloaded in
+    ;; init-git.el (Magit is not loaded at startup).  The two `C-x v' columns
+    ;; hold that map's commands not already above; they keep their `C-x v'
+    ;; letter where it is free here, else take one that is.
+    [["Subtrees (git subtree)"
+      ("A" "Timeline, all subtrees"  fenrir/magit-subtree-commits)
+      ("S" "Log one subtree"         fenrir/magit-subtree-log)
+      ("F" "Subtree log of file"     fenrir/magit-subtree-file-log)
+      ("o" "Status: file overview"   fenrir/magit-status-overview)]
+     ["This file (C-x v)"
+      ("e" "Ediff dwim"              magit-ediff-dwim)
+      ("E" "Ediff vs revision"       fenrir/ediff-buffer-vs-revision)
+      ("=" "Diff this file"          magit-diff-buffer-file)
+      ("v" "Stage this file"         magit-file-stage)
+      ("U" "Revert to HEAD"          magit-file-checkout)
+      ("~" "Visit at revision"       magit-find-file)
+      ("x" "Delete file"             magit-file-delete)]
+     ["Branches & remote (C-x v)"
+      ("i" "Diff menu"               magit-diff)
+      ("C" "Log current branch"      magit-log-current)
+      ("r" "Checkout branch"         magit-branch-checkout)
+      ("+" "Pull"                    magit-pull)
+      ("P" "Push"                    magit-push)
+      ("j" "Merge"                   magit-merge)
+      ("T" "Tag"                     magit-tag)
+      ("G" "Gitignore"               magit-gitignore)]])
 
   (transient-define-prefix fenrir/hub-refactor ()
     "Change the shape of code rather than its content."
@@ -438,7 +465,7 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("n" "Navigate   jump, symbols, search" fenrir/hub-navigate)
       ("s" "Search     files, text, symbols"  fenrir/search-menu)
       ("d" "Diagnose   errors, docs, TODOs"   fenrir/hub-diagnose)
-      ("g" "Git        status, blame, hunks"  fenrir/hub-git)
+      ("g" "Git        status, blame, subtrees" fenrir/hub-git)
       ("x" "Run/Debug  compile, dape, tests"  fenrir/hub-run)]
      [""
       ("r" "Refactor   rename, format, fold"  fenrir/hub-refactor)
