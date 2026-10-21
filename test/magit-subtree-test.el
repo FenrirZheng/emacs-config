@@ -55,6 +55,33 @@ libs/c\t0\t0\tchanged\t9\tc/main\tsame\t0\tc/main
     (should (equal (plist-get (fenrir/magit-subtree--owner "libs/a/x.rs" rows) :prefix) "libs/a"))
     (should (null (fenrir/magit-subtree--owner "libs/ab/x.rs" rows)))))
 
+(ert-deftest magit-subtree-parse-log ()
+  (let ((commits (fenrir/magit-subtree--parse-log
+                  (concat "\0aaa111\t1700000200\tfix: two\tfiles\n\nlibs/a/x.rs\nREADME\n"
+                          "\0bbb222\t1700000100\tMerge branch 'x'\n"))))
+    (should (= (length commits) 2))
+    (should (equal (nth 0 commits)
+                   '(:hash "aaa111" :time 1700000200 :subject "fix: two\tfiles"
+                     :paths ("libs/a/x.rs" "README"))))
+    (should (equal (nth 1 commits)
+                   '(:hash "bbb222" :time 1700000100 :subject "Merge branch 'x'" :paths nil)))))
+
+(ert-deftest magit-subtree-commit-labels ()
+  (let ((rows (fenrir/magit-subtree--parse magit-subtree-test--porcelain))
+        (memo (make-hash-table :test #'equal)))
+    (dolist (m (list nil memo memo))      ; uncached, cold cache, warm cache
+      (should (equal (string-join (fenrir/magit-subtree--commit-labels
+                                   '("libs/a/b/x.rs" "libs/c/y") rows m) ",")
+                     "b,c"))
+      (should (equal (string-join (fenrir/magit-subtree--commit-labels
+                                   '("repos/clawer/z/a.md") rows m) ",")
+                     "clawer"))
+      (should (equal (string-join (fenrir/magit-subtree--commit-labels
+                                   '(".scratch/m.md" "libs/c/y") rows m) ",")
+                     "c,(umbrella)"))
+      (should (equal (string-join (fenrir/magit-subtree--commit-labels nil rows m) ",")
+                     "(umbrella)")))))
+
 ;;;; Integration, against a real subtree repo
 
 (defun magit-subtree-test--fixture ()
@@ -219,6 +246,65 @@ g subtree add -q --squash --prefix=libs/sq ../up main >/dev/null 2>&1"
               (setq visited (current-buffer))
               (should (equal buffer-file-name (expand-file-name "libs/sq/new.txt" dir)))))
         (when (buffer-live-p visited) (kill-buffer visited))
+        (kill-buffer buf)))))
+
+(defun magit-subtree-test--commit-at (dir file text days-ago message)
+  "Commit FILE (relative to DIR) with TEXT, committed DAYS-AGO days ago."
+  (with-temp-file (expand-file-name file dir) (insert text))
+  (let ((process-environment
+         (cons (format "GIT_COMMITTER_DATE=%s"
+                       (format-time-string "%Y-%m-%dT%H:%M:%S%z"
+                                           (time-subtract nil (days-to-time days-ago))))
+               process-environment)))
+    (magit-subtree-test--git dir "commit" "-qam" message)))
+
+(defun magit-subtree-test--timeline-rows ()
+  "(SUBJECT . LABELS-TEXT) for each commit row of the current timeline buffer."
+  (mapcar (lambda (s)
+            (let ((line (buffer-substring-no-properties (oref s start) (1- (oref s end)))))
+              (string-match "\\`[-0-9]+ [:0-9]+  [0-9a-f]+  \\(\\S-+\\) +\\(.*\\)\\'" line)
+              (cons (match-string 2 line) (match-string 1 line))))
+          (seq-filter (lambda (s) (eq (oref s type) 'commit))
+                      (oref magit-root-section children))))
+
+(ert-deftest magit-subtree-commits-buffer ()
+  (magit-subtree-test--with-fixture dir
+    (magit-subtree-test--commit-at dir "libs/full/a.txt" "edited\n" 2 "edit full")
+    (magit-subtree-test--commit-at dir "README" "edited\n" 1 "edit readme")
+    (let ((buf (fenrir/magit-subtree-commits "1 year ago")) rev)
+      (unwind-protect
+          (with-current-buffer buf
+            (should (derived-mode-p 'fenrir/magit-subtree-commits-mode))
+            (let* ((rows (magit-subtree-test--timeline-rows))
+                   (readme (seq-position rows '("edit readme" . "(umbrella)")))
+                   (full (seq-position rows '("edit full" . "full"))))
+              (should readme)
+              (should full)
+              (should (< readme full)))
+            ;; Rows are newest first by commit time.
+            (let ((times (mapcar (lambda (s)
+                                   (string-to-number
+                                    (magit-git-string "log" "-1" "--format=%ct" (oref s value))))
+                                 (seq-filter (lambda (s) (eq (oref s type) 'commit))
+                                             (oref magit-root-section children)))))
+              (should (equal times (sort (copy-sequence times) #'>))))
+            ;; RET on the `full' row shows that commit.
+            (goto-char (point-min))
+            (re-search-forward "edit full")
+            (let ((hash (oref (magit-current-section) value)))
+              ;; RET may make the revision buffer current; stay in BUF after.
+              (save-current-buffer (call-interactively (key-binding (kbd "RET"))))
+              (setq rev (magit-get-mode-buffer 'magit-revision-mode))
+              (should rev)
+              (should (equal (buffer-local-value 'magit-buffer-revision rev) hash)))
+            ;; Narrowing, then `g', keeps the filter and the since.
+            (fenrir/magit-subtree-commits-filter '("full"))
+            (magit-refresh-buffer)
+            (should (equal fenrir/magit-subtree-commits--since "1 year ago"))
+            (let ((rows (magit-subtree-test--timeline-rows)))
+              (should rows)
+              (should (seq-every-p (lambda (r) (member "full" (split-string (cdr r) ","))) rows))))
+        (when (buffer-live-p rev) (kill-buffer rev))
         (kill-buffer buf)))))
 
 (ert-deftest magit-subtree-no-subtree-repo-shows-nothing ()

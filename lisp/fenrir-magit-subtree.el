@@ -20,6 +20,11 @@
 ;;   own ref can.
 ;; * `fenrir/magit-subtree-file-log': the same for the file being visited,
 ;;   with the prefix stripped from its path.
+;; * `fenrir/magit-subtree-commits' (`l A' in the log menu): one buffer listing
+;;   the umbrella's commits across every project, newest first by commit time,
+;;   each row naming the project(s) it touched.  `/' narrows to projects, `s'
+;;   changes the date range.  One `git log --name-only' plus one CLI call per
+;;   refresh; the p/* project-side refs are not listed.
 ;;
 ;; The CLI is read-only and offline (gix, no fetch), ~0.13 s on a 55-subtree
 ;; repo.  A repo where it finds no subtree is remembered for the session and
@@ -335,10 +340,197 @@ what says which project they came from."
               (propertize (string-join owners ", ") 'font-lock-face 'magit-filename)
               "\n"))))
 
+;;;; Cross-subtree commit timeline
+
+(defcustom fenrir/magit-subtree-project-roots '("repos")
+  "Directories whose children are projects even when no subtree owns them.
+A path under ROOT/NAME/ that belongs to no subtree is labelled NAME in
+`fenrir/magit-subtree-commits' (e.g. a plain tracked repos/clawer/...)."
+  :type '(repeat string))
+
+(defcustom fenrir/magit-subtree-commits-since "14 days ago"
+  "Default date range for `fenrir/magit-subtree-commits'."
+  :type 'string)
+
+(defconst fenrir/magit-subtree--umbrella "(umbrella)"
+  "Label for a path that belongs to no project.")
+
+(defun fenrir/magit-subtree--parse-log (output)
+  "Parse `git log --name-only --format=%x00%H%x09%ct%x09%s' OUTPUT.
+Return a list of plists (:hash :time :subject :paths), in OUTPUT's order.
+Walks a buffer rather than splitting one big string: on 30 days of
+ig_lottery history most of the naive version's time was GC."
+  (with-temp-buffer
+    (insert output)
+    (goto-char (point-min))
+    (let (commits)
+      (while (search-forward "\0" nil t)
+        (when (looking-at "\\([0-9a-f]+\\)\t\\([0-9]+\\)\t\\(.*\\)$")
+          (let ((hash (match-string-no-properties 1))
+                (time (string-to-number (match-string-no-properties 2)))
+                (subject (match-string-no-properties 3))
+                (end (save-excursion
+                       (if (search-forward "\0" nil t) (1- (point)) (point-max))))
+                paths)
+            (forward-line 1)
+            (while (< (point) end)
+              (unless (eolp)
+                (push (buffer-substring-no-properties (point) (line-end-position)) paths))
+              (forward-line 1))
+            (push (list :hash hash :time time :subject subject :paths (nreverse paths))
+                  commits))))
+      (nreverse commits))))
+
+(defun fenrir/magit-subtree--path-label (path rows)
+  "The project label of PATH: its subtree, a project root child, or umbrella."
+  (if-let* ((row (fenrir/magit-subtree--owner path rows)))
+      (file-name-nondirectory (plist-get row :prefix))
+    (or (seq-some (lambda (root)
+                    (let ((rest (and (string-prefix-p (concat root "/") path)
+                                     (substring path (1+ (length root))))))
+                      (and rest (string-match "\\`\\([^/]+\\)/" rest)
+                           (match-string 1 rest))))
+                  fenrir/magit-subtree-project-roots)
+        fenrir/magit-subtree--umbrella)))
+
+(defun fenrir/magit-subtree--commit-labels (paths rows &optional memo)
+  "Sorted project labels of PATHS among ROWS, umbrella last.
+No path at all (a merge) counts as umbrella.  MEMO, a hash table, caches
+labels by directory across calls: ownership depends only on the directory,
+and one owner scan per path was the slow part (933 ms vs 204 ms on two
+years of ig_lottery history)."
+  (let (labels)
+    (dolist (path paths)
+      (let ((dir (or (file-name-directory path) "")))
+        (push (if memo
+                  (with-memoization (gethash dir memo)
+                    (fenrir/magit-subtree--path-label path rows))
+                (fenrir/magit-subtree--path-label path rows))
+              labels)))
+    (let* ((labels (sort (delete-dups (or labels (list fenrir/magit-subtree--umbrella)))
+                         #'string<))
+           (umbrella (member fenrir/magit-subtree--umbrella labels)))
+      (if umbrella
+          (append (delete fenrir/magit-subtree--umbrella labels)
+                  (list fenrir/magit-subtree--umbrella))
+        labels))))
+
+(defvar-local fenrir/magit-subtree-commits--since nil
+  "The --since of this timeline buffer.")
+(defvar-local fenrir/magit-subtree-commits--revs nil
+  "The revisions this timeline buffer logs, a list of git arguments.")
+(defvar-local fenrir/magit-subtree-commits--filter nil
+  "Project labels this timeline buffer is narrowed to, or nil for all.")
+(defvar-local fenrir/magit-subtree-commits--labels nil
+  "Every project label in this timeline before narrowing, for completion.")
+
+(defvar-keymap fenrir/magit-subtree-commits-mode-map
+  :parent magit-mode-map
+  "/" #'fenrir/magit-subtree-commits-filter
+  "s" #'fenrir/magit-subtree-commits-set-since)
+
+(define-derived-mode fenrir/magit-subtree-commits-mode magit-mode "Subtree Commits"
+  "Commits of every project in a subtree repo, newest first by commit time.
+\\<fenrir/magit-subtree-commits-mode-map>
+Type \\[magit-visit-thing] to show the commit at point.
+Type \\[fenrir/magit-subtree-commits-filter] to narrow to projects.
+Type \\[fenrir/magit-subtree-commits-set-since] to change the date range.
+Type \\[magit-refresh] to refresh.")
+
+(defun fenrir/magit-subtree-commits--entries ()
+  "Commits of this buffer's repo, labelled and sorted newest first."
+  (let* ((rows (fenrir/magit-subtree--rows nil t))
+         (memo (make-hash-table :test #'equal))
+         ;; Read the buffer-locals here: inside `with-temp-buffer' they are nil.
+         (args (append (list "--no-pager" "log" "--name-only" "--no-color"
+                             "--format=%x00%H%x09%ct%x09%s"
+                             (concat "--since=" fenrir/magit-subtree-commits--since))
+                       fenrir/magit-subtree-commits--revs '("--")))
+         ;; Plain `process-file', not `magit-git-insert': the latter turned
+         ;; the %x00 record separators into spaces.
+         (output (with-temp-buffer
+                   (let ((coding-system-for-read 'utf-8-unix))
+                     (apply #'process-file magit-git-executable nil '(t nil) nil args))
+                   (buffer-string)))
+         (commits (fenrir/magit-subtree--parse-log output)))
+    (dolist (c commits)
+      (plist-put c :labels (fenrir/magit-subtree--commit-labels (plist-get c :paths) rows memo)))
+    (sort commits (lambda (a b) (> (plist-get a :time) (plist-get b :time))))))
+
+(defun fenrir/magit-subtree-commits-refresh-buffer ()
+  "Insert the timeline; Magit calls this on create and on `g'."
+  (let* ((all (fenrir/magit-subtree-commits--entries))
+         (filter fenrir/magit-subtree-commits--filter)
+         (shown (if filter
+                    (seq-filter (lambda (c) (seq-intersection filter (plist-get c :labels))) all)
+                  all))
+         (projects (delete-dups (apply #'append (mapcar (lambda (c) (plist-get c :labels)) shown))))
+         (width (min 30 (apply #'max 0 (mapcar (lambda (c) (length (string-join (plist-get c :labels) ",")))
+                                                shown))))
+         (abbrev (magit-abbrev-length)))
+    (setq fenrir/magit-subtree-commits--labels
+          (sort (delete-dups (apply #'append (mapcar (lambda (c) (plist-get c :labels)) all)))
+                #'string<))
+    (magit-insert-section (fenrir-subtree-commits)
+      (magit-insert-heading
+        (format "Subtree commits (since %s, %d commits, %d projects%s; umbrella commits only)"
+                fenrir/magit-subtree-commits--since (length shown) (length projects)
+                (if filter (format ", only %s" (string-join filter ",")) "")))
+      (dolist (c shown)
+        (magit-insert-section (commit (plist-get c :hash))
+          (insert (propertize (format-time-string "%Y-%m-%d %H:%M" (plist-get c :time))
+                              'font-lock-face 'magit-log-date)
+                  "  "
+                  (propertize (substring (plist-get c :hash) 0 abbrev) 'font-lock-face 'magit-hash)
+                  "  "
+                  (propertize (string-pad (truncate-string-to-width
+                                           (string-join (plist-get c :labels) ",") width)
+                                          width)
+                              'font-lock-face 'magit-filename)
+                  "  "
+                  (plist-get c :subject)
+                  "\n"))))))
+
+;;;###autoload
+(defun fenrir/magit-subtree-commits (since &optional revs)
+  "List the commits of every project in this subtree repo by commit time.
+SINCE is a git date such as \"14 days ago\".  REVS, a list of git
+arguments, defaults to all local branches; with a prefix argument it is read.
+Each row names the subtree(s) the commit touched (see
+`fenrir/magit-subtree-project-roots' for non-subtree projects)."
+  (interactive
+   (list (read-string (format-prompt "Since" fenrir/magit-subtree-commits-since)
+                      nil nil fenrir/magit-subtree-commits-since)
+         (and current-prefix-arg
+              (split-string-and-unquote (read-string "Revisions: " "--branches")))))
+  (let ((top (or (magit-toplevel) (user-error "Not in a git repository"))))
+    (magit-setup-buffer #'fenrir/magit-subtree-commits-mode nil
+      :buffer (format "*magit-subtree-commits: %s*"
+                      (file-name-nondirectory (directory-file-name top)))
+      :directory top
+      (fenrir/magit-subtree-commits--since since)
+      (fenrir/magit-subtree-commits--revs (or revs '("--branches")))
+      (fenrir/magit-subtree-commits--filter nil))))
+
+(defun fenrir/magit-subtree-commits-filter (labels)
+  "Narrow this timeline to commits touching any of LABELS; empty shows all."
+  (interactive
+   (list (completing-read-multiple "Projects (empty = all): "
+                                   fenrir/magit-subtree-commits--labels)))
+  (setq fenrir/magit-subtree-commits--filter labels)
+  (magit-refresh-buffer))
+
+(defun fenrir/magit-subtree-commits-set-since (since)
+  "Change this timeline's date range to SINCE and refresh."
+  (interactive (list (read-string (format-prompt "Since" fenrir/magit-subtree-commits--since)
+                                  nil nil fenrir/magit-subtree-commits--since)))
+  (setq fenrir/magit-subtree-commits--since since)
+  (magit-refresh-buffer))
+
 ;;;; Wiring
 
 (defun fenrir/magit-subtree--install ()
-  "Add the status section and `S' in the log menu, once."
+  "Add the status section and `S' / `A' in the log menu, once."
   (magit-add-section-hook 'magit-status-sections-hook
                           #'fenrir/magit-subtree-insert-section
                           'magit-insert-staged-changes t)
@@ -355,7 +547,15 @@ what says which project they came from."
               '("S" "subtree" fenrir/magit-subtree-log)))
         (error (display-warning
                 'fenrir (format "could not add `S' to magit-log: %s; use M-x fenrir/magit-subtree-log"
-                                (error-message-string err))))))))
+                                (error-message-string err)))))))
+  (unless (ignore-errors (transient-get-suffix 'magit-log "A"))
+    (condition-case err
+        (let ((transient-error-on-insert-failure t))
+          (transient-append-suffix 'magit-log "S"
+            '("A" "all subtrees by time" fenrir/magit-subtree-commits)))
+      (error (display-warning
+              'fenrir (format "could not add `A' to magit-log: %s; use M-x fenrir/magit-subtree-commits"
+                              (error-message-string err)))))))
 
 (with-eval-after-load 'magit
   (fenrir/magit-subtree--install))

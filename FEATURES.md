@@ -949,6 +949,7 @@ expression syntax is the debuggee's language. An empty message removes the logpo
 | `j o` | `fenrir/magit-status-overview` | **Fold back to a file overview** (status buffers) |
 | `l S` | `fenrir/magit-subtree-log` | **Log one git subtree's own history** (repos built with `git subtree`) |
 | — | `fenrir/magit-subtree-file-log` | Log the visited file inside its subtree's own history (`M-x`) |
+| `l A` | `fenrir/magit-subtree-commits` | **One commit timeline across every subtree**, newest first, each row naming its project(s) |
 
 **File overview (`j o`, or `M-x fenrir/magit-status-overview`):** after a session of folding, a status buffer often shows three collapsed group headings and not one filename. This expands the *Staged*, *Unstaged* and *Untracked* groups so every file heading is visible, and collapses the file bodies under Staged and Unstaged so a thousand-line diff stops burying the list. Untracked entries have no body and are left exactly as Magit rendered them, "N files not listed" notice included.
 
@@ -974,6 +975,10 @@ Toggle per buffer with `M-x fenrir/magit-hints-mode`; customize `fenrir/magit-hi
 A commit buffer (`RET` on a commit) shows a `Subtree: <prefix>` line under its headers. That line names the project an imported commit came from, since its paths (`src/…`) don't say. A project commit that is only on another branch (say UAT when the mainline is hg-config) gets no line.
 
 That log matters because the imported commits carry project-relative paths (`src/…`, not `repos/<prefix>/src/…`), so limiting the umbrella log to `repos/<prefix>` cannot show them. The subtree's own ref can. `M-x fenrir/magit-subtree-file-log` does the same for the visited file, with the prefix stripped from its path.
+
+**Timeline across projects (`l A`, or `M-x fenrir/magit-subtree-commits`):** work that spans several subtrees at once (the 澳洲幸運5 odds integration touches odds-server, odds-web-crawler, odds-web-ag and the crawler) reads as one list. It asks for a date range (default `14 days ago`) and opens `*magit-subtree-commits: <repo>*`, where each commit on the umbrella's local branches is one row, newest first by **commit time**: `date  hash  project(s)  subject`. A subtree is named by its prefix's last component (`odds-web-ag`). A path under `repos/` that no subtree owns is named by its first directory there (`clawer`); the roots are `fenrir/magit-subtree-project-roots`. Anything else is `(umbrella)`. A commit touching several projects stays one row, its names joined by `,`. `RET` shows the commit, with its `Subtree:` line. `/` narrows to chosen projects (empty answer = all), `s` changes the date range, and `g` keeps both. `C-u l A` also asks which revisions to log (default `--branches`).
+
+Not shown: the `p/*` project-side refs, where other developers' commits live. Imported project commits reachable from an umbrella branch carry project-relative paths, so they appear as `(umbrella)`. Cost: one `git log --name-only` and one helper call per refresh; 30 days of ig_lottery (578 commits) refreshes in 0.19 s (measured 2026-10-21).
 
 The data comes from the [`git-subtree-status`](rust/git-tools/git-subtree-status/README.md) helper (gix, read-only, never fetches), built by `make -C rust/git-tools` into `rust/lib/`. Without it, or in a repo with no subtree, nothing shows. A repo found to have none is not asked again this session; `M-x fenrir/magit-subtree-forget` resets that.
 

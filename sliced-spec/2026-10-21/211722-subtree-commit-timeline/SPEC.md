@@ -1,6 +1,6 @@
 # Spec: Magit — one commit timeline across every git subtree
 
-Status: approved
+Status: in progress
 Date: 2026-10-21 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
 
