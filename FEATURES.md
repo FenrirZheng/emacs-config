@@ -1345,6 +1345,7 @@ key binding. Pick this one when Emacs is a GUI/daemon outside any tmux; pick
 |---|---|---|
 | `C-\` | `toggle-input-method` | Toggle emacs-rime (`bopomofo_tw` 注音) in the current buffer; the state is per-buffer |
 | `RET` | `rime--return` | Commit the converted text (`su3cl3 RET` → 你好), as in fcitx5; `S-RET` commits the 注音 symbols |
+| `A`–`O` / `=` `-` | — | Pick candidate 1–15 (labelled `A.` `B.` …; digits are tone keys in 注音) / next and previous page (also `PageDown` / `PageUp`) |
 
 Keep fcitx5 in English while in Emacs — composing in fcitx5 swallows `C-x` / `M-x`. Same
 librime as fcitx5, separate user dir (`var/rime/`, its own word frequencies); the

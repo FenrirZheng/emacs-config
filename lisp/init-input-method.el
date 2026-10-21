@@ -32,6 +32,16 @@ Creating the dir also skips emacs-rime's first-deploy `yes-or-no-p'."
         (unless (file-exists-p dst)
           (make-symbolic-link src dst))))))
 
+(defun fenrir/rime-candidate-letter (num select-labels)
+  "Label candidate NUM with a letter: A for 1, B for 2, ...
+The fcitx5 patches set `menu/alternative_select_keys' to A-O because 注音
+uses the digit keys for tones, but librime reports no SELECT-LABELS for that
+setting, so the default formatter shows digits that select nothing.  Real
+SELECT-LABELS, when a schema has them, still win."
+  (if select-labels
+      (format "%s. " (nth (1- num) select-labels))
+    (format "%c. " (+ ?A (1- num)))))
+
 (use-package rime
   :defer t
   :init
@@ -46,6 +56,7 @@ Creating the dir also skips emacs-rime's first-deploy `yes-or-no-p'."
   ;; raw keys: `su3cl3 RET' inserts "su3cl3" instead of 你好.  S-RET still
   ;; commits the preedit (the 注音 symbols).
   (rime-return-insert-raw nil)
+  (rime-candidate-num-format-function #'fenrir/rime-candidate-letter)
   ;; Auto-English: in code outside strings/comments, and right after a Latin
   ;; letter (so `foo中' needs no toggle).  org / text buffers never switch.
   (rime-disable-predicates '(rime-predicate-prog-in-code-p
