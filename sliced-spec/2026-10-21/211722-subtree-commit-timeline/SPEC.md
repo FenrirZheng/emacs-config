@@ -3,6 +3,7 @@
 Status: implemented
 Date: 2026-10-21 (Asia/Taipei)
 Handoff: [HANDOFF.md](HANDOFF.md)
+Shipped: 2026-10-21 ddecae5 → origin/main
 
 ## 目標
 
