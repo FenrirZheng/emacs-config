@@ -62,6 +62,11 @@ A path ending in / is a directory, anything else an empty file."
   (python-root-test--with-tree '("repo/app/.venv/bin/" "repo/app/sub/")
     (should (equal (python-root-test--rel top "repo/app/sub/") "repo/app/"))))
 
+(ert-deftest python-root-conftest-not-a-marker ()
+  ;; tests/conftest.py must not split tests/ from the pyproject root
+  (python-root-test--with-tree '("repo/pyproject.toml" "repo/tests/conftest.py")
+    (should (equal (python-root-test--rel top "repo/tests/") "repo/"))))
+
 (ert-deftest python-root-dot-project-is-marker ()
   (python-root-test--with-tree '("repo/scripts/.project" "repo/scripts/hooks/")
     (should (equal (python-root-test--rel top "repo/scripts/hooks/") "repo/scripts/"))))

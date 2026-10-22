@@ -20,12 +20,23 @@
 ;;           sibling scripts share one server.  A file directly in VC-ROOT gets
 ;;           VC-ROOT.
 ;;
+;; Tier 1 is nearest-wins, so a marker that commonly sits BELOW the real root
+;; would split it: that is why `conftest.py' (usually in `tests/') is not a
+;; marker.  `requirements.txt' keeps a milder form of the risk -- a
+;; `docs/requirements.txt' roots `docs/' at itself -- and stays because it is
+;; the main signal for repos without a `pyproject.toml'.
+;;
 ;; Known costs of Tier 2:
 ;;   - A markerless repo laid out as `src/' + `tests/' gives `tests/' its own
 ;;     root, and `import pkg' there silently fails to resolve.  Fix: put a
 ;;     marker (`pyrightconfig.json', `.project', ...) at the repo root.
 ;;   - A `.py' directly in a big markerless VC-ROOT still gets VC-ROOT, so the
 ;;     runaway watch loop can come back for root-level files.
+;;   - The first-level subdir can itself be the huge tree.  In ig_lottery_hotfix
+;;     `repos/' holds nested projects as plain tracked files (no nested `.git'),
+;;     so a markerless `.py' under e.g. `repos/tg_infra/HG-EXTENDABLE/tools/'
+;;     resolves to `repos/'.  Fix: a `.project' or `pyrightconfig.json' in the
+;;     Python-bearing directory.
 ;;
 ;; This file is pure (no Eglot, no project.el) so `test/python-root-test.el'
 ;; can load it under `emacs -Q'.  The `project-find-functions' wiring, gated on
@@ -38,7 +49,7 @@
 
 (defvar fenrir/python-root-markers
   '("pyrightconfig.json" "pyproject.toml" "setup.py" "setup.cfg"
-    "requirements.txt" "Pipfile" "tox.ini" "conftest.py" ".venv" ".project")
+    "requirements.txt" "Pipfile" "tox.ini" ".venv" ".project")
   "Files or directories that mark a directory as a Python LSP root.")
 
 (defun fenrir/python--lsp-root (dir vc-root)
