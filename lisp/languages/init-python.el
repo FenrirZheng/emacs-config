@@ -74,6 +74,33 @@ already resolved it)."
 ;; so the env is in place before pyright launches.
 (add-hook 'after-change-major-mode-hook #'fenrir/python-activate-project-venv 90)
 
+;; ---------------------------------------------------------------------------
+;; pyright's workspace root.
+;;
+;; The tier logic and the incident behind it are in
+;; [`fenrir-python-root.el'](fenrir-python-root.el).  This is only the wiring:
+;; Eglot binds `eglot-lsp-context' to t around its `project-current' call, so
+;; answering only then narrows pyright's root while `C-x p' keeps the ordinary
+;; one.  `bound-and-true-p' because breadcrumb and friends call
+;; `project-current' before Eglot is loaded.  VC-ROOT comes from the advised
+;; `project-try-vc' (see `my-project-ignore-home' in init-languages.el), never a
+;; bare `vc-find-root', so a stray `.py' under ~ is not rooted at the dotfiles
+;; repo -- nil there, and this function defers.
+(require 'fenrir-python-root)
+
+(defun fenrir/project-find-python-lsp-root (dir)
+  "Return pyright's project for DIR as a (vc BACKEND ROOT) list, or nil.
+Only answers for Python buffers inside Eglot's root lookup."
+  (when (and (bound-and-true-p eglot-lsp-context)
+             (derived-mode-p 'python-base-mode))
+    (when-let* ((vc-proj (project-try-vc dir))
+                (root (fenrir/python--lsp-root dir (project-root vc-proj))))
+      ;; Same shape as `fenrir/project-find-java-build-root' (init-java.el).
+      (list 'vc (ignore-errors (vc-responsible-backend root))
+            (abbreviate-file-name root)))))
+
+(add-hook 'project-find-functions #'fenrir/project-find-python-lsp-root)
+
 ;; pyright / basedpyright: workspace-wide diagnostics (default "openFilesOnly"
 ;; silently misses cross-file regressions) plus type-checking on "basic" --
 ;; catches the obvious wrongs without the false-positive flood of "strict".

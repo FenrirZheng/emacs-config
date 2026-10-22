@@ -41,6 +41,10 @@
 ;; m2e regenerates `.project' inside every module, defeating the deepest-wins
 ;; markers heuristic); its `fenrir/project-find-java-build-root' is prepended to
 ;; `project-find-functions' from [`languages/init-java.el'](languages/init-java.el).
+;; Python adds one too, `fenrir/project-find-python-lsp-root' in
+;; [`languages/init-python.el'](languages/init-python.el), but it only answers
+;; Eglot's lookup (`eglot-lsp-context'), so it narrows pyright's root and leaves
+;; the project.el root above untouched.
 (use-package project
   :ensure nil
   :custom

@@ -610,6 +610,12 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   runs with no language server at all ([why](_doc/JAVA.md#there-is-no-language-server)).
   `eglot-autoshutdown t` kills the server when
   its last buffer closes; the JSON-RPC events log is disabled.
+  **pyright's root is narrower than the git root**: the nearest dir with a Python marker
+  (`pyproject.toml`, `pyrightconfig.json`, `requirements.txt`, `.venv`, `.project`, …),
+  else the repo's first-level subdir holding the file — so a script dir next to a huge
+  `repos/` tree doesn't make pyright watch it all. `C-x p` is unaffected. Override by
+  dropping a `.project` where you want the root
+  ([`fenrir-python-root.el`](lisp/languages/fenrir-python-root.el)).
 - **consult-eglot**: `M-g e` → `consult-eglot-symbols` (bound only in
   `eglot-mode-map`). Asks the language server's `workspace/symbol` index for **every**
   symbol in the project, not just open buffers — fills the gap between `consult-imenu`
