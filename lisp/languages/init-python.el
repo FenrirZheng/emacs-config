@@ -105,9 +105,17 @@ Only answers for Python buffers inside Eglot's root lookup."
 ;; silently misses cross-file regressions) plus type-checking on "basic" --
 ;; catches the obvious wrongs without the false-positive flood of "strict".
 ;; Bump to "strict" via `.dir-locals.el' for codebases that warrant it.
+;; "basic" still makes Optional narrowing an error, which reddens the stock
+;; `spec_from_file_location' -> `module_from_spec' -> `spec.loader.exec_module'
+;; idiom (both calls return Optional); those two rules are demoted to warnings.
+;; `default-value': Eglot 1.23 makes the variable `defvar-local', so a plain
+;; `setf' lands in whichever buffer is current and pyright never sees it.
 (with-eval-after-load 'eglot
-  (setf (alist-get :python eglot-workspace-configuration)
+  (setf (alist-get :python (default-value 'eglot-workspace-configuration))
         '(:analysis (:typeCheckingMode "basic"
+                     :diagnosticSeverityOverrides
+                     (:reportOptionalMemberAccess "warning"
+                      :reportArgumentType "warning")
                      :diagnosticMode "workspace"
                      :autoImportCompletions t
                      :inlayHints (:variableTypes t
