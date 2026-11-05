@@ -1097,12 +1097,12 @@ First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart 
 
 ## 11. Appearance ([`init-appearance.el`](lisp/init-appearance.el))
 
-- **ef-themes** — `ef-melissa-dark` loaded by default (warm, sunlit dark palette; replaced
-  the cold doom-tokyo-night). `C-c e t` = `ef-themes-toggle` (flip `ef-melissa-dark` ↔
-  `ef-melissa-light`, night/day).
-- **doom-themes** — kept installed for its extras: `doom-themes-org-config` (re-run after
-  the ef theme loads, harmonizing Org faces) and as an alternative palette family (bold +
-  italic apply when a `doom-*` theme is selected).
+- **doom-themes** — `doom-dracula` loaded by default, with `doom-themes-org-config` run after
+  it to harmonize Org faces (bold + italic on). `C-c e t` = `fenrir/load-default-theme`: back
+  to `doom-dracula` from any theme.
+- **ef-themes** — installed as an alternative palette family; nothing loads one at startup.
+  Pick one with `C-c e T`. `M-x ef-themes-toggle` still flips `ef-melissa-dark` ↔
+  `ef-melissa-light`, but has no key.
 - **doom-modeline** — `doom-modeline-mode`, height 25. Tuned for narrow tmux panes so the
   right-side segments don't silently truncate: compact checker counter
   (`doom-modeline-check 'simple`), no buffer-encoding segment, `truncate-upto-project` file
@@ -1119,8 +1119,8 @@ First install: `tempel` isn't bundled — `M-x my/package-refresh` then restart 
   completion). `marginalia-mode` is already on at startup, so the mode is enabled explicitly
   *and* hooked to `marginalia-mode-hook` for later re-wiring.
 - **nerd-icons-ibuffer** — a glyph per row in ibuffer (this config's `C-x b`).
-- **consult-theme** — `C-c e T`: live-preview pick any installed theme (e.g. the punchier
-  runner-up `doom-snazzy`, or back to `doom-tokyo-night`).
+- **consult-theme** — `C-c e T`: live-preview pick any installed theme (e.g. `doom-snazzy`,
+  `doom-tokyo-night` or `ef-melissa-dark`).
 - **tab-bar** **(built-in)** — TTY-native text workspace row. `tab-bar-show 1` auto-hides the
   row at a single tab (invisible until you open a second tab). Numeric hints on, mouse close
   / new buttons off for a clean TTY row. Tab commands stay on the native `C-x t` map

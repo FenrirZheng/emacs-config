@@ -5,17 +5,38 @@
 
 ;;; Code:
 
-;; doom-themes stays INSTALLED but no longer provides the default theme -- it is
-;; kept for its extras (`doom-themes-org-config' below) and as an alternative
-;; palette family.  doom-snazzy is the cheerful runner-up to the current default;
-;; reach it live with `C-c e T' -> consult-theme.  The default theme is now the
-;; warm, sunlit `ef-melissa-dark', loaded in the ef-themes block below -- it
-;; replaced the cold, melancholic doom-tokyo-night.  These bold/italic toggles
-;; only take effect when a doom-* theme is actually selected.
+;; doom-themes: the home of the DEFAULT theme.  `doom-dracula' is the user's choice
+;; (2026-11-05); it replaced `ef-melissa-dark' (f03ba98), which had replaced
+;; doom-tokyo-night.  `doom-themes-org-config' runs AFTER the theme is loaded so
+;; org faces harmonize with the active palette.
+;;   C-c e t : fenrir/load-default-theme (back to doom-dracula from any theme)
+;;   C-c e T : consult-theme             (live-preview pick ANY installed theme)
+;; C-c e / C-c e t / C-c e T verified free.  Tab management deliberately stays on
+;; the native `C-x t' prefix -- no C-c key is invented for it.
+;; `:demand t' is LOAD-BEARING: this block carries the DEFAULT theme in its
+;; `:config' (`load-theme' below).  Without :demand, the `:bind' keys make
+;; use-package defer the whole block, so `:config' -- and the theme load --
+;; would only fire the first time you press `C-c e t'/`C-c e T'.  At daemon
+;; boot / fresh GUI start that left every frame on the white Emacs default
+;; theme until a key was pressed (a14a53f).
+(defun fenrir/load-default-theme ()
+  "Make `doom-dracula' the only enabled theme.
+Disable the others first: `load-theme' stacks, so faces the current theme sets
+and doom-dracula leaves alone would otherwise leak through."
+  (interactive)
+  (mapc #'disable-theme custom-enabled-themes)
+  (load-theme 'doom-dracula t))
+
 (use-package doom-themes
+  :demand t
   :custom
   (doom-themes-enable-bold t)
-  (doom-themes-enable-italic t))
+  (doom-themes-enable-italic t)
+  :bind (("C-c e t" . fenrir/load-default-theme)
+         ("C-c e T" . consult-theme))
+  :config
+  (load-theme 'doom-dracula t)
+  (doom-themes-org-config))
 
 ;; nerd-icons: glyph set used by doom-modeline and (optionally) Dired/Corfu.
 ;; Run `M-x nerd-icons-install-fonts' ONCE after install to fetch the font.
@@ -162,35 +183,14 @@ redraw ~3x/s for the rest of the session."
 (use-package nerd-icons-ibuffer
   :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
 
-;; ef-themes: now the home of the DEFAULT theme.  `ef-melissa-dark' is a warm,
-;; sunlit dark palette (toasted-brown canvas + marigold/amber + spring green),
-;; chosen to replace the cold, melancholic doom-tokyo-night -- picked via a
-;; multi-agent judge panel weighing cheer + warmth + long-session readability.
-;; `doom-themes-org-config' is re-run here, AFTER the ef theme is loaded, so org
-;; faces harmonize with the active palette (it needs doom-themes -- declared
-;; eagerly in the block above -- already loaded; load order in this file is fine).
-;; `ef-themes-to-toggle' flips between Melissa's designed dark/light siblings.
-;;   C-c e t : ef-themes-toggle (flip ef-melissa-dark <-> ef-melissa-light: night/day)
-;;   C-c e T : consult-theme    (live-preview pick ANY installed theme -- e.g. the
-;;                               punchier runner-up doom-snazzy, or jump back to
-;;                               doom-tokyo-night)
-;; C-c e / C-c e t / C-c e T verified free.  Tab management deliberately stays on
-;; the native `C-x t' prefix -- no C-c key is invented for it.
-;; `:demand t' is LOAD-BEARING: this block carries the DEFAULT theme in its
-;; `:config' (`load-theme' below).  Without :demand, the `:bind' keys make
-;; use-package defer the whole block, so `:config' -- and the theme load --
-;; would only fire the first time you press `C-c e t'/`C-c e T'.  At daemon
-;; boot / fresh GUI start that left every frame on the white Emacs default
-;; theme until a key was pressed.  :demand forces eager load so the theme
-;; paints at startup; the keys are still bound.
+;; ef-themes: an alternative palette family; nothing loads one at startup.  Its
+;; autoloads put the themes on `custom-theme-load-path', so `C-c e T' lists them
+;; without this block loading.  `ef-melissa-dark' (warm, sunlit) was the default
+;; from f03ba98 until doom-dracula.  `ef-themes-to-toggle' serves
+;; `M-x ef-themes-toggle', which is no longer bound to a key.
 (use-package ef-themes
-  :demand t
-  :custom (ef-themes-to-toggle '(ef-melissa-dark ef-melissa-light))
-  :bind (("C-c e t" . ef-themes-toggle)
-         ("C-c e T" . consult-theme))
-  :config
-  (load-theme 'ef-melissa-dark t)
-  (doom-themes-org-config))
+  :defer t
+  :custom (ef-themes-to-toggle '(ef-melissa-dark ef-melissa-light)))
 
 ;; tab-bar: a TTY-native text workspace row (built-in, hence :ensure nil).
 ;; `tab-bar-show' set to the INTEGER 1 (not t) auto-hides the row when only one

@@ -219,7 +219,7 @@ the filesystem round-trip but not `emacsclient --eval' argv quoting."
     "C-c a" "aider"
     "C-c B" "dired-sidebar"
     "C-c D" "docker"
-    "C-c e" '("theme" . "ef-themes light/dark toggle")
+    "C-c e" '("theme" . "default theme / pick a theme")
     "C-c g" '("gtags" . "GNU Global build/diagnose/nav")
     "C-c G" '("git-extras" . "git-link / timemachine / blamer")
     "C-c h" '("eglot-hier" . "call/type hierarchy, inlay hints, tokens")
