@@ -1,0 +1,45 @@
+#+title: Emacs performance follow-ups (unapplied findings)
+#+created: [2026-11-06]
+
+Source: =/home/fenrir/code/org-roam/codeVault/emacs/Emacs_Performance_Verified_Findings.org= (called "findings" below).
+Compared against this config on 2026-11-06, including the live daemon (=emacsclient -e=).
+Nothing below has been applied. Each item is a proposal; none is a decision.
+
+* Not yet used
+** TODO Try =eglot-booster-io-only= mode
+- Findings: =:71= (some I/O buffering benefit remains in =eglot-booster-io-only= mode); =:73= (measure before keeping or adding the booster).
+- Project: =lisp/init-languages.el:345-348= (=eglot-booster-mode= runs in default bytecode mode). The comment at =lisp/init-languages.el:322-325= already names a fallback (=--disable-bytecode=) but never applies it.
+- Live daemon: =eglot-booster-io-only= is nil, =eglot-booster-mode= is t.
+- Do: only if the bytecode path feels slow on small completions. Compare against the benchmark below first; switching without a measurement is a guess.
+- Risk: the booster monkey-patches =eglot--connect= (see =_doc/GOTCHAS.md:45=); toggle off with =M-x eglot-booster-mode=.
+
+** TODO Benchmark the booster on Emacs 30
+- Findings: =:73= (the "about 4x" speedup is self-reported, names no Emacs version, likely predates the Emacs 30 native JSON parser); =:102= (open question: does the booster still help on Emacs 30.x/31 on a realistic server?).
+- Project: =lisp/init-languages.el:345-348=; the config comment at =lisp/init-languages.el:317-319= already says the gain shrinks on Emacs 30 but cites no measurement.
+- Do: time the same LSP actions with the booster on and off, on a real server (gopls, rust-analyzer or tsserver; the config uses all three). Candidate actions: =consult-eglot-symbols= workspace/symbol, a large hover, workspace diagnostics.
+- Cost: one test session; do it only if LSP feels slow.
+
+** TODO Use =magit-refresh-verbose= as an actual diagnostic run
+- Findings: =:80= (=M-x magit-toggle-verbose-refresh= prints per-section time to =*Messages*=; more exclamation marks mean a slower section).
+- Project: =lisp/init-git.el:27-29= documents it with =(magit-refresh-verbose t)= commented out. Live daemon: =magit-refresh-verbose= is nil.
+- Do: when a Magit refresh is slow, run =M-x magit-toggle-verbose-refresh=, refresh once, read =*Messages*=, then toggle it off. Do not leave it on.
+- Do not: set =magit-refresh-status-buffer= to nil; the findings (=:82=) say that claim was refuted.
+
+* Checked, nothing to change
+** Magit refresh-hook audit (findings =:80=)
+Live daemon values on 2026-11-06:
+- =magit-pre-refresh-hook=: =magit-maybe-save-repository-buffers= (Magit default).
+- =magit-post-refresh-hook=: =diff-hl-magit-post-refresh=, added deliberately at =lisp/init-git.el:614= (comment at =:612-613=: the pre-refresh half was obsoleted in diff-hl 1.11.0).
+- =magit-refresh-buffer-hook=: =magit-process-unset-mode-line-error-status= (Magit's own). The project's =fenrir/magit-hints--install= is added buffer-locally at =lisp/init-git.el:253=.
+Not measured: whether =diff-hl-magit-post-refresh= slows refreshes. The verbose run above is the way to find out.
+
+* Already used (no action)
+- =global-so-long-mode=: =lisp/init-defaults.el:24= (findings =:48=).
+- =eglot-booster=: =lisp/init-languages.el:345-348= (findings =:69=).
+- Startup GC pattern: =early-init.el:33-39= and =gcmh= at =lisp/init-defaults.el:163-167= (findings =:87=).
+- Built-in profiler: used ad hoc, lesson at =_doc/GOTCHAS.md:173-174= (findings =:29-36=); no config or binding.
+- =long-line-threshold= / =large-hscroll-threshold= left at defaults (50000 / 10000 live), as findings =:56= advises.
+
+* Limits of this comparison
+- Line-by-line reading of =lisp/languages/*.el= was not done; the grep and the live daemon values cover the settings above.
+- The findings' "no verified claim" topics (native compilation, =read-process-output-max=, jit-lock, tree-sitter font-lock, =esup=, =benchmark-init=) were not compared; the findings give nothing to apply.
