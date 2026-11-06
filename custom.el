@@ -7,6 +7,10 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(custom-safe-themes
+   '("8c7e832be864674c220f9a9361c851917a93f921fedb7717b1b5ece47690c098"
+     "720838034f1dd3b3da66f6bd4d053ee67c93a747b219d1c546c41c4e425daf93"
+     default))
  '(eglot-confirm-server-edits nil nil nil "Customized with use-package eglot")
  '(package-selected-packages
    '(ace-link ace-window aidermacs apheleia avy-zap bash-completion

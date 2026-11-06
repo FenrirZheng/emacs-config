@@ -1,0 +1,156 @@
+#+TITLE: Intent prompt: make doom-dracula the default Emacs theme
+#+DATE: [2026-11-05 Thu 11:25]
+#+TARGET_MODEL: claude-fable-5-1
+#+GENERATED_BY: /intent-prompt (claude-fable-5-1, effort high)
+
+* Original instruction
+#+begin_quote
+set `doom-dracalu` as default emacs theme.
+#+end_quote
+
+* Intent prompt
+#+begin_src text
+# Intent
+
+Make `doom-dracula` the theme that the Emacs config at /home/fenrir/.emacs.d loads at
+startup, replacing the current default `ef-melissa-dark`. The instruction wrote
+`doom-dracalu`; read that as `doom-dracula`, the only matching theme file in the
+installed doom-themes package (elpa/doom-themes-20260117.2323/doom-dracula-theme.el).
+`doom-dracalu` matches nothing anywhere in the repo.
+
+# Context
+
+- Repo: /home/fenrir/.emacs.d (Emacs 30.1, TTY-first daemon plus a GUI frame from the
+  same daemon). Read its CLAUDE.md first; it says FEATURES.md must be kept in sync with
+  bindings and workflow changes.
+- The default theme is loaded in /home/fenrir/.emacs.d/lisp/init-appearance.el, inside
+  the `(use-package ef-themes ...)` block, in its `:config`:
+      (load-theme 'ef-melissa-dark t)
+      (doom-themes-org-config)
+  That block is `:demand t`, and the comment above it (and commit a14a53f, "emacs: fix
+  ef-melissa-dark not painting at startup (:demand t)") records why: the block also has
+  `:bind` keys, so without `:demand` use-package deferred it and the theme was not
+  painted until a key was pressed. Whatever block ends up carrying `load-theme` must load
+  eagerly at startup.
+- `(use-package doom-themes ...)` earlier in the same file has only `:custom`
+  (`doom-themes-enable-bold t`, `doom-themes-enable-italic t`), so it loads eagerly
+  today. Those two toggles take effect only when a doom-* theme is active, so they will
+  start applying.
+- `doom-themes-org-config` must run after the theme is loaded (the existing comment says
+  so, and it does today).
+- The ef-themes block also sets `ef-themes-to-toggle '(ef-melissa-dark ef-melissa-light)`
+  and binds `C-c e t` to `ef-themes-toggle` and `C-c e T` to `consult-theme`. After this
+  change, `C-c e t` would load an ef theme over doom-dracula. The user has not said what
+  to do about that (see Open questions); default: leave those keys and the ef-themes
+  package in place, change only the startup theme.
+- Prose that will go stale once the default changes:
+  - init-appearance.el header comment, lines 8-14 ("doom-themes stays INSTALLED but no
+    longer provides the default theme ... The default theme is now ... ef-melissa-dark").
+  - init-appearance.el ef-themes block comment, lines 197-217 (melissa chosen to replace
+    doom-tokyo-night, `:demand t` is load-bearing because the block carries the default).
+  - FEATURES.md section 11 "Appearance", lines 1100-1105 (ef-themes "loaded by default",
+    doom-themes "kept installed for its extras") and 1122-1123 (consult-theme bullet).
+  - _doc/ARCHITECTURE.md line 42 lists init-appearance as "doom-themes, doom-modeline,
+    nerd-icons" and needs no change.
+- Prior decision trail, to keep rather than erase: commit f03ba98 swapped
+  doom-tokyo-night -> ef-melissa-dark; the comment says it was picked by a judge panel
+  for warmth and readability. This change is a user directive that reverses it. The new
+  comment should say that in one or two lines (dracula by user directive on 2026-11-05,
+  replacing melissa from f03ba98), not pretend melissa never happened.
+- `load-theme` is called with NO-CONFIRM `t`, so no `custom-safe-themes` hash is needed.
+  Do not touch custom.el.
+- The working tree is dirty with unrelated, uncommitted work: CLAUDE.md, custom.el
+  (a `custom-safe-themes` addition), init-appearance.el (ibuffer sticky-titles and name
+  column width, lines ~159-195), and an untracked docs/ directory. Edit in place; do not
+  stash, checkout or otherwise disturb those edits.
+- Whether the Emacs daemon is running right now is not known [unverified]: an
+  `emacsclient -e 'custom-enabled-themes'` probe returned no output.
+
+# Scope
+
+In:
+- /home/fenrir/.emacs.d/lisp/init-appearance.el: move the startup theme to doom-dracula
+  so that exactly one theme is enabled at startup, keep `doom-themes-org-config` running
+  after the theme load, keep the carrying block eager, and rewrite the two stale
+  comments.
+- /home/fenrir/.emacs.d/FEATURES.md section 11: update the ef-themes, doom-themes and
+  consult-theme bullets to describe the new default.
+
+Out:
+- No new packages, no change to custom.el, no change to the `C-c e t` / `C-c e T`
+  bindings or `ef-themes-to-toggle` unless the user answers the open question.
+- No change to the per-frame setup (`fenrir/setup-frame`, alpha-background) or
+  doom-modeline settings.
+- No commit, unless the user says so (open question). Report what changed.
+
+# Done when
+
+1. init-appearance.el contains exactly one `load-theme` call and it names
+   `doom-dracula`:
+       ug -n "load-theme" /home/fenrir/.emacs.d/lisp/init-appearance.el
+   prints one line containing `'doom-dracula`, and
+       ug -n "ef-melissa-dark" /home/fenrir/.emacs.d/lisp/init-appearance.el
+   matches only comments and the `ef-themes-to-toggle` value, never a `load-theme`.
+2. The theme file loads under the installed package set (verified today, keep as a
+   smoke test):
+       cd /home/fenrir/.emacs.d && emacs -Q --batch --eval \
+         '(progn (package-initialize) (load-theme (quote doom-dracula) t) (message "%S" custom-enabled-themes))'
+   prints `(doom-dracula)`.
+3. The config itself selects it [unverified command; adjust if it misbehaves]:
+       cd /home/fenrir/.emacs.d && emacs --batch -l early-init.el -l init.el \
+         --eval '(message "%S" custom-enabled-themes)' 2>&1 | tail -1
+   prints exactly `(doom-dracula)`, not a list containing ef-melissa-dark too.
+4. If the daemon answers, after `M-x load-file RET lisp/init-appearance.el RET` (or
+   `emacsclient -e '(load-file "/home/fenrir/.emacs.d/lisp/init-appearance.el")'`):
+       emacsclient -e 'custom-enabled-themes'
+   prints `(doom-dracula)`. If ef-melissa-dark is still listed, disable it with
+   `(disable-theme 'ef-melissa-dark)` in that session only; the startup path must not
+   need that.
+5. FEATURES.md section 11 no longer calls ef-melissa-dark the default:
+       ug -n "loaded by default|default theme" /home/fenrir/.emacs.d/FEATURES.md
+   shows doom-dracula as the default and ef-themes as an installed alternative.
+6. No stray artefacts: `git -C /home/fenrir/.emacs.d status --porcelain` shows the same
+   dirty set as before plus nothing new except the two edited files (already listed),
+   and `fdfind --no-ignore -e elc --exclude elpa --exclude eln-cache . ` in the repo
+   finds nothing new (the batch runs must not leave a .elc behind).
+
+# Constraints and authorization
+
+May do without asking: edit the two files above, run the batch and emacsclient probes,
+`load-file` the module into a running daemon.
+
+May not: restart or kill the user's Emacs daemon (systemd `emacs.service`), run
+`git stash`, `git checkout -- <file>`, `git add .`, or commit; install or remove
+packages; byte-compile anything and leave the `.elc`.
+
+# Stop and ask when
+
+- `doom-dracula` is not what the user meant (the name was corrected from `doom-dracalu`).
+- The user wants `C-c e t` repointed (e.g. to a doom light/dark pair) or removed.
+- The user wants this committed, and how to separate it from the in-flight ibuffer
+  edits already sitting uncommitted in the same file.
+- Criterion 3's batch run fails for a reason unrelated to the theme (missing package,
+  network fetch attempt): report the error instead of patching the bootstrap.
+#+end_src
+
+* Tailoring notes
+- Applied: "Common core" of ~/.claude/skills/opus-prompting/references/model-guidance.md
+  only (clear result and constraints, context the target cannot see, explicit evidence per
+  criterion). No Fable 5.1-specific guidance exists in that file and none was applied.
+- Name resolution: the instruction's `doom-dracalu` was read as `doom-dracula`; the theme
+  file exists in the installed doom-themes package and `dracalu` matches nothing in the
+  repo. Confirm under Open questions.
+- Verified this turn: the `load-theme` site, the `:demand t` rationale and commit a14a53f,
+  the doom-themes block contents, the stale comment and FEATURES.md line ranges, the dirty
+  working tree, that `emacs -Q --batch` plus `package-initialize` loads doom-dracula and
+  reports `(doom-dracula)`.
+- Marked [unverified]: whether the daemon is running (the emacsclient probe printed
+  nothing), and the batch command in criterion 3 that loads early-init.el and init.el
+  (not run this turn; it may need adjusting).
+
+* Open questions
+- Is `doom-dracula` the intended theme (instruction said `doom-dracalu`)?
+- After the switch, `C-c e t` (`ef-themes-toggle`) loads ef-melissa-dark/light over
+  doom-dracula. Keep as is, rebind to a doom pair, or drop?
+- Commit the change (precedent subject: `emacs: swap default theme ...`), or leave it
+  uncommitted beside the in-flight ibuffer and custom.el edits?

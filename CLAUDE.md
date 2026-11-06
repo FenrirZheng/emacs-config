@@ -174,3 +174,17 @@ One line each; the evidence is in [_doc/GOTCHAS.md](_doc/GOTCHAS.md) and
 - **Extending the Magit status buffer: a folded section has no children, the refresh cache
   doesn't cover `git status`, and timing must use one `magit-refresh-buffer`** —
   ([why](_doc/GOTCHAS.md#extending-the-magit-status-buffer)).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as each issue file's `Status:` line. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.

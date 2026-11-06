@@ -180,8 +180,40 @@ redraw ~3x/s for the rest of the session."
 ;; nerd-icons-ibuffer: a glyph per row in ibuffer.  Relevant because this config
 ;; rebinds `C-x b' to ibuffer (the consult fuzzy switcher lives on `C-x B'), so
 ;; ibuffer is the everyday buffer list and benefits from the major-mode icons.
+;;
+;; Two ibuffer tweaks ride along here because both touch the same columns:
+;; - Name is 30 wide (package default 18), so `*Claude Index: ig_lottery*' and
+;;   its per-repo siblings stop eliding to the same `*Claude Index: ...'.  Only
+;;   the `name' column is swapped; the rest follows the package default.
+;; - The column titles (buffer lines 1-2) scroll away; a copy of line 1 goes in
+;;   the header line.  The advice is on `ibuffer-update', not on
+;;   `ibuffer-update-title-and-summary': `ibuffer-update' sets
+;;   `header-line-format' as its LAST form (to the filter text, or nil), which
+;;   would overwrite anything set earlier.  Active filters are appended after
+;;   the titles.  Clicking a title in the header does not sort -- use `s'.
+(defun fenrir/ibuffer-sticky-titles (&rest _)
+  "Show ibuffer's column titles in the header line, then any filter text."
+  (when (derived-mode-p 'ibuffer-mode)
+    (let ((titles (save-excursion
+                    (goto-char (point-min))
+                    (string-replace "%" "%%" (buffer-substring
+                                              (line-beginning-position)
+                                              (line-end-position))))))
+      (setq header-line-format
+            (list (propertize " " 'display '(space :align-to 0))
+                  titles
+                  (and ibuffer-use-header-line ibuffer-filtering-qualifiers
+                       (list "  " ibuffer-header-line-format)))))))
+
 (use-package nerd-icons-ibuffer
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
+  :hook (ibuffer-mode . nerd-icons-ibuffer-mode)
+  :config
+  (setq nerd-icons-ibuffer-formats
+        (cons (mapcar (lambda (col)
+                        (if (eq (car-safe col) 'name) '(name 30 30 :left :elide) col))
+                      (car nerd-icons-ibuffer-formats))
+              (cdr nerd-icons-ibuffer-formats)))
+  (advice-add 'ibuffer-update :after #'fenrir/ibuffer-sticky-titles))
 
 ;; ef-themes: an alternative palette family; nothing loads one at startup.  Its
 ;; autoloads put the themes on `custom-theme-load-path', so `C-c e T' lists them
