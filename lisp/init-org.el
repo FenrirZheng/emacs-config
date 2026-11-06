@@ -304,6 +304,26 @@ CODE GTAGS root and inherits the daemon env -- disjoint roots, disjoint env."
   :custom
   (valign-fancy-bar nil))   ; keep ASCII `|' bars, matching org-modern-table's choice
 
+;; Close the org-indent agent timer leak.  `org-indent-mode' starts a repeating
+;; idle timer whenever `org-indent-agentized-buffers' is empty and overwrites
+;; `org-indent-agent-timer', its only handle to the previous one.  The agent
+;; cancels itself only on its next idle period, so an Org buffer opened in the
+;; meantime (typically `emacsclient' while you aren't typing) strands the old
+;; timer forever.  Harmless alone, but valign adds `:after' advice to the agent
+;; that realigns the WHOLE current buffer, so N leaked timers mean N realigns,
+;; synchronously, after every pause: measured 28 timers = 3-5 s freezes when
+;; moving between headings.  Evidence: _doc/GOTCHAS.md.
+(defvar org-indent-agent-timer)
+(defvar org-indent-agentized-buffers)
+(defun fenrir/org-indent--cancel-spent-agent (&rest _)
+  "Cancel the previous org-indent agent timer if it has no buffers left."
+  (when (and (timerp org-indent-agent-timer)
+             (null org-indent-agentized-buffers))
+    (cancel-timer org-indent-agent-timer)))
+
+(with-eval-after-load 'org-indent
+  (advice-add 'org-indent-mode :before #'fenrir/org-indent--cancel-spent-agent))
+
 ;; org-appear: temporarily reveal the *bold* / =verbatim= / [[link]] markup of
 ;; whichever element point is on -- the complement to `org-hide-emphasis-markers'
 ;; above, so you can still edit the markers without globally un-hiding them.

@@ -143,6 +143,36 @@ From building [`fenrir-magit-subtree.el`](../lisp/fenrir-magit-subtree.el) (2026
   refresh.** The pair refreshes twice and doubles any per-refresh cost (this
   session's first figure, 0.52 → 0.77 s, was that error; one refresh is ~+0.09 s).
 
+## Org heading lag: leaked `org-indent` timers multiplied by valign
+
+Measured 2026-11-06 on Emacs 30.1 / Org 9.7.11, GUI frame. The fix is
+`fenrir/org-indent--cancel-spent-agent` in [`init-org.el`](../lisp/init-org.el).
+
+- **Leak.** `org-indent-mode` overwrites `org-indent-agent-timer`, its only handle on a
+  repeating idle timer, whenever `org-indent-agentized-buffers` is empty. The old timer only
+  cancels itself on its next idle period, so an Org buffer opened before then strands it.
+  `emacsclient` opening an Org file while nobody types hits this every time: 4 opens leaked 4
+  timers before the fix and 0 after. The daemon had 26 after 21 h.
+- **Multiplier.** valign's `:after` advice on `org-indent-initialize-agent` realigns the whole
+  current buffer when the agent list is empty, so N timers mean N synchronous realigns on every
+  idle period.
+- **Symptom.** A freeze about 0.2 s after a key, not during the command. A 180 s capture in a
+  real note with 28 timers: 38.9 s of non-GC stalls, each up to 5.8 s, with 86% of CPU samples
+  under `valign-region`.
+- **Folding makes each realign slower.** One `valign-region` on the same note (26 table lines):
+  17-20 ms unfolded, 113 ms folded at full width, 179 ms folded in a half-width split. 28 × 179 ms
+  is 5.0 s, the size of the freezes seen after `org-cycle`. Unfolded copies understate this: the
+  same copy, unfolded, froze for only about 0.5 s per key.
+- **Not the cause.** With no leaked timers, a heading command on a 175 KB, 522-heading copy has
+  a median of 24 ms from key to repaint with pulsar and beacon on, 2 ms with pulsar off, 27 ms
+  with beacon off, 1 ms with both off, and no stall in the 0.75 s after each press. pulsar's
+  cost is the repaint; it can stay on.
+- **Timing it.** `(redisplay t)` in a loop never goes idle, and `emacsclient -e` doesn't end an
+  idle period, so neither fires these timers: that benchmark showed 1-2 ms per move while the
+  user saw freezes. Inject real keys with `unread-command-events` and log gaps from a 20 ms timer.
+- **`profiler-stop` replaces the saved log.** It runs `(setq profiler-cpu-log (profiler-cpu-log))`,
+  so a log saved just before it is lost. Stop first, then read `(profiler-cpu-profile)`.
+
 ## See also
 
 - [CLAUDE.md](../CLAUDE.md) — the one-line rules
