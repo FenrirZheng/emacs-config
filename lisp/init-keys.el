@@ -547,8 +547,9 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
 ;; stock quit.  In this daemon setup "C-x C-c, get me out" is most often
 ;; pressed inside a blocking client session (Claude Code's Ctrl+G prompt
 ;; editor / Ctrl+O transcript viewer via claude-editor{,-gui}), where the
-;; caller resumes only when the CLIENT is released -- see the EDITOR CONTRACT
-;; header in ~/.claude/bin/claude-editor-gui.  So: in a buffer some client is
+;; caller resumes only when the CLIENT is released -- see the editor-contract
+;; doc comment in ~/code/fenrir-claude-plugin/open-emacse-rust/src/main.rs.
+;; So: in a buffer some client is
 ;; waiting on, behave like `C-x k' -- kill the buffer WITHOUT saving (the
 ;; Ctrl+G prompt returns unchanged) -- which releases the client and hands
 ;; control back to Claude Code; in every other buffer, fall through to
