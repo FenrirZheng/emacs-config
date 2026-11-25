@@ -38,9 +38,7 @@
 ;; Register taplo's language server.  `taplo lsp stdio' speaks LSP over stdio
 ;; (the transport Eglot drives).  Eglot ships NO toml entry in its default
 ;; `eglot-server-programs', so this is a pure addition; `add-to-list' prepends
-;; it.  eglot-booster (init-languages.el) wraps this stdio connection like every
-;; other Eglot server -- it prepends to the PROGRAM part only, so the "lsp"
-;; "stdio" args survive.
+;; it.
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
                '(toml-ts-mode . ("taplo" "lsp" "stdio"))))

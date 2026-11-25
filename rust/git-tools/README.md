@@ -8,6 +8,7 @@ Each member is a bin run by a `lisp/` module, and also a plain CLI: because a bi
 |---|---|---|
 | [`git-subtree-status/`](git-subtree-status/README.md) | [`lisp/fenrir-magit-subtree.el`](../../lisp/fenrir-magit-subtree.el) | which `git subtree` prefixes changed: uncommitted, since a revision, against an upstream ref |
 | [`git-nested-status/`](git-nested-status/README.md) | [`lisp/fenrir-magit-nested.el`](../../lisp/fenrir-magit-nested.el) | the independent clones nested inside a repo (`repos/*` with their own `.git`): branch, ahead/behind, staged/unstaged/untracked |
+| [`git-diff-hl/`](git-diff-hl/README.md) | [`lisp/init-git.el`](../../lisp/init-git.el) | batch `diff-hl` VC state and `(line inserts deletes type)` hunk calculation for open tracked buffers |
 
 ## Why one workspace
 

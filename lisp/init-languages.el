@@ -9,7 +9,7 @@
 ;; LANGUAGE-AGNOSTIC infrastructure every language module builds on:
 ;;   project.el (+ ignore-$HOME advice, cache reset), envrc, the Eglot core
 ;;   (settings / glyphs / faces / debug toggles -- but NOT per-language hooks or
-;;   workspace-config), eglot-booster, consult-eglot, xref, breadcrumb, eldoc
+;;   workspace-config), consult-eglot, xref, breadcrumb, eldoc
 ;;   routing, treesit-auto, combobulate (package only -- hooks live per
 ;;   language), flymake, sideline, apheleia, dape.  (gtags/GNU Global moved to
 ;;   [`init-tags.el'](init-tags.el) in the 2026-07-30 toolchain rebuild.)
@@ -140,9 +140,7 @@ seems stuck on a stale answer."
 ;; bundled package, so it never reaches `package-install'.  The real upgrade
 ;; needs `package-install-upgrade-built-in' (set in init.el) plus a ONE-TIME
 ;; `M-x package-install RET eglot' on a fresh clone (elpa/ is gitignored) -- see
-;; CLAUDE.md "Eglot upgraded to the GNU ELPA release".  eglot-booster's
-;; `eglot--connect' / `jsonrpc--json-read' advice was verified to still apply
-;; against 1.23, so the booster keeps working across the bump.
+;; CLAUDE.md "Eglot upgraded to the GNU ELPA release".
 (use-package eglot
   :ensure t
   ;; Inlay hints: parameter names, inferred types, `&` references etc. rendered
@@ -308,44 +306,6 @@ seems stuck on a stale answer."
   (setq eglot-events-buffer-config '(:size 0 :format full))
   (when (eglot-current-server) (eglot-reconnect (eglot-current-server)))
   (message "eglot: events log OFF"))
-
-;; eglot-booster: speed up Eglot by routing the LSP server's stdio through
-;; `emacs-lsp-booster' (Rust binary, blahgeek/emacs-lsp-booster v0.2.1).
-;; Two mechanisms:
-;;   1. Threaded I/O on the booster side -- Emacs no longer blocks the UI
-;;      waiting for a slow server response.  Win regardless of message size.
-;;   2. JSON -> Elisp bytecode pre-parse -- `read' on bytecode beats
-;;      `json-parse-string' on Emacs 29.  Win SHRINKS on Emacs 30 (native
-;;      parser already fast); still meaningful for large payloads:
-;;      `consult-eglot-symbols' workspace/symbol responses, gopls hovers on
-;;      heavy structs, rust-analyzer full type info, workspace diagnostics.
-;;      Tiny per-keystroke completion deltas may go marginally SLOWER -- if
-;;      that's perceptible, add `--disable-bytecode' via
-;;      `eglot-booster-no-remote-boost' / `eglot-booster-program-args' to
-;;      keep the threaded-I/O win without the bytecode trick.
-;;
-;; Trust posture (decided 2026-05-18): built from source via
-;; `cargo install --locked --version 0.2.1 emacs-lsp-booster' rather than
-;; downloading the pre-built release binary.  `--locked' pins every
-;; transitive dep to the upstream Cargo.lock SHA, eliminating
-;; compiler-supply-chain ambiguity in the prebuilt zip.  Trade: 3-5 min
-;; compile on first install.  Binary lands at ~/.cargo/bin/, on PATH via
-;; rustup.
-;;
-;; Compatibility: monkey-patches `eglot--connect'.  Built-in Eglot evolves
-;; with Emacs releases; an Emacs upgrade may break the patch (historically
-;; fixed quickly upstream).  If broken: `M-x eglot-booster-mode' to disable
-;; at runtime, no permanent harm.  All LSP servers this config talks to
-;; (pyright, gopls, rust-analyzer, typescript-language-server, vscode-*,
-;; clangd) use stdio JSON-RPC and are compatible.
-;;
-;; Source GitHub-only, installed via Emacs 30's `:vc' keyword (same pattern
-;; as combobulate below).  Update later: `M-x package-vc-upgrade RET
-;; eglot-booster RET'.
-(use-package eglot-booster
-  :vc (:url "https://github.com/jdtsmith/eglot-booster" :rev :newest)
-  :after eglot
-  :config (eglot-booster-mode 1))
 
 ;; consult-eglot: project-wide LSP symbol search via `workspace/symbol'.
 ;;

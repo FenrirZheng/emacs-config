@@ -5,7 +5,7 @@
 #
 # Sections:
 #   1. npm globals  — LSPs / formatters / linters (skipped if no npm)
-#   2. cargo        — emacs-lsp-booster, difftastic (skipped if no cargo)
+#   2. cargo        — difftastic, taplo (skipped if no cargo)
 #   2b. pipx        — black (apheleia Python format-on-save; skipped if no pipx)
 #   2c. lldb-dap    — stable symlink for dape (Debian ships lldb-dap-NN)
 #   3. go install   — gopls (skipped if no go)
@@ -56,8 +56,6 @@ fi
 # ── 2. cargo ────────────────────────────────────────────────────────────
 section "cargo crates"
 if have cargo; then
-  # emacs-lsp-booster: version pin matches init.el:713
-  cargo install --locked --version 0.2.1 emacs-lsp-booster
   cargo install --locked difftastic
   # taplo: TOML language server + formatter. The `lsp' feature enables the
   # `taplo lsp' subcommand Eglot drives (languages/init-toml.el); the bare crate
@@ -65,7 +63,7 @@ if have cargo; then
   # lights up TOML format-on-save. Not on apt.
   cargo install --locked --features lsp taplo-cli
 else
-  skip "cargo 不在 PATH — emacs-lsp-booster / difftastic 跳過"
+  skip "cargo 不在 PATH — difftastic / taplo 跳過"
 fi
 
 # ── 2b. pipx (isolated Python CLIs) ─────────────────────────────────────

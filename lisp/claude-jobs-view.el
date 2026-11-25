@@ -49,6 +49,7 @@
 (require 'tabulated-list)
 (require 'subr-x)
 (require 'seq)
+(require 'parse-time)
 ;; `json-parse-string' is a C builtin since Emacs 27; no `require' needed.
 
 ;; Forward declarations: these symbols come from packages we only touch at
@@ -75,11 +76,26 @@
   "Mirrors $JOBCTL_STATE; directory where jobctl writes <uuid>.meta files."
   :type 'directory)
 
+(defcustom claude-jobs-view-jobs-dir
+  (expand-file-name ".claude/jobs" (or (getenv "HOME") "~"))
+  "Directory where Claude Code writes daemon job state (`<short>/state.json')."
+  :type 'directory)
+
 (defcustom claude-jobs-view-projects-dir
   (expand-file-name ".claude/projects" (or (getenv "HOME") "~"))
   "Where Claude Code writes session transcript JSONL files.
 Used as the secondary cwd source when the meta file is missing `cwd='."
   :type 'directory)
+
+(defcustom claude-jobs-view-scan-program
+  (let ((base (or load-file-name buffer-file-name)))
+    (if base
+        (expand-file-name "../rust/lib/claude-jobs-scan"
+                          (file-name-directory base))
+      (expand-file-name "rust/lib/claude-jobs-scan" user-emacs-directory)))
+  "Path to the `claude-jobs-scan' helper binary.
+Built by `make -C rust/claude-jobs-scan' into the workspace `rust/lib/'."
+  :type 'file)
 
 (defcustom claude-jobs-view-transcript-head-bytes 65536
   "Bytes to scan from the head of a transcript JSONL for cwd / first prompt.
@@ -147,17 +163,63 @@ metadata, not status)."
   "Face for the INTENT column (italic green)."
   :group 'claude-jobs-view)
 
-;;;; Parsing -----------------------------------------------------------------
+;;;; Scanner Cache & Parsing ---------------------------------------------------
+
+(defvar claude-jobs-view--scan-hinted nil
+  "Non-nil after logging the missing `claude-jobs-scan' build hint once.")
+
+(defvar claude-jobs-view--cache-config nil
+  "Directory and head-bytes configuration used to populate caches.")
+
+(defvar claude-jobs-view--session-cache (make-hash-table :test #'equal)
+  "Map from session UUID to the latest plist from `claude-jobs-scan'.")
+
+(defvar claude-jobs-view--daemon-cache (make-hash-table :test #'equal)
+  "Map from daemon short ID to the latest plist from `claude-jobs-scan'.")
+
+(defun claude-jobs-view--current-config ()
+  "Return the normalized scanner configuration key."
+  (list (expand-file-name claude-jobs-view-state-dir)
+        (expand-file-name claude-jobs-view-jobs-dir)
+        (expand-file-name claude-jobs-view-projects-dir)
+        (max 0 claude-jobs-view-transcript-head-bytes)))
+
+(defun claude-jobs-view--clear-caches ()
+  "Clear cached session and daemon metadata."
+  (clrhash claude-jobs-view--session-cache)
+  (clrhash claude-jobs-view--daemon-cache)
+  (setq claude-jobs-view--cache-config nil))
+
+(defun claude-jobs-view--ensure-cache-current ()
+  "Invalidate caches when scanner directories or head limit changed."
+  (let ((cfg (claude-jobs-view--current-config)))
+    (unless (equal cfg claude-jobs-view--cache-config)
+      (clrhash claude-jobs-view--session-cache)
+      (clrhash claude-jobs-view--daemon-cache)
+      (setq claude-jobs-view--cache-config cfg))))
 
 (defconst claude-jobs-view--session-rx
-  ;; "<uuid>  pid=<pid>(<state>)  <iso-timestamp>"
+  ;; "<uuid>  pid=<pids>(<state>)  [<agent>  ]<iso-timestamp>"
   (rx bol
       (group (= 8 hex) "-" (= 4 hex) "-" (= 4 hex) "-" (= 4 hex) "-" (= 12 hex))
       (+ space)
-      "pid=" (group (+ digit)) "(" (group (+ (any "a-z"))) ")"
+      "pid=" (group (+ (any digit ","))) "(" (group (+ (any "a-z" ","))) ")"
       (+ space)
-      (group (+ (not (any " \t\n")))))
+      (optional (group (+? nonl)) (+ space))
+      (group (+ (not (any " \t\n"))))
+      (* space)
+      eol)
   "Matches a dispatched-session row in `jobctl list' output.")
+
+(defun claude-jobs-view--session-alive-p (state)
+  "Return non-nil if session STATE represents a live process."
+  (and (stringp state)
+       (string-match-p "\\`alive\\(?:,\\|\\'\\)" state)))
+
+(defun claude-jobs-view--daemon-alive-p (state)
+  "Return non-nil if daemon STATE represents an active daemon."
+  (and (stringp state)
+       (string-match-p "\\`\\(active\\|running\\|alive\\)\\'" state)))
 
 (defconst claude-jobs-view--daemon-header-rx
   (rx bol "SHORT" (+ space) "STATE" (+ space) "UPDATED" (+ space) "INTENT")
@@ -203,13 +265,8 @@ writes the cwd on every entry, so the first occurrence is near the top."
       (when (re-search-forward "\"cwd\":\"\\([^\"]+\\)\"" nil t)
         (match-string 1)))))
 
-(defun claude-jobs-view--transcript-first-user-text (uuid)
-  "Return the first `type:\"user\"' message's text from UUID's transcript.
-Scans only the file head (`claude-jobs-view-transcript-head-bytes')
-because the first user entry always sits near the top.  Returns nil when:
-  - no transcript file is found,
-  - the head contains no parsable user entry (truncation, races, format
-    drift).  Caller treats nil as `no intent available'."
+(defun claude-jobs-view--transcript-first-user-text-elisp (uuid)
+  "Pure-Elisp fallback reading the first `type:\"user\"' text from UUID's JSONL."
   (when-let ((path (claude-jobs-view--find-transcript uuid)))
     (with-temp-buffer
       (insert-file-contents path nil 0
@@ -251,19 +308,163 @@ because the first user entry always sits near the top.  Returns nil when:
           (forward-line 1))
         nil))))
 
+(defun claude-jobs-view--scan-program ()
+  "Return executable path for `claude-jobs-scan', or nil with a one-time hint."
+  (let ((prog (and claude-jobs-view-scan-program
+                   (executable-find claude-jobs-view-scan-program))))
+    (if prog
+        (setq claude-jobs-view--scan-hinted nil)
+      (unless claude-jobs-view--scan-hinted
+        (setq claude-jobs-view--scan-hinted t)
+        (message "claude-jobs-view: %s is not built -- run: make -C rust/claude-jobs-scan (falling back to jobctl)"
+                 (or claude-jobs-view-scan-program "claude-jobs-scan"))))
+    prog))
+
+(defun claude-jobs-view--valid-session-plist-p (s)
+  "Return non-nil if S is a valid session plist from `claude-jobs-scan'."
+  (and (plistp s)
+       (stringp (plist-get s :sid))
+       (or (null (plist-get s :pid)) (integerp (plist-get s :pid)))
+       (or (null (plist-get s :state)) (stringp (plist-get s :state)))
+       (let ((live (plist-get s :live-pids)))
+         (and (proper-list-p live)
+              (seq-every-p #'integerp live)))
+       (or (null (plist-get s :agent)) (stringp (plist-get s :agent)))
+       (or (null (plist-get s :started)) (stringp (plist-get s :started)))
+       (or (null (plist-get s :cwd)) (stringp (plist-get s :cwd)))
+       (or (null (plist-get s :transcript-path))
+           (stringp (plist-get s :transcript-path)))
+       (or (null (plist-get s :first-user-text))
+           (stringp (plist-get s :first-user-text)))))
+
+(defun claude-jobs-view--valid-daemon-plist-p (d)
+  "Return non-nil if D is a valid daemon plist from `claude-jobs-scan'."
+  (and (plistp d)
+       (stringp (plist-get d :short))
+       (or (null (plist-get d :state)) (stringp (plist-get d :state)))
+       (or (null (plist-get d :updated)) (stringp (plist-get d :updated)))
+       (or (null (plist-get d :intent)) (stringp (plist-get d :intent)))
+       (or (null (plist-get d :raw-intent)) (stringp (plist-get d :raw-intent)))
+       (or (null (plist-get d :name)) (stringp (plist-get d :name)))
+       (or (null (plist-get d :cwd)) (stringp (plist-get d :cwd)))))
+
+(defun claude-jobs-view--parse-scan-output (string)
+  "Parse full-scan stdout STRING from `claude-jobs-scan' into a plist, or nil."
+  (when-let* ((res (ignore-errors (read-from-string string)))
+              ((string-blank-p (substring string (cdr res))))
+              (form (car res))
+              ((plistp form))
+              ((plist-member form :sessions))
+              ((plist-member form :daemons)))
+    (let ((sessions (plist-get form :sessions))
+          (daemons (plist-get form :daemons)))
+      (when (and (proper-list-p sessions)
+                 (proper-list-p daemons)
+                 (seq-every-p #'claude-jobs-view--valid-session-plist-p sessions)
+                 (seq-every-p #'claude-jobs-view--valid-daemon-plist-p daemons))
+        form))))
+
+(defun claude-jobs-view--parse-uuid-output (string)
+  "Parse `--uuid' stdout STRING from `claude-jobs-scan'.
+Returns `(ok . PLIST-OR-NIL)' when valid, or nil on corrupt/empty output."
+  (when-let* ((res (ignore-errors (read-from-string string)))
+              ((string-blank-p (substring string (cdr res)))))
+    (let ((form (car res)))
+      (cond
+       ((null form) (cons 'ok nil))
+       ((claude-jobs-view--valid-session-plist-p form)
+        (cons 'ok form))
+       (t nil)))))
+
+(defun claude-jobs-view--run-scan (&optional uuid)
+  "Run `claude-jobs-scan' and return parsed output, or nil on error/unbuilt.
+When UUID is nil, returns the full scan plist `(:sessions ... :daemons ...)'.
+When UUID is non-nil, returns `(ok . PLIST-OR-NIL)' on success, or nil on error."
+  (when-let ((prog (claude-jobs-view--scan-program)))
+    (with-temp-buffer
+      (let* ((args (append
+                    (list "--state-dir" (expand-file-name claude-jobs-view-state-dir)
+                          "--jobs-dir" (expand-file-name claude-jobs-view-jobs-dir)
+                          "--projects-dir" (expand-file-name claude-jobs-view-projects-dir)
+                          "--head-bytes" (number-to-string
+                                          (max 0 claude-jobs-view-transcript-head-bytes)))
+                    (when uuid (list "--uuid" uuid))))
+             (exit (apply #'call-process prog nil '(t nil) nil args))
+             (out (buffer-string)))
+        (if (not (zerop exit))
+            (progn
+              (message "claude-jobs-view: %s exited %d" prog exit)
+              nil)
+          (let ((parsed (if uuid
+                            (claude-jobs-view--parse-uuid-output out)
+                          (claude-jobs-view--parse-scan-output out))))
+            (unless parsed
+              (message "claude-jobs-view: unexpected output from %s" prog))
+            parsed))))))
+
+(defun claude-jobs-view--session-info (uuid)
+  "Return `(ok . PLIST-OR-NIL)' for UUID via cache or `claude-jobs-scan --uuid'.
+Returns nil when `claude-jobs-scan' is unbuilt or failed, so callers can fall
+back to `jobctl' / pure Elisp."
+  (claude-jobs-view--ensure-cache-current)
+  (let* ((cached (gethash uuid claude-jobs-view--session-cache))
+         (cached-path (and cached (plist-get cached :transcript-path))))
+    (if (and cached
+             (if cached-path
+                 (file-exists-p cached-path)
+               (not (claude-jobs-view--session-alive-p
+                     (or (plist-get cached :state) "")))))
+        (cons 'ok cached)
+      (let ((res (claude-jobs-view--run-scan uuid)))
+        (when (eq (car-safe res) 'ok)
+          (let ((plist (cdr res)))
+            (if plist
+                (puthash uuid plist claude-jobs-view--session-cache)
+              (remhash uuid claude-jobs-view--session-cache))
+            (cons 'ok plist)))))))
+
+(defun claude-jobs-view--transcript-first-user-text (uuid)
+  "Return the first `type:\"user\"' message's text from UUID's transcript.
+Uses cached/`claude-jobs-scan --uuid' metadata when available, falling back
+to pure Elisp."
+  (let ((res (claude-jobs-view--session-info uuid)))
+    (if (eq (car-safe res) 'ok)
+        (plist-get (cdr res) :first-user-text)
+      (claude-jobs-view--transcript-first-user-text-elisp uuid))))
+
 (defun claude-jobs-view--one-line (s)
   "Collapse all whitespace runs in S to a single space."
-  (replace-regexp-in-string "[\n\t ]+" " " (string-trim s)))
+  (replace-regexp-in-string "[\r\n\t ]+" " " (string-trim s)))
 
 (defun claude-jobs-view--resolve-cwd (uuid)
   "Resolve dispatch-time cwd for UUID; mirrors jobctl's `resolve_cwd' chain.
-Source 1: $JOBCTL_STATE/UUID.meta `cwd=' line  (post-2026-05 dispatches).
-Source 2: transcript JSONL `\"cwd\":\"...\"' grep  (always correct when
-          a transcript exists, because Claude itself wrote it).
-Returns nil only when BOTH sources are unavailable — typical for sessions
-where the transcript has been pruned away."
-  (or (claude-jobs-view--meta-cwd uuid)
-      (claude-jobs-view--transcript-cwd uuid)))
+Uses cached/`claude-jobs-scan --uuid' metadata when available, falling back
+to reading `$JOBCTL_STATE/UUID.meta' and the transcript JSONL."
+  (let ((res (claude-jobs-view--session-info uuid)))
+    (if (eq (car-safe res) 'ok)
+        (plist-get (cdr res) :cwd)
+      (or (claude-jobs-view--meta-cwd uuid)
+          (claude-jobs-view--transcript-cwd uuid)))))
+
+(defun claude-jobs-view--transcript-path (uuid)
+  "Resolve the JSONL transcript path for UUID, or nil.
+Uses cached/`claude-jobs-scan --uuid' metadata when available, falling back
+to `jobctl path' only when `claude-jobs-scan' is unavailable."
+  (let ((res (claude-jobs-view--session-info uuid)))
+    (if (eq (car-safe res) 'ok)
+        (let ((path (plist-get (cdr res) :transcript-path)))
+          (if (and path (not (file-exists-p path)))
+              (let ((fresh (claude-jobs-view--run-scan uuid)))
+                (if (eq (car-safe fresh) 'ok)
+                    (let ((fplist (cdr fresh)))
+                      (if fplist
+                          (puthash uuid fplist claude-jobs-view--session-cache)
+                        (remhash uuid claude-jobs-view--session-cache))
+                      (let ((fpath (plist-get fplist :transcript-path)))
+                        (and fpath (file-exists-p fpath) fpath)))
+                  (ignore-errors (claude-jobs-view--jobctl-string "path" uuid))))
+            path))
+      (ignore-errors (claude-jobs-view--jobctl-string "path" uuid)))))
 
 (defun claude-jobs-view--run-list ()
   "Run `jobctl list' and return stdout as a string.
@@ -303,11 +504,11 @@ short id)."
         (let* ((uuid   (match-string 1 line))
                (pid    (match-string 2 line))
                (state  (match-string 3 line))
-               (ts     (match-string 4 line))
+               (ts     (match-string 5 line))
                (short  (substring uuid 0
                                   (min (length uuid)
                                        claude-jobs-view-short-len)))
-               (raw    (claude-jobs-view--transcript-first-user-text uuid))
+               (raw    (claude-jobs-view--transcript-first-user-text-elisp uuid))
                (intent
                 (if raw
                     (propertize (claude-jobs-view--one-line raw)
@@ -324,7 +525,7 @@ short id)."
                        (propertize short  'face
                                    'claude-jobs-view-short-face)
                        (propertize state  'face
-                                   (if (string= state "alive")
+                                   (if (claude-jobs-view--session-alive-p state)
                                        'claude-jobs-view-alive-face
                                      'claude-jobs-view-dead-face))
                        (propertize pid    'face
@@ -349,9 +550,7 @@ short id)."
                            ;; running, errored, …); colour-code only the
                            ;; clear-active markers, dim everything else.
                            (propertize state 'face
-                                       (if (string-match-p
-                                            "\\`\\(active\\|running\\|alive\\)\\'"
-                                            state)
+                                       (if (claude-jobs-view--daemon-alive-p state)
                                            'claude-jobs-view-alive-face
                                          'claude-jobs-view-dead-face))
                            (propertize "—" 'face 'shadow)
@@ -363,9 +562,88 @@ short id)."
                     rows)))))))
     (nreverse rows)))
 
+(defun claude-jobs-view--entries-from-scan (scan)
+  "Build `tabulated-list-entries' from SCAN plist and update session/daemon caches."
+  (clrhash claude-jobs-view--session-cache)
+  (clrhash claude-jobs-view--daemon-cache)
+  (setq claude-jobs-view--cache-config (claude-jobs-view--current-config))
+  (let ((rows '()))
+    (dolist (d (plist-get scan :daemons))
+      (let* ((short      (or (plist-get d :short) ""))
+             (state      (or (plist-get d :state) ""))
+             (updated    (or (plist-get d :updated) ""))
+             (intent-raw (or (plist-get d :intent) ""))
+             (raw-intent (or (plist-get d :raw-intent) intent-raw))
+             (one        (claude-jobs-view--one-line intent-raw))
+             (intent-cell
+              (if (string-empty-p one)
+                  (propertize "—" 'face 'shadow)
+                (propertize one
+                            'face 'claude-jobs-view-intent-face
+                            'help-echo raw-intent))))
+        (puthash short d claude-jobs-view--daemon-cache)
+        (push (list (cons 'daemon short)
+                    (vector
+                     (propertize "daemon" 'face 'claude-jobs-view-daemon-face)
+                     (propertize short 'face 'claude-jobs-view-short-face)
+                     (propertize state 'face
+                                 (if (claude-jobs-view--daemon-alive-p state)
+                                     'claude-jobs-view-alive-face
+                                   'claude-jobs-view-dead-face))
+                     (propertize "—" 'face 'shadow)
+                     (propertize updated 'face 'claude-jobs-view-timestamp-face)
+                     intent-cell))
+              rows)))
+    (dolist (s (plist-get scan :sessions))
+      (let* ((sid        (or (plist-get s :sid) ""))
+             (pid        (plist-get s :pid))
+             (live-pids  (plist-get s :live-pids))
+             (state      (or (plist-get s :state) "dead"))
+             (resumed    (plist-get s :resumed))
+             (state-str  (if (and resumed
+                                  (claude-jobs-view--session-alive-p state))
+                             "alive,resumed"
+                           state))
+             (pid-str    (cond
+                          (live-pids
+                           (mapconcat #'number-to-string live-pids ","))
+                          ((integerp pid)
+                           (number-to-string pid))
+                          (t "—")))
+             (started    (or (plist-get s :started) ""))
+             (first-user (plist-get s :first-user-text))
+             (short      (claude-jobs-view--short sid))
+             (intent-cell
+              (if (and first-user (not (string-empty-p first-user)))
+                  (let ((one (claude-jobs-view--one-line first-user)))
+                    (if (string-empty-p one)
+                        (propertize "—" 'face 'shadow)
+                      (propertize one
+                                  'face 'claude-jobs-view-intent-face
+                                  'help-echo first-user)))
+                (propertize "—" 'face 'shadow))))
+        (puthash sid s claude-jobs-view--session-cache)
+        (push (list (cons 'session sid)
+                    (vector
+                     (propertize "session" 'face 'claude-jobs-view-session-face)
+                     (propertize short 'face 'claude-jobs-view-short-face)
+                     (propertize state-str 'face
+                                 (if (claude-jobs-view--session-alive-p state-str)
+                                     'claude-jobs-view-alive-face
+                                   'claude-jobs-view-dead-face))
+                     (propertize pid-str 'face 'claude-jobs-view-pid-face)
+                     (propertize started 'face 'claude-jobs-view-timestamp-face)
+                     intent-cell))
+              rows)))
+    (nreverse rows)))
+
 (defun claude-jobs-view--entries ()
-  "Return `tabulated-list-entries' from a fresh `jobctl list' invocation."
-  (claude-jobs-view--parse (claude-jobs-view--run-list)))
+  "Return `tabulated-list-entries' from `claude-jobs-scan', or `jobctl list'."
+  (let ((scan (claude-jobs-view--run-scan)))
+    (if scan
+        (claude-jobs-view--entries-from-scan scan)
+      (claude-jobs-view--clear-caches)
+      (claude-jobs-view--parse (claude-jobs-view--run-list)))))
 
 ;;;; Helpers ----------------------------------------------------------------
 
@@ -421,8 +699,8 @@ short id)."
   "Visit the transcript JSONL for the session at point (read-only)."
   (interactive)
   (let* ((uuid (claude-jobs-view--session-at-point))
-         (path (claude-jobs-view--jobctl-string "path" uuid)))
-    (when (string-empty-p path)
+         (path (claude-jobs-view--transcript-path uuid)))
+    (when (or (null path) (string-empty-p path))
       (user-error "No transcript path for %s" (claude-jobs-view--short uuid)))
     (find-file-read-only path)))
 
@@ -430,8 +708,8 @@ short id)."
   "Pop a detail buffer summarising the row at point.
 For sessions, shows uuid / cwd / transcript path / first user message
 verbatim — i.e. what you'd otherwise have to chain `jobctl path' +
-`jobctl cwd' + `cat <jsonl> | jq' to see.  For daemon rows, just notes
-that jobctl can only list them."
+`jobctl cwd' + `cat <jsonl> | jq' to see.  For daemon rows, shows cached
+state/cwd/intent when available alongside the `claude agents' note."
   (interactive)
   (let* ((id (claude-jobs-view--id-at-point))
          (tag (car id))
@@ -443,10 +721,20 @@ that jobctl can only list them."
 
 (defun claude-jobs-view--render-session-info (uuid)
   (let* ((buf  (claude-jobs-view--scratch-buffer "info" uuid))
-         (path (ignore-errors
-                 (claude-jobs-view--jobctl-string "path" uuid)))
-         (cwd  (or (claude-jobs-view--resolve-cwd uuid) "(not resolved)"))
-         (text (claude-jobs-view--transcript-first-user-text uuid)))
+         (res  (claude-jobs-view--session-info uuid))
+         (ok   (eq (car-safe res) 'ok))
+         (info (and ok (cdr res)))
+         (path (if ok
+                   (plist-get info :transcript-path)
+                 (ignore-errors
+                   (claude-jobs-view--jobctl-string "path" uuid))))
+         (cwd  (or (if ok
+                       (plist-get info :cwd)
+                     (claude-jobs-view--resolve-cwd uuid))
+                   "(not resolved)"))
+         (text (if ok
+                   (plist-get info :first-user-text)
+                 (claude-jobs-view--transcript-first-user-text-elisp uuid))))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (insert (propertize "Session\n" 'face 'bold))
@@ -460,15 +748,35 @@ that jobctl can only list them."
     (pop-to-buffer buf)))
 
 (defun claude-jobs-view--render-daemon-info (short)
+  (claude-jobs-view--ensure-cache-current)
   (let ((buf (get-buffer-create
-              (format "*claude-jobs info %s*" short))))
+              (format "*claude-jobs info %s*" short)))
+        (info (gethash short claude-jobs-view--daemon-cache)))
     (with-current-buffer buf
+      (special-mode)
       (let ((inhibit-read-only t))
         (erase-buffer)
         (insert (propertize (format "Daemon job %s\n\n" short) 'face 'bold))
+        (when info
+          (when-let ((name (plist-get info :name)))
+            (unless (string-empty-p name)
+              (insert (format "  name:     %s\n" name))))
+          (when-let ((state (plist-get info :state)))
+            (unless (string-empty-p state)
+              (insert (format "  state:    %s\n" state))))
+          (when-let ((updated (plist-get info :updated)))
+            (unless (string-empty-p updated)
+              (insert (format "  updated:  %s\n" updated))))
+          (when-let ((cwd (plist-get info :cwd)))
+            (insert (format "  cwd:      %s\n" (abbreviate-file-name cwd))))
+          (when-let ((raw (or (plist-get info :raw-intent)
+                              (plist-get info :intent))))
+            (unless (string-empty-p raw)
+              (insert "\n" (propertize "Intent\n" 'face 'bold) raw "\n")))
+          (insert "\n"))
         (insert "jobctl can only LIST daemon jobs; inspect/manage via the\n"
                 "`claude agents' UI (see ~/.claude/jobs/<short>/state.json).\n"))
-      (special-mode))
+      (goto-char (point-min)))
     (pop-to-buffer buf)))
 
 (defun claude-jobs-view-send (uuid prompt)
@@ -547,6 +855,7 @@ filesystem.  Transcript JSONL under ~/.claude/projects/ is NOT touched
         (claude-jobs-view--jobctl-string "kill" uuid))
       (dolist (f existing)
         (delete-file f))
+      (remhash uuid claude-jobs-view--session-cache)
       (message "claude-jobs: deleted %s (%d files removed)"
                short (length existing))
       (claude-jobs-view-refresh))))
@@ -640,7 +949,9 @@ back to vterm (or term-mode)."
   "Copy transcript path of the session at point to the kill ring."
   (interactive)
   (let* ((uuid (claude-jobs-view--session-at-point))
-         (path (claude-jobs-view--jobctl-string "path" uuid)))
+         (path (claude-jobs-view--transcript-path uuid)))
+    (when (or (null path) (string-empty-p path))
+      (user-error "No transcript path for %s" (claude-jobs-view--short uuid)))
     (kill-new path)
     (message "Copied: %s" path)))
 
@@ -648,7 +959,10 @@ back to vterm (or term-mode)."
   "Copy dispatch-time cwd of the session at point to the kill ring."
   (interactive)
   (let* ((uuid (claude-jobs-view--session-at-point))
-         (cwd  (claude-jobs-view--jobctl-string "cwd" uuid)))
+         (cwd  (or (claude-jobs-view--resolve-cwd uuid)
+                   (ignore-errors (claude-jobs-view--jobctl-string "cwd" uuid)))))
+    (when (or (null cwd) (string-empty-p cwd))
+      (user-error "Cannot determine cwd for %s" (claude-jobs-view--short uuid)))
     (kill-new cwd)
     (message "Copied: %s" cwd)))
 
@@ -689,6 +1003,29 @@ back to vterm (or term-mode)."
     map)
   "Keymap for `claude-jobs-view-mode'.")
 
+(defun claude-jobs-view--parse-updated-time (s)
+  "Parse ISO-8601 timestamp string S into an Emacs time value, or nil."
+  (when (and (stringp s) (not (string-empty-p s)))
+    (ignore-errors (parse-iso8601-time-string s))))
+
+(defun claude-jobs-view--compare-updated (a b)
+  "Return non-nil if entry A's UPDATED column sorts chronologically before B's.
+Compares parsed ISO-8601 timestamps via `time-less-p' so UTC (`Z') and
+local-offset (`+08:00') entries sort in wall-clock order.  Empty or
+unparseable timestamps sort before valid timestamps."
+  (let* ((sa (or (aref (cadr a) 4) ""))
+         (sb (or (aref (cadr b) 4) ""))
+         (ta (claude-jobs-view--parse-updated-time sa))
+         (tb (claude-jobs-view--parse-updated-time sb)))
+    (cond
+     ((and ta tb)
+      (if (time-equal-p ta tb)
+          (string< sa sb)
+        (time-less-p ta tb)))
+     ((or ta tb)
+      (null ta))
+     (t (string< sa sb)))))
+
 (define-derived-mode claude-jobs-view-mode tabulated-list-mode "Claude-Jobs"
   "Tabulated UI for the `jobctl' CLI."
   (setq tabulated-list-format
@@ -696,7 +1033,7 @@ back to vterm (or term-mode)."
           ("SHORT"   ,(1+ claude-jobs-view-short-len) t)
           ("STATE"   7 t)
           ("PID"     8 t)
-          ("UPDATED" 26 t)
+          ("UPDATED" 26 claude-jobs-view--compare-updated)
           ("INTENT"  0 t)])
   (setq tabulated-list-sort-key '("UPDATED" . t))
   (setq tabulated-list-padding 1)

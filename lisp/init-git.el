@@ -606,6 +606,230 @@ from a revision buffer it is a plain revision-vs-revision comparison."
 ;; a git repo with ~1500 tracked files), opening dired triggered a `git status'
 ;; + `git ls-files' sweep through the vc framework on every revert -- the
 ;; `emacs ./' in $HOME CPU spike. magit covers dired-side git status anyway.
+
+(declare-function magit-toplevel "magit-git")
+(declare-function vc-git-root "vc-git")
+(declare-function vc-state-refresh "vc-hooks")
+(declare-function vc-file-setprop "vc-hooks")
+(declare-function diff-hl-update "diff-hl")
+(declare-function diff-hl-remove-overlays "diff-hl")
+(declare-function diff-hl--update-overlays "diff-hl")
+(declare-function diff-hl--autohide-margin "diff-hl")
+(defvar diff-hl-flydiff-modified-tick)
+(defvar diff-hl-reference-revision)
+(defvar diff-hl-show-staged-changes)
+
+(defcustom fenrir/git-diff-hl-program
+  (expand-file-name "rust/lib/git-diff-hl" user-emacs-directory)
+  "The `git-diff-hl' helper binary.
+Built by `make -C rust/git-tools' into the workspace `rust/lib/'.
+When missing or not executable, `diff-hl-magit-post-refresh' falls back
+to its stock per-buffer implementation."
+  :type 'file
+  :group 'diff-hl)
+
+(defconst fenrir/diff-hl--header "# git-diff-hl v1"
+  "First line of `git-diff-hl --porcelain' output.")
+
+(defun fenrir/diff-hl--parse-porcelain ()
+  "Parse `git-diff-hl --porcelain' output in the current buffer.
+Return a hash table mapping relative path to (STATE . HUNKS), where STATE
+is a VC state symbol and HUNKS is a list of (LINE INSERTS DELETES TYPE)
+tuples.  Return nil unless line 1 matches `fenrir/diff-hl--header'."
+  (goto-char (point-min))
+  (when (looking-at "\\`# git-diff-hl v1$")
+    (forward-line 1)
+    (let ((results (make-hash-table :test #'equal))
+          cur-path cur-state cur-hunks)
+      (while (not (eobp))
+        (cond
+         ((looking-at "^F\t\\([^\t\n]+\\)\t\\([^\n]+\\)$")
+          (when cur-path
+            (puthash cur-path (cons cur-state (nreverse cur-hunks)) results))
+          (setq cur-state (intern (match-string 1))
+                cur-path (match-string 2)
+                cur-hunks nil))
+         ((looking-at
+           "^H\t\\([0-9]+\\)\t\\([0-9]+\\)\t\\([0-9]+\\)\t\\(insert\\|delete\\|change\\)$")
+          (when cur-path
+            (push (list (string-to-number (match-string 1))
+                        (string-to-number (match-string 2))
+                        (string-to-number (match-string 3))
+                        (intern (match-string 4)))
+                  cur-hunks))))
+        (forward-line 1))
+      (when cur-path
+        (puthash cur-path (cons cur-state (nreverse cur-hunks)) results))
+      results)))
+
+(defun fenrir/diff-hl--relative-path (file topdir-true)
+  "Return FILE's path relative to TOPDIR-TRUE, canonicalizing parent symlinks.
+Avoids resolving a symlinked leaf filename itself, while normalizing
+symlinked repository roots or parent directories."
+  (file-relative-name
+   (expand-file-name (file-name-nondirectory file)
+                     (file-truename (file-name-directory file)))
+   topdir-true))
+
+(defun fenrir/diff-hl--parse-sexp ()
+  "Parse `git-diff-hl --sexp' output in the current buffer.
+Return a hash table mapping relative path to (STATE . HUNKS), where STATE
+is a VC state symbol and HUNKS is a list of (LINE INSERTS DELETES TYPE)
+tuples.  Return nil on malformed output."
+  (goto-char (point-min))
+  (skip-chars-forward " \t\n\r")
+  (unless (eobp)
+    (condition-case nil
+        (let ((data (read (current-buffer))))
+          (skip-chars-forward " \t\n\r")
+          (when (and (eobp) (listp data))
+            (let ((results (make-hash-table :test #'equal))
+                  (valid t))
+              (while (and valid (consp data))
+                (let ((entry (car data)))
+                  (if (and (consp entry)
+                           (stringp (car entry))
+                           (consp (cdr entry))
+                           (memq (cadr entry)
+                                 '(up-to-date edited added removed
+                                   conflict unregistered ignored))
+                           (consp (cddr entry))
+                           (null (cdddr entry))
+                           (listp (caddr entry)))
+                      (let ((hunks (caddr entry)))
+                        (while (and valid (consp hunks))
+                          (let ((h (car hunks)))
+                            (unless (and (consp h)
+                                         (integerp (nth 0 h))
+                                         (integerp (nth 1 h))
+                                         (integerp (nth 2 h))
+                                         (memq (nth 3 h) '(insert delete change))
+                                         (null (nthcdr 4 h)))
+                              (setq valid nil)))
+                          (setq hunks (cdr hunks)))
+                        (when hunks
+                          (setq valid nil))
+                        (when valid
+                          (puthash (car entry)
+                                   (cons (cadr entry) (caddr entry))
+                                   results)))
+                    (setq valid nil)))
+                (setq data (cdr data)))
+              (when (and valid (null data))
+                results))))
+      (error nil))))
+
+(defun fenrir/diff-hl--run-batch (program topdir relpaths)
+  "Run PROGRAM in TOPDIR for RELPATHS and return parsed result table, or nil."
+  (with-temp-buffer
+    (dolist (rel relpaths)
+      (insert rel "\0"))
+    (let ((default-directory topdir)
+          (coding-system-for-write 'utf-8-unix)
+          (coding-system-for-read 'utf-8-unix))
+      (when (eql 0 (call-process-region
+                    (point-min) (point-max) program t (list t nil) nil
+                    "-C" topdir "--sexp" "--stdin" "-z"))
+        (goto-char (point-min))
+        (if (eq (char-after) ?#)
+            (fenrir/diff-hl--parse-porcelain)
+          (fenrir/diff-hl--parse-sexp))))))
+
+(defun fenrir/diff-hl--apply-buffer (buf state hunks)
+  "Apply batch VC STATE and HUNKS to BUF."
+  (with-current-buffer buf
+    (let* ((file buffer-file-name)
+           (changes
+            (pcase state
+              ('added
+               `((1 ,(save-restriction (widen) (line-number-at-pos (point-max)))
+                    0 insert)))
+              ('removed
+               `((1 0 ,(save-restriction (widen) (line-number-at-pos (point-max)))
+                    delete)))
+              ((or 'edited 'conflict) hunks)
+              (_ nil))))
+      (vc-file-setprop file 'vc-state state)
+      (diff-hl-remove-overlays)
+      (diff-hl--update-overlays changes nil)
+      (unless changes
+        (diff-hl--autohide-margin))
+      (when (bound-and-true-p diff-hl-flydiff-mode)
+        (setq diff-hl-flydiff-modified-tick (buffer-chars-modified-tick))))))
+
+(defun fenrir/diff-hl-magit-post-refresh (orig-fn &rest args)
+  "Batch-refresh `diff-hl' buffers after Magit refresh using `git-diff-hl'.
+Falls back to ORIG-FN with ARGS on remote directories or when the helper
+binary is unavailable or fails."
+  (if (file-remote-p default-directory)
+      (apply orig-fn args)
+    (when-let* ((topdir (magit-toplevel)))
+      (let ((program (executable-find fenrir/git-diff-hl-program)))
+        (if (not program)
+            (apply orig-fn args)
+          (let* ((topdir-true (file-name-as-directory (file-truename topdir)))
+                 (root-cache (make-hash-table :test #'equal))
+                 (batch-table (make-hash-table :test #'equal))
+                 relpaths delegate-bufs)
+            (dolist (buf (buffer-list))
+              (when (and (buffer-local-value 'diff-hl-mode buf)
+                         (not (buffer-modified-p buf)))
+                (when-let* ((file (buffer-file-name buf))
+                            ((not (file-remote-p file)))
+                            (resolved-file
+                             (expand-file-name
+                              (file-name-nondirectory file)
+                              (file-truename (file-name-directory file))))
+                            ((file-in-directory-p resolved-file topdir-true))
+                            ((file-exists-p file)))
+                  (with-current-buffer buf
+                    (when (eq (vc-backend file) 'Git)
+                      (let* ((dir (file-name-directory file))
+                             (git-root
+                              (let ((cached (gethash dir root-cache 'miss)))
+                                (if (not (eq cached 'miss))
+                                    cached
+                                  (puthash dir
+                                           (when-let* ((r (vc-git-root file)))
+                                             (file-name-as-directory
+                                              (file-truename r)))
+                                           root-cache)))))
+                        (when (or (null git-root) (equal git-root topdir-true))
+                          (if (or diff-hl-reference-revision
+                                  (not diff-hl-show-staged-changes))
+                              (push buf delegate-bufs)
+                            (let ((rel (file-relative-name
+                                        resolved-file topdir-true)))
+                              (unless (gethash rel batch-table)
+                                (push rel relpaths))
+                              (push buf (gethash rel batch-table)))))))))))
+            (if (null relpaths)
+                ;; 0 eligible batch buffers -> 0 git-diff-hl subprocesses.
+                (dolist (buf delegate-bufs)
+                  (with-current-buffer buf
+                    (vc-state-refresh buffer-file-name 'Git)
+                    (diff-hl-update)))
+              (if-let* ((results (fenrir/diff-hl--run-batch
+                                  program topdir (nreverse relpaths))))
+                  (progn
+                    (maphash
+                     (lambda (rel bufs)
+                       (let ((entry (gethash rel results 'missing)))
+                         (if (eq entry 'missing)
+                             (dolist (buf bufs)
+                               (with-current-buffer buf
+                                 (vc-state-refresh buffer-file-name 'Git)
+                                 (diff-hl-update)))
+                           (dolist (buf bufs)
+                             (fenrir/diff-hl--apply-buffer
+                              buf (car entry) (cdr entry))))))
+                     batch-table)
+                    (dolist (buf delegate-bufs)
+                      (with-current-buffer buf
+                        (vc-state-refresh buffer-file-name 'Git)
+                        (diff-hl-update))))
+                (apply orig-fn args)))))))))
+
 (use-package diff-hl
   :hook
   ;; Redraw the margin after a Magit refresh (commit/stage/unstage/...).
@@ -634,7 +858,11 @@ from a revision buffer it is a plain revision-vs-revision comparison."
   (diff-hl-margin-mode 1)
   ;; Refresh as you type, not only on save / VC op / Magit refresh -- flydiff
   ;; diffs the buffer against its committed blob, per-buffer, cheap in $HOME.
-  (diff-hl-flydiff-mode 1))
+  (diff-hl-flydiff-mode 1)
+  ;; Batch-update all eligible diff-hl buffers via `rust/lib/git-diff-hl' in
+  ;; one pass instead of spawning git status/diff-index per buffer.
+  (advice-add 'diff-hl-magit-post-refresh
+              :around #'fenrir/diff-hl-magit-post-refresh))
 
 ;; Make hunk-hopping repeatable: after the first `C-c v n' (or `p'/`s'/`r'),
 ;; bare `n'/`p'/`s'/`r' continue without the `C-c v' prefix until any other

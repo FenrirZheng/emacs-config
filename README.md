@@ -24,7 +24,7 @@ emacs                                               # first launch: use-package 
 The [bootstrap script](shell/install.sh) is idempotent — it installs system packages
 that the config references (jinx → enchant-2, vterm → cmake + libvterm-dev,
 magit-delta → git-delta, etc.) plus the npm / cargo / go / rustup binaries used
-by `eglot`, `apheleia`, and `eglot-booster`. Re-run safely after pulling new
+by `eglot` and `apheleia`. Re-run safely after pulling new
 `init.el` deps. Toolchains that aren't on `PATH` (cargo / go / rustup) are
 skipped with a warning rather than aborting the run.
 

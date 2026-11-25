@@ -55,7 +55,7 @@
 ;; crate graph, MIR/HIR/memory-layout views).  This is THE thing that closes the
 ;; gap between Eglot-driven Rust and the rustic/lsp-mode experience.
 ;;
-;; GitHub-only -- not on MELPA/ELPA -- so `:vc' like eglot-booster / combobulate
+;; GitHub-only -- not on MELPA/ELPA -- so `:vc' like combobulate
 ;; (URL recorded in [`custom.el'](../../custom.el) `package-vc-selected-packages').
 ;;
 ;; `eglot-x-setup' binds NO keys; it only advises a few Eglot internals to

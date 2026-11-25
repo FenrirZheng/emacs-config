@@ -86,17 +86,98 @@
 ;; re-scans everything already in the table plus FILES -- so runs on different
 ;; trees accumulate rather than clobber.  Re-run after adding new nodes; org-id
 ;; also self-heals single misses for files it already tracks.
+(defvar fenrir/org-roam-sync-program
+  (expand-file-name "rust/lib/org-roam-sync" user-emacs-directory)
+  "Path to the Rust `org-roam-sync' indexer binary.")
+
+(defun fenrir/org-id--under-dir-p (file dir-true dir-lex)
+  "Return non-nil if FILE lies under DIR-TRUE or DIR-LEX."
+  (let* ((exp (expand-file-name file))
+         (true (or (ignore-errors (file-truename exp)) exp)))
+    (or (string-prefix-p dir-lex exp)
+        (string-prefix-p dir-true exp)
+        (string-prefix-p dir-true true)
+        (string-prefix-p dir-lex true))))
+
+(defun fenrir/org-id--merge-alist (dir scanned)
+  "Merge SCANNED alist ((file id...) ...) for DIR into `org-id-locations'.
+Replaces only entries under DIR while preserving all entries outside DIR,
+then saves `org-id-locations-file'."
+  (unless (hash-table-p org-id-locations)
+    (setq org-id-locations (org-id-alist-to-hash org-id-locations)))
+  (let* ((dir-lex (file-name-as-directory (expand-file-name dir)))
+         (dir-true (file-name-as-directory (file-truename dir-lex)))
+         (stale-ids nil))
+    (maphash (lambda (id path)
+               (when (fenrir/org-id--under-dir-p path dir-true dir-lex)
+                 (push id stale-ids)))
+             org-id-locations)
+    (dolist (id stale-ids)
+      (remhash id org-id-locations))
+    (setq org-id-files
+          (cl-remove-if (lambda (f)
+                          (fenrir/org-id--under-dir-p f dir-true dir-lex))
+                        org-id-files))
+    (dolist (entry scanned)
+      (let ((file (car entry))
+            (ids (cdr entry)))
+        (cl-pushnew file org-id-files :test #'equal)
+        (dolist (id ids)
+          (puthash id file org-id-locations))))
+    (setq org-id--locations-checksum nil)
+    (org-id-locations-save)))
+
 (defun fenrir/org-id-index-directory (dir)
   "Index the :ID: of every .org file under DIR into `org-id-locations'."
   (interactive (list (read-directory-name "Index org IDs under: ")))
   (require 'org-id)
-  (let ((files (directory-files-recursively (expand-file-name dir) "\\.org\\'")))
-    (unless files
-      (user-error "No .org files under %s" dir))
-    (org-id-update-id-locations files)
-    (message "org-id: scanned %d files under %s; %d IDs known"
-             (length files) (abbreviate-file-name dir)
-             (hash-table-count org-id-locations))))
+  (require 'cl-lib)
+  (unless org-id-track-globally
+    (error "Please turn on `org-id-track-globally' if you want to track IDs"))
+  ;; Load existing locations first so indexing one tree never clobbers others.
+  (unless org-id-locations
+    (when (and org-id-locations-file (file-exists-p org-id-locations-file))
+      (org-id-locations-load)))
+  (let* ((expanded-dir (expand-file-name dir))
+         (used-rust nil)
+         (scanned nil))
+    (when (and (stringp fenrir/org-roam-sync-program)
+               (file-executable-p fenrir/org-roam-sync-program)
+               (not (file-remote-p expanded-dir))
+               (file-directory-p expanded-dir))
+      (with-temp-buffer
+        (let ((status (condition-case nil
+                          (call-process fenrir/org-roam-sync-program
+                                        nil (list (current-buffer) nil) nil
+                                        "--dir" expanded-dir
+                                        "--emit-org-ids")
+                        (error nil))))
+          (when (eql status 0)
+            (goto-char (point-min))
+            (condition-case nil
+                (let ((parsed (read (current-buffer))))
+                  (when (listp parsed)
+                    (setq scanned parsed
+                          used-rust t)))
+              (error nil))))))
+    (if used-rust
+        (progn
+          (when (and (null scanned)
+                     (null (directory-files-recursively expanded-dir "\\.org\\'")))
+            (user-error "No .org files under %s" dir))
+          (unless org-id-locations
+            (setq org-id-locations (make-hash-table :test #'equal)))
+          (fenrir/org-id--merge-alist expanded-dir scanned)
+          (message "org-id: indexed %d files under %s via org-roam-sync; %d IDs known"
+                   (length scanned) (abbreviate-file-name dir)
+                   (hash-table-count org-id-locations)))
+      (let ((files (directory-files-recursively expanded-dir "\\.org\\'")))
+        (unless files
+          (user-error "No .org files under %s" dir))
+        (org-id-update-id-locations files)
+        (message "org-id: scanned %d files under %s; %d IDs known"
+                 (length files) (abbreviate-file-name dir)
+                 (hash-table-count org-id-locations))))))
 
 ;; --- org-index: the GNU Global :ID:/[[id:]] index -----------------------------
 ;;
@@ -369,7 +450,7 @@ CODE GTAGS root and inherits the daemon env -- disjoint roots, disjoint env."
   :ensure t
   :after org
   :bind (:map org-mode-map
-         ("C-c i" . org-download-clipboard)))
+              ("C-c i" . org-download-clipboard)))
 
 (provide 'init-org)
 ;;; init-org.el ends here

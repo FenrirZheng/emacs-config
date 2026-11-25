@@ -270,6 +270,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-diff-hl"
+version = "0.1.0"
+dependencies = [
+ "gix",
+]
+
+[[package]]
 name = "git-nested-status"
 version = "0.1.0"
 dependencies = [

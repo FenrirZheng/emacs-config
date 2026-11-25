@@ -3,27 +3,62 @@
 
 Source: =/home/fenrir/code/org-roam/codeVault/emacs/Emacs_Performance_Verified_Findings.org= (called "findings" below).
 Compared against this config on 2026-11-06, including the live daemon (=emacsclient -e=).
-Nothing below has been applied. Each item is a proposal; none is a decision.
+Items under "Not yet used" started as proposals; each heading's keyword gives its state as of 2026-11-06. The one config change applied is the removal of eglot-booster.
 
 * Not yet used
-** TODO Try =eglot-booster-io-only= mode
+** CANCELLED Try =eglot-booster-io-only= mode
+- Closed 2026-11-06: the benchmark below rules it out. =io-only= matched off within noise, with no gain to win. It does avoid the bytecode non-ASCII defect recorded below, which is an input to the removal decision, not a reason to reopen this item.
 - Findings: =:71= (some I/O buffering benefit remains in =eglot-booster-io-only= mode); =:73= (measure before keeping or adding the booster).
 - Project: =lisp/init-languages.el:345-348= (=eglot-booster-mode= runs in default bytecode mode). The comment at =lisp/init-languages.el:322-325= already names a fallback (=--disable-bytecode=) but never applies it.
 - Live daemon: =eglot-booster-io-only= is nil, =eglot-booster-mode= is t.
 - Do: only if the bytecode path feels slow on small completions. Compare against the benchmark below first; switching without a measurement is a guess.
-- Risk: the booster monkey-patches =eglot--connect= (see =_doc/GOTCHAS.md:45=); toggle off with =M-x eglot-booster-mode=.
+- Risk: moot, the booster was removed. See "eglot-booster was removed" in =_doc/GOTCHAS.md=.
 
-** TODO Benchmark the booster on Emacs 30
+** DONE Benchmark the booster on Emacs 30
 - Findings: =:73= (the "about 4x" speedup is self-reported, names no Emacs version, likely predates the Emacs 30 native JSON parser); =:102= (open question: does the booster still help on Emacs 30.x/31 on a realistic server?).
 - Project: =lisp/init-languages.el:345-348=; the config comment at =lisp/init-languages.el:317-319= already says the gain shrinks on Emacs 30 but cites no measurement.
 - Do: time the same LSP actions with the booster on and off, on a real server (gopls, rust-analyzer or tsserver; the config uses all three). Candidate actions: =consult-eglot-symbols= workspace/symbol, a large hover, workspace diagnostics.
 - Cost: one test session; do it only if LSP feels slow.
+- Status 2026-11-06: measured, and the booster was removed on this result. Decision and rollback: "eglot-booster was removed" in =_doc/GOTCHAS.md=. The =lisp/init-languages.el= line numbers above predate the removal.
 
-** TODO Use =magit-refresh-verbose= as an actual diagnostic run
+Verdict: no-win (gopls only; process-side blocking in batch, not perceived latency)
+
+Median blocked ms inside =jsonrpc--process-filter=, 30 samples per action, from =test/booster-bench.el=. Raw data, gitignored: =var/booster-bench/20261106T195321.csv=. References is the L action (off-mode reply 330714 bytes); =hover-small= is the S action (524 bytes).
+
+| mode     | rotation | references blocked | hover-small blocked | references parse | references wire bytes |
+|----------+----------+--------------------+---------------------+------------------+-----------------------|
+| off      |        1 |              1.269 |               0.092 |            0.988 |                330714 |
+| off      |        2 |              1.304 |               0.089 |            1.021 |                330714 |
+| off      |        3 |              1.256 |               0.088 |            0.986 |                330714 |
+| io-only  |        1 |              1.265 |               0.091 |            0.990 |                330714 |
+| io-only  |        2 |              1.300 |               0.090 |            1.016 |                330714 |
+| io-only  |        3 |              1.253 |               0.099 |            0.982 |                330714 |
+| bytecode |        1 |              1.782 |               0.102 |            1.653 |                127437 |
+| bytecode |        2 |              1.748 |               0.098 |            1.595 |                127437 |
+| bytecode |        3 |              1.766 |               0.100 |            1.627 |                127437 |
+
+Reported only, by the rule (20-100 KiB off-mode): largest-struct hover 24700 bytes, completion 23485, =workspace/symbol= about 32 KB.
+
+Scope:
+- Benchmark repo: 1120 Go files, 232k lines. One server, gopls v0.22.0, on Emacs 30.1.
+- Rule fixed before the run: L win needs at least 25% and at least 5 ms below off in all three rotations. Off blocked about 1.3 ms in total on this reply, so the 5 ms floor could not be met at this payload size. Larger replies were not measured.
+- Batch has no redisplay, so the verdict covers process-side blocking, not perceived latency.
+- gopls's =completionBudget= was ="0s"= in all three modes, set in the benchmark child only (live default: 100ms), so completion replies can differ from live ones.
+- The harness's target picking and connect call are Go-only. A rust-analyzer run is deferred and needs harness work first.
+- Hover and =hover-small= counts are in bytes, because in bytecode mode the same text has a different character =length=.
+
+Found on the way: in bytecode mode, non-ASCII text reaches Lisp undecoded, so hover, completion, diagnostics, symbol names and =newText= hold raw bytes when rendered or inserted. Measured in batch on 2026-11-06, not observed in the live daemon. =io-only= was not affected. Scope, mechanism and what was not tested: "eglot-booster-bytecode-unibyte" in =_doc/GOTCHAS.md=.
+
+** DONE Use =magit-refresh-verbose= as an actual diagnostic run
 - Findings: =:80= (=M-x magit-toggle-verbose-refresh= prints per-section time to =*Messages*=; more exclamation marks mean a slower section).
 - Project: =lisp/init-git.el:27-29= documents it with =(magit-refresh-verbose t)= commented out. Live daemon: =magit-refresh-verbose= is nil.
 - Do: when a Magit refresh is slow, run =M-x magit-toggle-verbose-refresh=, refresh once, read =*Messages*=, then toggle it off. Do not leave it on.
 - Do not: set =magit-refresh-status-buffer= to nil; the findings (=:82=) say that claim was refuted.
+- Result 2026-11-06, one =magit-refresh= in a batch Emacs with real =init-git=, in each repo. No item over the 200 ms line, so no tickets:
+  - =~/.emacs.d/=: total 0.190 s, buffer refresh 0.125 s. Slowest sections: =magit-insert-unstaged-changes= 0.038 s, =magit-insert-status-headers= 0.035 s, =magit-insert-unpushed-to-upstream-or-recent= 0.013 s.
+  - =~/=: total 0.110 s, buffer refresh 0.104 s. Slowest sections: =magit-insert-unstaged-changes= 0.034 s, =magit-insert-status-headers= 0.025 s, =magit-insert-untracked-files= 0.015 s.
+  - Pre-refresh hook: =magit-maybe-save-repository-buffers= under 0.001 s in both.
+  - Limits: =magit-refresh-buffer-hook= runs through plain =run-hooks= (=elpa/magit-20260506.643/magit-mode.el:1125=), so it has no per-function time; it counts in the total. Batch skips redisplay and the other config modules. The 30 buffers were the first 30 sorted tracked =.el= files, visited read-only.
 
 * Checked, nothing to change
 ** Magit refresh-hook audit (findings =:80=)
@@ -31,11 +66,10 @@ Live daemon values on 2026-11-06:
 - =magit-pre-refresh-hook=: =magit-maybe-save-repository-buffers= (Magit default).
 - =magit-post-refresh-hook=: =diff-hl-magit-post-refresh=, added deliberately at =lisp/init-git.el:614= (comment at =:612-613=: the pre-refresh half was obsoleted in diff-hl 1.11.0).
 - =magit-refresh-buffer-hook=: =magit-process-unset-mode-line-error-status= (Magit's own). The project's =fenrir/magit-hints--install= is added buffer-locally at =lisp/init-git.el:253=.
-Not measured: whether =diff-hl-magit-post-refresh= slows refreshes. The verbose run above is the way to find out.
+Measured 2026-11-06, one refresh each: diff-hl-magit-post-refresh 0.065 s with 30 diff-hl buffers in =~/.emacs.d/= (34% of a 0.190 s refresh); 0.005 s with 0 diff-hl buffers in =~/=. Details under the verbose-run heading above. A session with many more open file buffers was not measured.
 
 * Already used (no action)
 - =global-so-long-mode=: =lisp/init-defaults.el:24= (findings =:48=).
-- =eglot-booster=: =lisp/init-languages.el:345-348= (findings =:69=).
 - Startup GC pattern: =early-init.el:33-39= and =gcmh= at =lisp/init-defaults.el:163-167= (findings =:87=).
 - Built-in profiler: used ad hoc, lesson at =_doc/GOTCHAS.md:173-174= (findings =:29-36=); no config or binding.
 - =long-line-threshold= / =large-hscroll-threshold= left at defaults (50000 / 10000 live), as findings =:56= advises.

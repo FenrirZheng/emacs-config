@@ -1,0 +1,9 @@
+[package]
+name = "git-diff-hl"
+version = "0.1.0"
+edition = "2024"
+description = "Batch diff-hl VC state and hunk calculator using gix and imara-diff"
+license = "MIT"
+
+[dependencies]
+gix = { workspace = true }

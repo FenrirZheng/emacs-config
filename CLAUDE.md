@@ -155,8 +155,6 @@ One line each; the evidence is in [_doc/GOTCHAS.md](_doc/GOTCHAS.md) and
   doubling reintroduces the save-time cursor jump. `C-c f` stays manual.
 - **Eglot refactor keys stay off the `C-c o` prefix** (combobulate owns it), and
   `eglot-semantic-tokens-mode` stays a per-buffer toggle, never a global hook.
-- **`eglot-booster` advises `eglot--connect` / `jsonrpc--json-read`** — an Emacs or Eglot
-  upgrade can break it; `M-x eglot-booster-mode` toggles it off at runtime.
 - **Java deliberately runs with NO language server** — [`init-java.el`](lisp/languages/init-java.el)
   attaches no `eglot-ensure` and registers no `eglot-server-programs` entry; jdtls was
   removed for its startup stall and 3 GB heap. `M-.` is gtags (name-level, no types), and

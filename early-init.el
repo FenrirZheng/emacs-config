@@ -97,10 +97,21 @@
 (push '(menu-bar-lines . 0) default-frame-alist)
 (push '(tool-bar-lines . 0) default-frame-alist)
 (push '(vertical-scroll-bars) default-frame-alist)
-;; Start the GUI frame maximized (fills the screen, keeps the window manager's
-;; title bar / borders).  Set on `default-frame-alist' so the very first frame
-;; is born maximized -- no post-init resize flash.  No-op in a TUI.
-(push '(fullscreen . maximized) default-frame-alist)
+;; Start GUI frames in full screen (no title bar or panels).  Set on
+;; `default-frame-alist' so the very first frame is born that way -- no post-init
+;; resize flash.  No-op in a TUI.
+;;
+;; `fullscreen-restore' is what `toggle-frame-fullscreen' (F11) leaves full screen
+;; to.  Without it, F11 from a frame that started full screen drops to a small
+;; unmaximized window (fullscreen=nil, measured in Emacs 30.1).
+;;
+;; `x-frame-normalize-before-maximize' makes that restore stick.  A frame born
+;; full screen was never maximized, so on GNOME/XWayland a direct full-screen ->
+;; maximized request ends with the window manager reporting no state and a
+;; 736x648 window; asking for the normal size first gives 1920x1011 (measured).
+(push '(fullscreen . fullboth) default-frame-alist)
+(push '(fullscreen-restore . maximized) default-frame-alist)
+(setq x-frame-normalize-before-maximize t)
 
 ;; Suppress implicit frame resize when toolbar/menubar visibility changes --
 ;; saves several geometry round-trips on GUI startup.

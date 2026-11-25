@@ -1,0 +1,23 @@
+[package]
+name = "claude-jobs-scan"
+version = "0.1.0"
+edition = "2021"
+description = "Fast parallel scanner for jobctl .meta sessions, /proc liveness, Claude daemon state.json, and JSONL transcript heads, emitting one Elisp plist."
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+serde_json = "1.0"
+
+# Profiles: the rust-build-speed new-workspace scaffold.
+[profile.release]
+lto = "thin"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.quick]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true

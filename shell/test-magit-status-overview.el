@@ -74,6 +74,7 @@
           (lambda () (delete-directory tmso--state t)))
 
 (require 'magit)
+(add-to-list 'load-path (expand-file-name "lisp" tmso--root))
 (load (expand-file-name "lisp/init-git.el" tmso--root) nil t)
 
 ;;;; Fixtures

@@ -21,7 +21,7 @@
 # ---- config -------------------------------------------------------------
 HERE       := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 LIB_DIR    := $(abspath $(HERE)/../lib)
-BINS       := git-subtree-status git-nested-status
+BINS       := git-subtree-status git-nested-status git-diff-hl
 DEPLOYED   := $(addprefix $(LIB_DIR)/,$(BINS))
 SOURCES    := $(wildcard $(HERE)/*/src/*.rs) $(wildcard $(HERE)/*/Cargo.toml) \
               $(HERE)/Cargo.toml $(HERE)/Cargo.lock $(HERE)/.cargo/config.toml

@@ -1,0 +1,29 @@
+[package]
+name = "org-roam-sync"
+version = "0.1.0"
+edition = "2021"
+description = "Parallel org-roam.db (v20) and org-id-locations indexer for init-org-roam.el and init-org.el."
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+rayon = "1.12.0"
+regex = "1.13.2"
+# Disable default features (`ffi-sqlite-wasm-rs` requires uncached `sqlite-wasm-rs`);
+# keep `cache` for `prepare_cached` and link system libsqlite3 via pkg-config.
+rusqlite = { version = "0.40.2", default-features = false, features = ["cache"] }
+sha1 = "0.11.0"
+walkdir = "2.5.1"
+
+[profile.release]
+strip = true
+lto = "thin"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.quick]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true

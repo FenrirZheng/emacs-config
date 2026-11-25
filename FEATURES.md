@@ -661,17 +661,6 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   `lib/src.zip` once per JDK version, so `M-.` reaches `java.*` / `javax.*` classes;
   **`fenrir/libsrc-gc`** deletes library trees no project references that were built
   more than `fenrir/libsrc-gc-days` (60) ago, plus leftover `.tmp` build directories.
-- **eglot-booster**: routes LSP traffic through the `emacs-lsp-booster` Rust binary
-  for threaded I/O (Emacs no longer blocks waiting on the server) and JSON →
-  Elisp-bytecode pre-parse (large payloads like `consult-eglot-symbols`, gopls
-  hover on heavy structs, rust-analyzer type info — meaningfully faster even on
-  Emacs 30's already-quick native JSON parser; per-keystroke completion deltas
-  may go marginally slower). Binary built from source via
-  `cargo install --locked --version 0.2.1 emacs-lsp-booster` (lands in
-  `~/.cargo/bin/`); `--locked` pins transitive deps to the upstream `Cargo.lock`
-  so there's no compiler-supply-chain gap relative to the pre-built release.
-  Toggle at runtime via `M-x eglot-booster-mode` if anything misbehaves; package
-  itself installed via `:vc` from [jdtsmith/eglot-booster](https://github.com/jdtsmith/eglot-booster).
 - **tree-sitter** **(built-in)** via `treesit-auto`: faster, more accurate syntax through
   `*-ts-mode`. Grammars are installed on demand (`treesit-auto-install 'prompt` — it asks
   first); classic modes are remapped to their tree-sitter equivalents.
@@ -692,7 +681,7 @@ into a Vertico minibuffer listing just that prefix's bindings, filterable by typ
   Enabled in `prog-mode` buffers only — org/markdown have their own outline-navigation
   surfaces and a redundant breadcrumb would clash visually in long org buffers; toggle
   per buffer with `M-x breadcrumb-local-mode`. From GNU ELPA (same author as
-  eglot-booster and `indent-bars`).
+  `indent-bars`).
 - **flymake** **(built-in)**: on-the-fly diagnostics, fed by Eglot from the LSP. `M-n` /
   `M-p` jump to the next / previous error; the `C-c !` cluster opens the list views —
   `C-c ! l` this buffer's diagnostics (`flymake-show-buffer-diagnostics`), `C-c ! p` the
@@ -1031,8 +1020,12 @@ each key keeps the slot vc.el used, so vc muscle memory carries over. Keys marke
 `vc-edit-next-command`, and `vc-update-change-log` had no crisp Magit
 counterpart — those `C-x v` slots (`i`, `I`, `O`, `h`, `!`, `a`) are now undefined.
 
-- **diff-hl**: live added/changed/removed markers in the fringe (in `prog-mode` and
-  Dired); refreshes right after a Magit commit/stage via `magit-post-refresh`.
+- **diff-hl**: live added/changed/removed markers in the margin/fringe (every file buffer
+  via `global-diff-hl-mode`); refreshes right after a Magit commit/stage via
+  `diff-hl-magit-post-refresh`, batched across open tracked buffers by the
+  [`git-diff-hl`](rust/git-tools/git-diff-hl/README.md) helper (`make -C rust/git-tools`
+  → `rust/lib/git-diff-hl`, read-only `gix` + `imara-diff`; falls back to stock `vc-git`
+  until built).
 - **forge**: GitHub PR / Issue browsing inside Magit. Adds "Pull requests" and
   "Issues" sections to the `magit-status` buffer plus a `@` transient (e.g. `@ p l`
   fetch PRs, `@ p p` act on the PR at point, `@ a` add the repo). First-time
@@ -1235,7 +1228,10 @@ source — narrow to them with `< q`. To get a preview side panel back, add
   `:ID:` under a chosen directory into `org-id-locations`, so `[[id:...]]` links in org
   files **outside** the agenda/roam scope resolve instead of dying with "Cannot find entry
   with ID" — needed for project-local org KBs (e.g. `~/code/camhr/infra/.../kb/`). Merges
-  with the existing table; safe to re-run after adding nodes.
+  with the existing table; safe to re-run after adding nodes. Uses
+  [`org-roam-sync`](rust/org-roam-sync/README.md) (`--emit-org-ids`, built by
+  `make -C rust/org-roam-sync` into `rust/lib/`) when available, falling back to pure
+  Elisp otherwise.
 - **`M-x fenrir/org-index-rebuild`** (Tier 3, no key): rebuilds the **GNU Global**
   `:ID:`/`[[id:]]` index (`.org-index/` — a different mechanism from `org-id-locations`
   above) for the root owning the current file; `C-u` prompts for a path. Elisp twin of
@@ -1269,7 +1265,11 @@ the side-window `org-roam-buffer` shows the backlinks of whatever you're viewing
 - **First run**: `M-x my/package-refresh` → restart Emacs → `M-x org-roam-db-sync` to
   build the cache from the vault. After that, `org-roam-db-autosync-mode` keeps it
   fresh as you edit. The DB pulls in `emacsql`; Emacs 30's built-in SQLite covers it
-  with no external `sqlite3` install needed.
+  with no external `sqlite3` install needed. When
+  [`rust/lib/org-roam-sync`](rust/org-roam-sync/README.md) is built
+  (`make -C rust/org-roam-sync`), `org-roam-db-sync` delegates parallel file walking and
+  SQLite v20 updates to it, falling back to pure Elisp if unbuilt or when encrypted
+  (`.gpg`/`.age`) notes or customized hooks/predicates apply.
 - **Capture tag prompt**: the default `"d"` template runs `completing-read-multiple`
   against `(org-roam-tag-completions)` so you pick from your existing vocabulary
   instead of inventing typo-variants (`#meeting` vs `#meetings`). Empty input emits
@@ -1317,16 +1317,18 @@ aider-chat`); `vterm` ([`init-terminal.el`](lisp/init-terminal.el)). aider reads
 `GEMINI_API_KEY` from the environment — exported by the untracked `~/.profile.local`,
 harvested into the daemon by an `exec-path-from-shell-copy-env` call in the module.
 
-[`claude-jobs-view`](lisp/claude-jobs-view.el) — a `tabulated-list-mode` UI over the
-external `jobctl` CLI for persistent Claude Code background sessions: list, send a prompt,
-dispatch a new session, attach (via `vterm`), tail logs, and kill/delete, all from one
-buffer.
+[`claude-jobs-view`](lisp/claude-jobs-view.el) — a `tabulated-list-mode` UI over persistent
+Claude Code background sessions: list, send a prompt, dispatch a new session, attach (via
+`vterm`), tail logs, and kill/delete, all from one buffer. Listing and inspect (`i`) run
+the [`claude-jobs-scan`](rust/claude-jobs-scan/README.md) helper (`make -C
+rust/claude-jobs-scan` → `rust/lib/claude-jobs-scan`), falling back to `jobctl list`
+with a one-time build hint until built.
 
 | Binding | Command |
 |---------|---------|
 | `C-c j` | `claude-jobs-view` — open the session list |
 
-`:commands`-only autoload — the ~700-line module doesn't load until the first `C-c j`.
+`:commands`-only autoload — the ~1,060-line module doesn't load until the first `C-c j`.
 
 `M-x fenrir/tmux-claude-split` ([`init-tmux-claude.el`](lisp/init-tmux-claude.el)) — when
 Emacs runs inside tmux, splits the current pane left/right (the equivalent of tmux's

@@ -20,7 +20,7 @@
               dashboard devdocs diff-hl difftastic dimmer
               dired-collapse dired-narrow dired-sidebar diredfl docker
               dockerfile-mode doom-modeline doom-themes dumb-jump
-              ef-themes eglot-booster eglot-inactive-regions eglot-x
+              ef-themes eglot-inactive-regions eglot-x
               eldoc-box embark-consult envrc exec-path-from-shell
               expand-region expreg flymake-eslint fontaine forge
               frog-jump-buffer gcmh git-link git-timemachine goggles
@@ -41,8 +41,7 @@
               web-server wgrep which-key-posframe ws-butler
               yasnippet-snippets))
  '(package-vc-selected-packages
-   '((eglot-booster :url "https://github.com/jdtsmith/eglot-booster")
-     (combobulate :url "https://github.com/mickeynp/combobulate")
+   '((combobulate :url "https://github.com/mickeynp/combobulate")
      (eglot-x :url "https://github.com/nemethf/eglot-x"))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

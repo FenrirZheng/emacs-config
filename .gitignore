@@ -68,6 +68,8 @@
 /rust/question-queue-core/target/
 /rust/libsrc-classes/target/
 /rust/git-tools/target/
+/rust/claude-jobs-scan/target/
+/rust/org-roam-sync/target/
 # GNU Global index built ad-hoc inside subprojects (generated, not tracked).
 /rust/*/GTAGS
 /rust/*/GRTAGS

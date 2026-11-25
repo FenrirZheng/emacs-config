@@ -7,7 +7,7 @@
 
 [workspace]
 resolver = "3"
-members = ["git-subtree-status", "git-nested-status"]
+members = ["git-subtree-status", "git-nested-status", "git-diff-hl"]
 
 [workspace.dependencies]
 gix = { version = "0.89.0", default-features = false, features = ["max-performance-safe", "sha1", "status", "revision"] }

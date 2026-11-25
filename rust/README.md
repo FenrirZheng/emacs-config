@@ -26,8 +26,10 @@ how [cpp/](../cpp/README.md) aggregates C++ dynamic modules via
 | [`treesit-grammar-c/`](treesit-grammar-c/README.md) | ABI-14-pinned **C** tree-sitter grammar deployer (`tree-sitter-c` @ `v0.23.6`; parser-only) | `make -C treesit-grammar-c` |
 | [`treesit-grammar-lua/`](treesit-grammar-lua/README.md) | ABI-14-pinned **Lua** tree-sitter grammar deployer (`tree-sitter-lua` @ `v0.3.0`; has `scanner.c`) | `make -C treesit-grammar-lua` |
 | [`question-queue-core/`](question-queue-core/README.md) | Emacs **dynamic module** (raw emacs-module ABI via bindgen): assemble a region+question markdown file, atomically drop it into a question-queue `input/` dir, parse the answer back. Front-end: [`lisp/question-queue.el`](../lisp/question-queue.el) | `make -C question-queue-core` |
-| [`git-tools/`](git-tools/README.md) | **Cargo workspace of git helper binaries** (gix, read-only, never run `git`), one `Cargo.lock` and one `target/`; deploys one bin per member. [`git-subtree-status/`](git-tools/git-subtree-status/README.md): find the git subtrees of a repo from their trailers and report which changed — uncommitted, since a revision, against an upstream ref — as porcelain. Run by [`lisp/fenrir-magit-subtree.el`](../lisp/fenrir-magit-subtree.el) for the Magit Subtrees section and `l S`; also a terminal CLI (`git subtree-status`). [`git-nested-status/`](git-tools/git-nested-status/README.md): list the independent clones nested inside a repo (subdirectories with their own `.git`, such as yeeya's `repos/*`) with branch, ahead/behind and staged/unstaged/untracked counts, for the Magit **Nested repos** section ([`lisp/fenrir-magit-nested.el`](../lisp/fenrir-magit-nested.el)); also `git nested-status` | `make -C git-tools` |
+| [`git-tools/`](git-tools/README.md) | **Cargo workspace of git helper binaries** (gix, read-only, never run `git`), one `Cargo.lock` and one `target/`; deploys one bin per member. [`git-subtree-status/`](git-tools/git-subtree-status/README.md): find the git subtrees of a repo from their trailers and report which changed — uncommitted, since a revision, against an upstream ref — as porcelain. Run by [`lisp/fenrir-magit-subtree.el`](../lisp/fenrir-magit-subtree.el) for the Magit Subtrees section and `l S`; also a terminal CLI (`git subtree-status`). [`git-nested-status/`](git-tools/git-nested-status/README.md): list the independent clones nested inside a repo (subdirectories with their own `.git`, such as yeeya's `repos/*`) with branch, ahead/behind and staged/unstaged/untracked counts, for the Magit **Nested repos** section ([`lisp/fenrir-magit-nested.el`](../lisp/fenrir-magit-nested.el)); also `git nested-status`. [`git-diff-hl/`](git-tools/git-diff-hl/README.md): batch `vc-git` file states and `diff-hl` `(line inserts deletes type)` hunks across open tracked buffers via `gix::diff::blob` (`imara-diff`). Run by [`lisp/init-git.el`](../lisp/init-git.el) on `diff-hl-magit-post-refresh` | `make -C git-tools` |
 | [`libsrc-classes/`](libsrc-classes/README.md) | **Helper binary** (cargo bin, `zip` crate): read every jar's zip directory and print simple class name → `g:a:v` as one Lisp form. Run by [`lisp/languages/fenrir-libsrc.el`](../lisp/languages/fenrir-libsrc.el) for `C-c g l` | `make -C libsrc-classes` |
+| [`claude-jobs-scan/`](claude-jobs-scan/README.md) | **Helper binary** (cargo bin, `serde_json` crate): parallel scan of `$JOBCTL_STATE/*.meta`, `/proc/<pid>/cmdline`, `~/.claude/jobs/*/state.json`, and `~/.claude/projects/` JSONL heads, emitting one Elisp plist. Run by [`lisp/claude-jobs-view.el`](../lisp/claude-jobs-view.el) for `M-x claude-jobs-view` and `i` inspect | `make -C claude-jobs-scan` |
+| [`org-roam-sync/`](org-roam-sync/README.md) | **Helper binary** (cargo bin, `walkdir` / `rayon` / `rusqlite` linking system `libsqlite3`): parallel `.org` indexer updating `org-roam.db` (schema v20) and `org-id-locations`. Run by [`lisp/init-org-roam.el`](../lisp/init-org-roam.el) (`org-roam-db-sync`) and [`lisp/init-org.el`](../lisp/init-org.el) (`fenrir/org-id-index-directory`) | `make -C org-roam-sync` |
 
 > Why three near-identical grammar Makefiles instead of one parameterized build:
 > each subproject is self-contained per this workspace's convention, and they
@@ -42,7 +44,7 @@ how [cpp/](../cpp/README.md) aggregates C++ dynamic modules via
 rust/
 ├── README.md          # this file (tracked)
 ├── Makefile           # aggregator: forwards targets to each subproject (tracked)
-├── lib/               # deployed modules + helpers: question-queue-core.so, libsrc-classes, git-tools' bins (gitignored)
+├── lib/               # deployed modules + helpers: question-queue-core.so, libsrc-classes, claude-jobs-scan, org-roam-sync, git-tools' bins (gitignored)
 ├── treesit-grammar/        # Rust grammar deployer — see its own README
 │   ├── Makefile / README.md
 │   ├── tree-sitter-rust/   # cloned upstream grammar source (gitignored)
@@ -63,10 +65,20 @@ rust/
 │   ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile (tracked)
 │   ├── src/                # lib.rs (rules + output) / main.rs (tracked)
 │   └── target/             # cargo build dir (gitignored)
+├── claude-jobs-scan/       # cargo bin helper for claude-jobs-view — see its own README
+│   ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile / README.md (tracked)
+│   ├── src/                # lib.rs / main.rs (tracked)
+│   ├── tests/              # integration.rs (tracked)
+│   └── target/             # cargo build dir (gitignored)
+├── org-roam-sync/          # cargo bin helper for org-roam & org-id — see its own README
+│   ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile / README.md (tracked)
+│   ├── src/                # main.rs / lib.rs / parser.rs / db.rs / sexpr.rs (tracked)
+│   └── target/             # cargo build dir (gitignored)
 └── git-tools/              # cargo WORKSPACE of git helper bins — see its own README
     ├── Cargo.toml / Cargo.lock / .cargo/config.toml / Makefile / README.md (tracked)
     ├── git-subtree-status/ # member: Cargo.toml / README.md / src/main.rs (tracked)
     ├── git-nested-status/  # member: Cargo.toml / README.md / src/main.rs / tests/*.sh (tracked)
+    ├── git-diff-hl/        # member: Cargo.toml / README.md / src/main.rs / tests/cli.rs (tracked)
     └── target/             # one cargo build dir for every member (gitignored)
 ```
 

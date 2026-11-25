@@ -59,7 +59,7 @@ MELPA. **Built-ins must say `:ensure nil`** (`project`, `flymake`, `ibuffer`, `r
 the built-in.
 
 GitHub-only packages use `use-package`'s `:vc` keyword (Emacs 30 native
-`package-vc-install`; no straight.el / quelpa) — see `eglot-booster` and `combobulate` in
+`package-vc-install`; no straight.el / quelpa) — see `combobulate` in
 [`init-languages.el`](../lisp/init-languages.el). The pinned URLs are recorded in
 [`custom.el`](../custom.el) under `package-vc-selected-packages` so a fresh clone
 reproduces the same fetch. Update later with `M-x package-vc-upgrade RET <name> RET`.
@@ -92,8 +92,7 @@ Two load-bearing quirks:
 
 Side effect: installing Eglot 1.23 also pulls `flymake` 1.4.5 into `elpa/` as a dependency,
 which then shadows the built-in `flymake` even though its `use-package` block still says
-`:ensure nil` — benign (the block just configures the newer copy). eglot-booster's
-`eglot--connect` / `jsonrpc--json-read` advice was verified to still apply against 1.23.
+`:ensure nil` — benign (the block just configures the newer copy).
 
 ## Reload / rebuild
 

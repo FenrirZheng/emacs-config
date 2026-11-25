@@ -64,8 +64,7 @@
 
 ;; indent-bars: vertical indentation guides (the VSCode "indent rainbow" /
 ;; JetBrains indent guides).  Crucial for indentation-structured code (Python,
-;; YAML) and still useful for brace languages.  Same author as breadcrumb /
-;; eglot-booster.
+;; YAML) and still useful for brace languages.  Same author as breadcrumb.
 ;;
 ;; TTY-critical knobs:
 ;;   * `indent-bars-prefer-character' t -- the default renders bars with a

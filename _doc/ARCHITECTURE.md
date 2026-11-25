@@ -94,7 +94,7 @@ module rather than here: `vterm-toggle` in [`init-terminal.el`](../lisp/init-ter
 ## `init-languages.el` vs. `lisp/languages/`
 
 [`lisp/init-languages.el`](../lisp/init-languages.el) holds **only** the
-language-agnostic infrastructure: project.el, envrc, the Eglot core block, eglot-booster,
+language-agnostic infrastructure: project.el, envrc, the Eglot core block,
 consult-eglot, xref, breadcrumb, eldoc routing, the combobulate package declaration,
 treesit-auto, flymake, sideline, apheleia, dape. The GNU Global stack (gtags-mode xref
 fallback, `C-c g` index management, daemon-wide `GTAGSCONF`/`GTAGSLABEL`) lives in the
