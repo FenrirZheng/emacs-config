@@ -21,7 +21,7 @@
 ;; claude-open -- open files a Claude Code session mentions (rg hits, stack
 ;; frames, compiler errors) in THIS daemon at the right line, preferring the GUI
 ;; frame.  Source: lisp/claude-open.el, distributed by the `emacs-open' skill
-;; (~/code/fenrir-claude-plugin/fenrir-editors-and-browser/skills/emacs-open/references/claude-open.el is upstream; the
+;; (~/code/fenrir-claude-plugin/fenrir-emacs/skills/emacs-open/references/claude-open.el is upstream; the
 ;; skill probes `claude-open-version' for drift).
 ;; `:demand t' rather than the lazy `:commands' used above ON PURPOSE: the entry
 ;; point is reached by `emacsclient -e (claude-open-from-file ...)', a
