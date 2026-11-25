@@ -275,7 +275,8 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
       ("g" "Magit status"        magit-status)
       ("d" "Magit dispatch"      magit-dispatch)
       ("f" "File dispatch"       magit-file-dispatch)
-      ("D" "Difftastic diff"     difftastic-magit-diff)]
+      ("D" "Difftastic diff"     difftastic-magit-diff)
+      ("W" "Repos under dir"     fenrir/magit-nested-list)]
      ["History of this file"
       ("b" "Blame"               magit-blame)
       ("B" "Inline blame toggle" blamer-mode)

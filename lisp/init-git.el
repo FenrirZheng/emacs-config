@@ -1032,6 +1032,7 @@ the definition before the `add-hook' references it."
 (autoload 'fenrir/magit-subtree-commits "fenrir-magit-subtree" nil t)
 (autoload 'fenrir/magit-subtree-log "fenrir-magit-subtree" nil t)
 (autoload 'fenrir/magit-subtree-file-log "fenrir-magit-subtree" nil t)
+(autoload 'fenrir/magit-nested-list "fenrir-magit-nested" nil t)
 
 (provide 'init-git)
 ;;; init-git.el ends here

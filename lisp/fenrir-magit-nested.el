@@ -28,6 +28,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'tabulated-list)
 ;; Loaded after Magit (see init-git.el); `magit-insert-section' is a macro, so
 ;; Magit must be present when this file is read.
 (require 'magit)
@@ -58,6 +59,12 @@ Until then the Nested repos section stays absent, with a one-time hint."
   "Repository toplevels never scanned for nested clones.
 $HOME is one: the dotfiles repo's working tree holds about 100 clones."
   :type '(repeat directory))
+
+(defcustom fenrir/magit-nested-list-depth 4
+  "Default directory scan depth for `fenrir/magit-nested-list'.
+Can be adjusted interactively inside the `*git-projects*' buffer with
+`D', `+', and `-'."
+  :type 'natnum)
 
 (defvar fenrir/magit-nested--none (make-hash-table :test #'equal)
   "Toplevels where the helper found no nested clone this session.")
@@ -235,6 +242,267 @@ repository, so Magit's stage/unstage commands must not act on it."
                           (propertize (cdr f) 'font-lock-face 'magit-filename)
                           "\n"))))))
         (insert "\n")))))
+
+;;;; Interactive project list (`<f5> g W')
+
+(defvar-local fenrir/magit-nested-list--dir nil
+  "Root directory currently scanned in this `*git-projects*' buffer.")
+
+(defvar-local fenrir/magit-nested-list--depth nil
+  "Scan depth currently used in this `*git-projects*' buffer.")
+
+(defvar-local fenrir/magit-nested-list--rows nil
+  "All parsed row plists from the last `git-nested-status' run.")
+
+(defvar-local fenrir/magit-nested-list--changed-only nil
+  "When non-nil, show only projects with a change.")
+
+(defvar-local fenrir/magit-nested-list--filter nil
+  "Optional regexp filtering displayed projects by path or branch.")
+
+(defun fenrir/magit-nested--rows-in-dir (dir &optional depth)
+  "Scan DIR directly for nested git projects up to DEPTH levels down.
+Uses `git-nested-status --dir' so DIR need not be a git repository."
+  (let* ((expanded (file-name-as-directory (expand-file-name dir)))
+         (depth (or depth fenrir/magit-nested-list-depth))
+         (program (or (executable-find fenrir/magit-nested-program)
+                      (user-error "Nested repos: %s is not built -- run: make -C %s"
+                                  fenrir/magit-nested-program
+                                  (expand-file-name "rust/git-tools" user-emacs-directory)))))
+    (unless (file-directory-p expanded)
+      (user-error "Not a directory: %s" expanded))
+    (with-temp-buffer
+      (let* ((default-directory expanded)
+             (status (process-file program nil '(t t) nil
+                                   "--dir" expanded
+                                   "--depth" (number-to-string depth)
+                                   "--porcelain")))
+        (unless (eq status 0)
+          (user-error "git-nested-status failed: %s" (string-trim (buffer-string))))
+        (fenrir/magit-nested--parse (buffer-string))))))
+
+(defun fenrir/magit-nested-list--state-label (row)
+  "Compact, propertized state summary for ROW."
+  (let* ((staged (or (plist-get row :staged) 0))
+         (unstaged (or (plist-get row :unstaged) 0))
+         (untracked (or (plist-get row :untracked) 0))
+         (ahead (or (plist-get row :ahead) 0))
+         (behind (or (plist-get row :behind) 0))
+         (parts (delq nil
+                      (list (when (> staged 0) (format "S:%d" staged))
+                            (when (> unstaged 0) (format "U:%d" unstaged))
+                            (when (> untracked 0) (format "?:%d" untracked))
+                            (when (> ahead 0) (format "↑%d" ahead))
+                            (when (> behind 0) (format "↓%d" behind))
+                            (when (fenrir/magit-nested--detached-p row) "detached")))))
+    (if parts
+        (propertize (string-join parts " ")
+                    'face (if (or (> staged 0) (> unstaged 0) (> untracked 0))
+                              'warning
+                            'font-lock-keyword-face))
+      (propertize "clean" 'face 'success))))
+
+(defun fenrir/magit-nested-list--upstream-label (row)
+  "Upstream tracking ref for ROW, or a shadowed dash."
+  (if-let* ((u (plist-get row :upstream)))
+      u
+    (propertize "-" 'face 'shadow)))
+
+(defun fenrir/magit-nested-list--visible-rows (rows changed-only filter)
+  "Filter ROWS according to CHANGED-ONLY and regexp FILTER."
+  (seq-filter
+   (lambda (row)
+     (and (or (not changed-only) (fenrir/magit-nested--changed-p row))
+          (or (null filter)
+              (string-empty-p filter)
+              (let ((case-fold-search t))
+                (or (string-match-p filter (or (plist-get row :path) ""))
+                    (string-match-p filter (or (plist-get row :branch) "")))))))
+   rows))
+
+(defun fenrir/magit-nested-list--to-entry (row)
+  "Convert ROW plist into a `tabulated-list-entries' element."
+  (let ((path (plist-get row :path)))
+    (list path
+          (vector (propertize path 'face 'magit-filename)
+                  (fenrir/magit-nested--branch-label row)
+                  (fenrir/magit-nested-list--state-label row)
+                  (fenrir/magit-nested-list--upstream-label row)))))
+
+(defun fenrir/magit-nested-list--update-mode-line (visible total changed)
+  "Update mode-line metadata for the `*git-projects*' buffer."
+  (let* ((dir-short (abbreviate-file-name fenrir/magit-nested-list--dir))
+         (filt (concat (when fenrir/magit-nested-list--changed-only " changed")
+                       (when (and fenrir/magit-nested-list--filter
+                                  (not (string-empty-p fenrir/magit-nested-list--filter)))
+                         (format " /%s/" fenrir/magit-nested-list--filter)))))
+    (setq mode-line-process
+          (format " [%s | depth:%d | %d/%d (%d chg)%s | D/+/-:depth d:dir c:chg /:filter RET:magit o:dired]"
+                  dir-short fenrir/magit-nested-list--depth visible total changed filt))
+    (force-mode-line-update)))
+
+(defun fenrir/magit-nested-list--render ()
+  "Render `fenrir/magit-nested-list--rows' into the current tabulated list."
+  (let* ((all fenrir/magit-nested-list--rows)
+         (changed (length (seq-filter #'fenrir/magit-nested--changed-p all)))
+         (visible (fenrir/magit-nested-list--visible-rows
+                   all
+                   fenrir/magit-nested-list--changed-only
+                   fenrir/magit-nested-list--filter))
+         (pwidth (min 56 (max 28 (if visible
+                                     (apply #'max (mapcar (lambda (r) (length (plist-get r :path))) visible))
+                                   28))))
+         (bwidth (min 32 (max 14 (if visible
+                                     (apply #'max (mapcar (lambda (r) (length (fenrir/magit-nested--branch-label r))) visible))
+                                   14)))))
+    (setq tabulated-list-format
+          (vector (list "Project" pwidth t)
+                  (list "Branch" bwidth t)
+                  (list "State" 20 t)
+                  (list "Upstream" 28 t)))
+    (tabulated-list-init-header)
+    (setq tabulated-list-entries (mapcar #'fenrir/magit-nested-list--to-entry visible))
+    (tabulated-list-print t)
+    (fenrir/magit-nested-list--update-mode-line (length visible) (length all) changed)))
+
+(defun fenrir/magit-nested-list--current-dir ()
+  "Return the absolute directory of the project at point."
+  (let ((rel (tabulated-list-get-id)))
+    (unless rel
+      (user-error "No git project at point"))
+    (file-name-as-directory (expand-file-name rel fenrir/magit-nested-list--dir))))
+
+(defun fenrir/magit-nested-list-open-magit ()
+  "Open `magit-status' for the git project at point."
+  (interactive)
+  (magit-status-setup-buffer (fenrir/magit-nested-list--current-dir)))
+
+(defun fenrir/magit-nested-list-open-dired ()
+  "Open `dired' in the git project at point."
+  (interactive)
+  (dired (fenrir/magit-nested-list--current-dir)))
+
+(defun fenrir/magit-nested-list-find-file ()
+  "Find a file inside the git project at point."
+  (interactive)
+  (let ((default-directory (fenrir/magit-nested-list--current-dir)))
+    (call-interactively #'find-file)))
+
+(defun fenrir/magit-nested-list-refresh ()
+  "Re-run `git-nested-status' for the current directory and depth."
+  (interactive)
+  (setq fenrir/magit-nested-list--rows
+        (fenrir/magit-nested--rows-in-dir fenrir/magit-nested-list--dir
+                                          fenrir/magit-nested-list--depth))
+  (fenrir/magit-nested-list--render)
+  (message "Git projects under %s (depth %d): %d found, %d changed"
+           (abbreviate-file-name fenrir/magit-nested-list--dir)
+           fenrir/magit-nested-list--depth
+           (length fenrir/magit-nested-list--rows)
+           (length (seq-filter #'fenrir/magit-nested--changed-p fenrir/magit-nested-list--rows))))
+
+(defun fenrir/magit-nested-list-set-depth (depth)
+  "Set scan DEPTH for this buffer and re-scan."
+  (interactive
+   (list (read-number (format "Scan depth (current %d): "
+                              (or fenrir/magit-nested-list--depth
+                                  fenrir/magit-nested-list-depth))
+                      (or fenrir/magit-nested-list--depth
+                          fenrir/magit-nested-list-depth))))
+  (when (< depth 1)
+    (user-error "Scan depth must be at least 1"))
+  (setq fenrir/magit-nested-list--depth (truncate depth))
+  (fenrir/magit-nested-list-refresh))
+
+(defun fenrir/magit-nested-list-increase-depth ()
+  "Increase scan depth by 1 and re-scan."
+  (interactive)
+  (setq fenrir/magit-nested-list--depth
+        (1+ (or fenrir/magit-nested-list--depth fenrir/magit-nested-list-depth)))
+  (fenrir/magit-nested-list-refresh))
+
+(defun fenrir/magit-nested-list-decrease-depth ()
+  "Decrease scan depth by 1 (minimum 1) and re-scan."
+  (interactive)
+  (let ((cur (or fenrir/magit-nested-list--depth fenrir/magit-nested-list-depth)))
+    (when (<= cur 1)
+      (user-error "Scan depth is already at minimum (1)"))
+    (setq fenrir/magit-nested-list--depth (1- cur))
+    (fenrir/magit-nested-list-refresh)))
+
+(defun fenrir/magit-nested-list-set-dir (dir)
+  "Change the scanned root DIR and re-scan."
+  (interactive
+   (list (read-directory-name "Scan git projects under: "
+                              (or fenrir/magit-nested-list--dir default-directory))))
+  (setq fenrir/magit-nested-list--dir (file-name-as-directory (expand-file-name dir))
+        default-directory fenrir/magit-nested-list--dir)
+  (fenrir/magit-nested-list-refresh))
+
+(defun fenrir/magit-nested-list-toggle-changed ()
+  "Toggle between showing all projects and changed projects only."
+  (interactive)
+  (setq fenrir/magit-nested-list--changed-only
+        (not fenrir/magit-nested-list--changed-only))
+  (fenrir/magit-nested-list--render))
+
+(defun fenrir/magit-nested-list-filter (regexp)
+  "Filter displayed projects by REGEXP (empty string clears the filter)."
+  (interactive
+   (list (read-string "Filter projects (regexp, empty clears): "
+                      fenrir/magit-nested-list--filter)))
+  (setq fenrir/magit-nested-list--filter (if (string-empty-p regexp) nil regexp))
+  (fenrir/magit-nested-list--render))
+
+(defvar-keymap fenrir/magit-nested-list-mode-map
+  :doc "Keymap for `fenrir/magit-nested-list-mode'."
+  :parent tabulated-list-mode-map
+  "RET" #'fenrir/magit-nested-list-open-magit
+  "o"   #'fenrir/magit-nested-list-open-dired
+  "f"   #'fenrir/magit-nested-list-find-file
+  "D"   #'fenrir/magit-nested-list-set-depth
+  "+"   #'fenrir/magit-nested-list-increase-depth
+  "="   #'fenrir/magit-nested-list-increase-depth
+  "-"   #'fenrir/magit-nested-list-decrease-depth
+  "d"   #'fenrir/magit-nested-list-set-dir
+  "c"   #'fenrir/magit-nested-list-toggle-changed
+  "/"   #'fenrir/magit-nested-list-filter
+  "g"   #'fenrir/magit-nested-list-refresh)
+
+(define-derived-mode fenrir/magit-nested-list-mode tabulated-list-mode "GitProjects"
+  "Major mode for browsing nested git projects under a directory.
+
+\\{fenrir/magit-nested-list-mode-map}"
+  (setq tabulated-list-padding 2
+        tabulated-list-sort-key '("Project" . nil))
+  (hl-line-mode 1))
+
+;;;###autoload
+(defun fenrir/magit-nested-list (&optional dir depth)
+  "List all git projects under DIR in an interactive `*git-projects*' buffer.
+Without a prefix argument, scans the current git toplevel (or `default-directory'
+when outside a git repository).  With `C-u', prompts for DIR.
+DEPTH defaults to `fenrir/magit-nested-list-depth' (4) and can be adjusted
+live inside the buffer with `D', `+', and `-'."
+  (interactive
+   (list (when current-prefix-arg
+           (read-directory-name "Scan git projects under: " default-directory))))
+  (let* ((root (file-name-as-directory
+                (expand-file-name (or dir
+                                      (ignore-errors (magit-toplevel))
+                                      default-directory))))
+         (buf (get-buffer-create "*git-projects*")))
+    (pop-to-buffer-same-window buf)
+    (unless (derived-mode-p 'fenrir/magit-nested-list-mode)
+      (fenrir/magit-nested-list-mode))
+    (setq fenrir/magit-nested-list--dir root
+          default-directory root
+          fenrir/magit-nested-list--depth (or depth
+                                              fenrir/magit-nested-list--depth
+                                              fenrir/magit-nested-list-depth)
+          fenrir/magit-nested-list--changed-only nil
+          fenrir/magit-nested-list--filter nil)
+    (fenrir/magit-nested-list-refresh)))
 
 ;;;; Wiring
 

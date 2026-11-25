@@ -23,18 +23,23 @@ type Res<T> = Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
 const USAGE: &str = "\
 usage: git-nested-status [options]
 
-  -C <dir>        run in <dir> (the umbrella repository) instead of the current directory
-  --depth <n>     look <n> directory levels down for clones (0 = none); overrides the
-                  git config nested.depth, whose default is 2
-  --files         after each clone's row, list its uncommitted paths (porcelain: F lines)
-  --all           list every clone in the table, not only those with a change
-  --porcelain     tab-separated output for scripts (format below); lists every clone
-  --exit-code     exit 1 if any clone has a change
-  -h, --help      this help
-  -V, --version   print the version
+  -C <dir>             run in <dir> (the umbrella repository) instead of the current directory
+  --dir <dir>          scan <dir> directly without requiring it to be a git repository
+                       (default depth 4; cannot be combined with -C)
+  --depth <n>          look <n> directory levels down for clones (0 = none); overrides
+                       nested.depth (default 2 with -C, 4 with --dir)
+  --no-default-ignore  do not skip hidden dot-directories or build/vendor dirs while walking
+  --files              after each clone's row, list its uncommitted paths (porcelain: F lines)
+  --all                list every clone in the table, not only those with a change
+  --porcelain          tab-separated output for scripts (format below); lists every clone
+  --exit-code          exit 1 if any clone has a change
+  -h, --help           this help
+  -V, --version        print the version
 
 A clone is a subdirectory with its own .git (directory or file). It is opened at that
-path, never found by walking upward, and nothing inside a clone is searched. Where to look
+path, never found by walking upward, and nothing inside a clone is searched. By default,
+hidden directories (.*) and build/vendor directories (target, build, node_modules, _deps,
+dist, out, vendor, __pycache__) are skipped during traversal. In -C mode, where to look
 is read from the umbrella's git config:
   git config nested.depth <n>          levels below the toplevel (default 2: */ and */*/)
   git config --add nested.path <dir>   only the immediate children of <dir> (repeatable)
@@ -49,10 +54,23 @@ or its HEAD is detached. A clone with no upstream is not a change by itself.
   F  kind  file          (with --files; kind is staged, unstaged or untracked)
 ";
 
+const DEFAULT_IGNORED_DIRS: &[&str] = &[
+    "target",
+    "build",
+    "node_modules",
+    "_deps",
+    "dist",
+    "out",
+    "vendor",
+    "__pycache__",
+];
+
 #[derive(Default)]
 struct Opts {
     dir: Option<PathBuf>,
+    scan_dir: Option<PathBuf>,
     depth: Option<usize>,
+    no_default_ignore: bool,
     files: bool,
     all: bool,
     porcelain: bool,
@@ -66,10 +84,12 @@ fn parse_args() -> Opts {
         let mut value = |name: &str| args.next().unwrap_or_else(|| die(&format!("{name} needs a value")));
         match a.as_str() {
             "-C" => o.dir = Some(PathBuf::from(value("-C"))),
+            "--dir" => o.scan_dir = Some(PathBuf::from(value("--dir"))),
             "--depth" => {
                 let v = value("--depth");
                 o.depth = Some(v.parse().unwrap_or_else(|_| die(&format!("--depth: '{v}' is not a number"))));
             }
+            "--no-default-ignore" => o.no_default_ignore = true,
             "--files" => o.files = true,
             "--all" => o.all = true,
             "--porcelain" => o.porcelain = true,
@@ -84,6 +104,9 @@ fn parse_args() -> Opts {
             }
             _ => die(&format!("unknown argument: {a}\n\n{USAGE}")),
         }
+    }
+    if o.dir.is_some() && o.scan_dir.is_some() {
+        die("--dir and -C cannot be used together");
     }
     o
 }
@@ -124,15 +147,27 @@ fn is_clone(dir: &Path) -> bool {
     dir.join(".git").exists()
 }
 
+/// Whether a directory name should be skipped during traversal.
+fn should_skip_dir(name: &std::ffi::OsStr, default_ignore: bool) -> bool {
+    if name == ".git" {
+        return true;
+    }
+    if !default_ignore {
+        return false;
+    }
+    let s = name.to_string_lossy();
+    s.starts_with('.') || DEFAULT_IGNORED_DIRS.contains(&s.as_ref())
+}
+
 /// Clones under `root`, as paths relative to it, sorted. Symlinked directories and `.git`
 /// entries are skipped; unreadable directories are skipped silently.
-fn discover(root: &Path, scope: &Scope) -> Vec<PathBuf> {
+fn discover(root: &Path, scope: &Scope, default_ignore: bool) -> Vec<PathBuf> {
     let mut out = Vec::new();
     match scope {
-        Scope::Depth(n) => walk(root, Path::new(""), *n, &mut out),
+        Scope::Depth(n) => walk(root, Path::new(""), *n, default_ignore, &mut out),
         Scope::Paths(paths) => {
             for p in paths {
-                walk(&root.join(p), p, 1, &mut out);
+                walk(&root.join(p), p, 1, default_ignore, &mut out);
             }
         }
     }
@@ -141,14 +176,14 @@ fn discover(root: &Path, scope: &Scope) -> Vec<PathBuf> {
     out
 }
 
-fn walk(dir: &Path, rel: &Path, levels: usize, out: &mut Vec<PathBuf>) {
+fn walk(dir: &Path, rel: &Path, levels: usize, default_ignore: bool, out: &mut Vec<PathBuf>) {
     if levels == 0 {
         return;
     }
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let name = entry.file_name();
-        if name == ".git" {
+        if should_skip_dir(&name, default_ignore) {
             continue;
         }
         // symlink_metadata: a symlinked directory is skipped, it may point anywhere.
@@ -161,7 +196,7 @@ fn walk(dir: &Path, rel: &Path, levels: usize, out: &mut Vec<PathBuf>) {
         if is_clone(&path) {
             out.push(rel);
         } else {
-            walk(&path, &rel, levels - 1, out);
+            walk(&path, &rel, levels - 1, default_ignore, out);
         }
     }
 }
@@ -399,6 +434,15 @@ fn print_table(out: &mut impl Write, rows: &[&Row], files: bool) -> std::io::Res
 }
 
 fn run(o: &Opts) -> Res<Vec<Row>> {
+    let default_ignore = !o.no_default_ignore;
+    if let Some(root) = &o.scan_dir {
+        if !root.is_dir() {
+            return Err(format!("{}: not a directory", root.display()).into());
+        }
+        let depth = o.depth.unwrap_or(4);
+        let clones = discover(root, &Scope::Depth(depth), default_ignore);
+        return Ok(inspect_all(root, &clones));
+    }
     let repo = gix::discover(o.dir.as_deref().unwrap_or(Path::new(".")))?;
     let root = repo.workdir().ok_or("the umbrella repository is bare")?.to_path_buf();
     let cfg = repo.config_snapshot();
@@ -412,7 +456,7 @@ fn run(o: &Opts) -> Res<Vec<Row>> {
         .collect();
     drop(cfg);
     let scope = scope(o.depth, cfg_depth, cfg_paths);
-    let clones = discover(&root, &scope);
+    let clones = discover(&root, &scope, default_ignore);
     Ok(inspect_all(&root, &clones))
 }
 
@@ -467,10 +511,10 @@ mod tests {
         std::fs::create_dir_all(root.join("repos/plain")).unwrap();
         std::fs::write(root.join("repos/plain/file"), "x").unwrap();
         std::fs::create_dir_all(root.join(".git/modules")).unwrap(); // the umbrella's own .git
-        assert_eq!(rels(&discover(&root, &Scope::Depth(2))), ["a", "repos/b"]);
-        assert_eq!(rels(&discover(&root, &Scope::Depth(3))), ["a", "deep/x/y", "repos/b"]);
-        assert_eq!(rels(&discover(&root, &Scope::Depth(1))), ["a"]);
-        assert!(discover(&root, &Scope::Depth(0)).is_empty());
+        assert_eq!(rels(&discover(&root, &Scope::Depth(2), true)), ["a", "repos/b"]);
+        assert_eq!(rels(&discover(&root, &Scope::Depth(3), true)), ["a", "deep/x/y", "repos/b"]);
+        assert_eq!(rels(&discover(&root, &Scope::Depth(1), true)), ["a"]);
+        assert!(discover(&root, &Scope::Depth(0), true).is_empty());
     }
 
     #[test]
@@ -478,7 +522,7 @@ mod tests {
         let root = scratch("nodescend");
         mk_clone(&root, "a");
         mk_clone(&root, "a/vendor/lib"); // a clone inside a clone: the outer one owns it
-        assert_eq!(rels(&discover(&root, &Scope::Depth(5))), ["a"]);
+        assert_eq!(rels(&discover(&root, &Scope::Depth(5), true)), ["a"]);
     }
 
     #[test]
@@ -486,7 +530,7 @@ mod tests {
         let root = scratch("gitfile");
         std::fs::create_dir_all(root.join("repos/wt")).unwrap();
         std::fs::write(root.join("repos/wt/.git"), "gitdir: /elsewhere/.git/worktrees/wt\n").unwrap();
-        assert_eq!(rels(&discover(&root, &Scope::Depth(2))), ["repos/wt"]);
+        assert_eq!(rels(&discover(&root, &Scope::Depth(2), true)), ["repos/wt"]);
     }
 
     #[test]
@@ -496,9 +540,9 @@ mod tests {
         mk_clone(&root, "deep/x/y");
         mk_clone(&root, "deep/z");
         let sc = Scope::Paths(vec![PathBuf::from("deep/x"), PathBuf::from("missing")]);
-        assert_eq!(rels(&discover(&root, &sc)), ["deep/x/y"]);
+        assert_eq!(rels(&discover(&root, &sc, true)), ["deep/x/y"]);
         let sc = Scope::Paths(vec![PathBuf::from("deep")]);
-        assert_eq!(rels(&discover(&root, &sc)), ["deep/z"]);
+        assert_eq!(rels(&discover(&root, &sc, true)), ["deep/z"]);
     }
 
     #[cfg(unix)]
@@ -507,7 +551,35 @@ mod tests {
         let root = scratch("symlink");
         mk_clone(&root, "real");
         std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
-        assert_eq!(rels(&discover(&root, &Scope::Depth(2))), ["real"]);
+        assert_eq!(rels(&discover(&root, &Scope::Depth(2), true)), ["real"]);
+    }
+
+    #[test]
+    fn default_ignore_skips_dot_and_build_dirs() {
+        let root = scratch("ignore");
+        mk_clone(&root, "repos/app");
+        mk_clone(&root, ".hidden/sub");
+        mk_clone(&root, "tools/build/release/_deps/catch2-src");
+        mk_clone(&root, "target/dep");
+        mk_clone(&root, "node_modules/pkg");
+        assert_eq!(rels(&discover(&root, &Scope::Depth(6), true)), ["repos/app"]);
+        assert_eq!(
+            rels(&discover(&root, &Scope::Depth(6), false)),
+            [".hidden/sub", "node_modules/pkg", "repos/app", "target/dep", "tools/build/release/_deps/catch2-src"]
+        );
+    }
+
+    #[test]
+    fn scan_dir_works_without_enclosing_git_repo() {
+        let root = scratch("scandir");
+        gix::init(root.join("group/svc")).unwrap();
+        let o = Opts {
+            scan_dir: Some(root.clone()),
+            ..Opts::default()
+        };
+        let rows = run(&o).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].path, "group/svc");
     }
 
     #[test]

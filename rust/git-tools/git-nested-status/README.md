@@ -50,8 +50,10 @@ Ahead/behind is as of the clone's last fetch.
 ## Options
 
 ```
--C <dir>  --depth <n>  --files  --all  --porcelain  --exit-code  -h  -V
+-C <dir>  --dir <dir>  --depth <n>  --no-default-ignore  --files  --all  --porcelain  --exit-code  -h  -V
 ```
+
+`--dir <dir>` scans `<dir>` directly without requiring it to be a git repository (default depth `4`; cannot be combined with `-C`). By default, hidden dot-directories (`.*`) and common build/vendor directories (`target`, `build`, `node_modules`, `_deps`, `dist`, `out`, `vendor`, `__pycache__`) are skipped during traversal; pass `--no-default-ignore` to disable this pruning.
 
 `--porcelain` writes a `# git-nested-status v1` line, then one `R` line per clone (every clone,
 not only changed ones) and, with `--files`, `F` lines under it:

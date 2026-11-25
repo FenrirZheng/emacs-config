@@ -274,4 +274,60 @@ Skip without the helper."
         (rename-file aside fenrir/magit-nested-program)
         (when (buffer-live-p buf) (kill-buffer buf))))))
 
+(ert-deftest magit-nested-list-formatting-and-filtering ()
+  (let* ((rows (fenrir/magit-nested--parse magit-nested-test--porcelain))
+         (clean (nth 0 rows))
+         (detached (nth 1 rows))
+         (dirty (nth 2 rows)))
+    (should (equal (substring-no-properties (fenrir/magit-nested-list--state-label clean))
+                   "clean"))
+    (should (equal (substring-no-properties (fenrir/magit-nested-list--state-label detached))
+                   "detached"))
+    (should (equal (substring-no-properties (fenrir/magit-nested-list--state-label dirty))
+                   "S:1 U:1 ?:1 ↑1"))
+    (should (equal (mapcar (lambda (r) (plist-get r :path))
+                           (fenrir/magit-nested-list--visible-rows rows t nil))
+                   '("repos/detached" "repos/dirty")))
+    (should (equal (mapcar (lambda (r) (plist-get r :path))
+                           (fenrir/magit-nested-list--visible-rows rows nil "clean\\|local"))
+                   '("repos/clean" "repos/local")))))
+
+(ert-deftest magit-nested-list-interactive-depth-and-filter ()
+  "Verify `fenrir/magit-nested-list' with `--dir', depth adjustment, and filtering."
+  (magit-nested-test--with-fixture
+    (let ((buf nil))
+      (unwind-protect
+          (progn
+            ;; Default depth 4 finds deep/x/y as well as repos/* (4 clones total).
+            (fenrir/magit-nested-list magit-nested-test--fixture)
+            (setq buf (get-buffer "*git-projects*"))
+            (should (buffer-live-p buf))
+            (with-current-buffer buf
+              (should (derived-mode-p 'fenrir/magit-nested-list-mode))
+              (should (= fenrir/magit-nested-list--depth 4))
+              (should (equal (mapcar #'car tabulated-list-entries)
+                             '("deep/x/y" "repos/clean" "repos/detached" "repos/dirty")))
+              ;; Decrease depth to 2: deep/x/y disappears.
+              (fenrir/magit-nested-list-set-depth 2)
+              (should (= fenrir/magit-nested-list--depth 2))
+              (should (equal (mapcar #'car tabulated-list-entries)
+                             '("repos/clean" "repos/detached" "repos/dirty")))
+              ;; Increase depth by 1 to 3: deep/x/y reappears.
+              (fenrir/magit-nested-list-increase-depth)
+              (should (= fenrir/magit-nested-list--depth 3))
+              (should (member "deep/x/y" (mapcar #'car tabulated-list-entries)))
+              ;; Toggle changed-only: only detached and dirty remain.
+              (fenrir/magit-nested-list-toggle-changed)
+              (should (equal (mapcar #'car tabulated-list-entries)
+                             '("repos/detached" "repos/dirty")))
+              ;; Regexp filter narrows further.
+              (fenrir/magit-nested-list-filter "dirty")
+              (should (equal (mapcar #'car tabulated-list-entries)
+                             '("repos/dirty")))
+              ;; Absolute path resolution for row at point.
+              (goto-char (point-min))
+              (should (equal (fenrir/magit-nested-list--current-dir)
+                             (expand-file-name "repos/dirty/" magit-nested-test--fixture)))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
 ;;; magit-nested-test.el ends here
