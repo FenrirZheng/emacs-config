@@ -546,7 +546,7 @@ still on its own `C-c' chord -- the hub duplicates, never replaces."
 ;; `C-x C-c' -> release the blocking emacsclient when there is one, else the
 ;; stock quit.  In this daemon setup "C-x C-c, get me out" is most often
 ;; pressed inside a blocking client session (Claude Code's Ctrl+G prompt
-;; editor / Ctrl+O transcript viewer via claude-editor{,-gui}), where the
+;; editor via claude-editor{,-gui}), where the
 ;; caller resumes only when the CLIENT is released -- see the editor-contract
 ;; doc comment in ~/code/fenrir-claude-plugin/open-emacse-rust/src/main.rs.
 ;; So: in a buffer some client is
